@@ -3347,10 +3347,6 @@ function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
         }
     });
 }
-            automezzoRow.style.pointerEvents = 'auto';
-        }
-    });
-}
 
 // 🔧 NUOVE FUNZIONI: Gestione Attrezzi
 
