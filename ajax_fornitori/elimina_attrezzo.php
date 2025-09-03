@@ -5,27 +5,24 @@
  * VERSIONE MIGLIORATA: Con logging, gestione errori e autorizzazioni migliorate
  */
 
-// Supporto per diversi setup di WordPress
+// STEP 3: Carica WordPress - rileva automaticamente la posizione
 if (!defined('ABSPATH')) {
-    // Prova diversi percorsi per wp-config.php
-    $wp_config_paths = [
-        '../../../../wp-config.php',
-        '../../../wp-config.php',
-        '../../wp-config.php',
-        '../wp-config.php',
-        dirname(dirname(dirname(dirname(__FILE__)))) . '/wp-config.php'
-    ];
-    
-    $wp_loaded = false;
-    foreach ($wp_config_paths as $path) {
-        if (file_exists($path)) {
-            require_once($path);
-            $wp_loaded = true;
-            break;
-        }
+    if (file_exists('../wp-load.php')) {
+        // WordPress in root o sottocartella standard
+        define('WP_USE_THEMES', false);
+        require_once('../wp-load.php');
+    } elseif (file_exists('./wp-load.php')) {
+        // Se per caso siamo già nella root WordPress
+        define('WP_USE_THEMES', false);
+        require_once('./wp-load.php');
+    } else {
+        // Percorso personalizzato - adattare se necessario
+        define('WP_USE_THEMES', false);
+        require_once(dirname(__FILE__) . '/../wp-load.php');
     }
     
-    if (!$wp_loaded) {
+    // Verifica che WordPress sia stato caricato correttamente
+    if (!defined('ABSPATH')) {
         // Log dell'errore
         error_log("ERRORE ATTREZZO: Impossibile caricare WordPress. Percorso: " . __FILE__);
         header('Content-Type: application/json');
