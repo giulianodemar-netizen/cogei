@@ -1785,16 +1785,17 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🏗️ File Lavori in Quota Caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
             echo '<a href="' . esc_url($hse_persona['formazione_lavori_quota_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
-            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_lavori_quota\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_lavori_quota_file']) . '\', \'formazione_lavori_quota_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_formazione_lavori_quota_' . $index . '" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
-        echo '<input type="file" name="hse_formazione_lavori_quota_' . $index . '" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         echo '</div>';
         
-        // Formazione DPI 3° Categoria
+        // Formazione DPI 3° categoria
         echo '<div class="hse_dpi_terza_categoria_field">';
         echo '<label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>';
         if (!empty($hse_persona['formazione_dpi_terza_categoria_file'])) {
@@ -1802,16 +1803,17 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
             echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🦺 File DPI 3° Cat. Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🦺 File DPI 3° categoria Caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
             echo '<a href="' . esc_url($hse_persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
-            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_dpi_terza_categoria\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_dpi_terza_categoria_file']) . '\', \'formazione_dpi_terza_categoria_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_formazione_dpi_terza_categoria_' . $index . '" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
-        echo '<input type="file" name="hse_formazione_dpi_terza_categoria_' . $index . '" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         echo '</div>';
         
         // Formazione Ambienti Confinati
@@ -1822,16 +1824,17 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
             echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🕳️ File Amb. Confinati Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🕳️ File Ambienti Confinati Caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
             echo '<a href="' . esc_url($hse_persona['formazione_ambienti_confinati_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
-            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_ambienti_confinati\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_ambienti_confinati_file']) . '\', \'formazione_ambienti_confinati_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_formazione_ambienti_confinati_' . $index . '" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
-        echo '<input type="file" name="hse_formazione_ambienti_confinati_' . $index . '" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         echo '</div>';
         
         echo '</div>'; // Fine hse_ulteriori_formazione_grid
