@@ -2424,6 +2424,7 @@ echo '</div>'; // Fine hse_cantiere_form_container
 // Dati HSE per frontend con nuovi campi
 var hse_existingPersonaleData = <?php echo json_encode($hse_existing_data && !empty($hse_existing_data['personale']) ? $hse_existing_data['personale'] : array()); ?>;
 var hse_cantieriAssegnati = <?php echo json_encode($hse_cantieri_assegnati); ?>;
+var hse_currentUserId = <?php echo $hse_current_user_id; ?>;
 var hse_ajaxBaseUrl = '<?php echo home_url('/cogei/ajax_fornitori/'); ?>';
 var hse_nonce = '<?php echo wp_create_nonce('cantiere_form_' . $hse_current_user_id); ?>';
 
@@ -2897,7 +2898,525 @@ function hse_toggleAccordion(sectionId) {
     }
 }
 
-// Gestione Accordion Personale
+// 🚛 NUOVE FUNZIONI: Gestione Automezzi
+
+function hse_addAutomezzo() {
+    const container = document.getElementById('hse_automezzi_container');
+    const currentCount = parseInt(document.getElementById('hse_numero_automezzi').value);
+    const newIndex = currentCount;
+    
+    // Rimuovi messaggio "nessun automezzo" se presente
+    const noAutomezziMessage = container.querySelector('.hse_no_automezzi_message');
+    if (noAutomezziMessage) {
+        noAutomezziMessage.remove();
+    }
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'hse_automezzo_row';
+    newRow.setAttribute('data-index', newIndex);
+    newRow.style.cssText = 'border: 1px solid #ddd; background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px;';
+    
+    newRow.innerHTML = `
+        <div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="hse_automezzo_descrizione_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo:</label>
+                <input type="text" name="hse_automezzi_descrizione[]" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+            </div>
+            <div class="hse_automezzo_targa_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa:</label>
+                <input type="text" name="hse_automezzi_targa[]" placeholder="AA123BB" maxlength="7" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" oninput="hse_validateTargaInput(this)" required>
+                <div class="hse_targa_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>
+            </div>
+            <div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">
+                <button type="button" onclick="hse_removeAutomezzoRow(this)" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Rimuovi</button>
+            </div>
+        </div>
+    `;
+    
+    // Animazione di inserimento
+    newRow.style.opacity = '0';
+    newRow.style.transform = 'translateY(-10px)';
+    container.appendChild(newRow);
+    
+    setTimeout(() => {
+        newRow.style.transition = 'all 0.3s ease';
+        newRow.style.opacity = '1';
+        newRow.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Aggiorna contatori
+    document.getElementById('hse_numero_automezzi').value = currentCount + 1;
+    hse_updateAutomezziCount();
+    
+    // Focus sul primo campo
+    const firstInput = newRow.querySelector('input[name="hse_automezzi_descrizione[]"]');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 300);
+    }
+    
+    hse_showToast('✅ Nuovo automezzo aggiunto', 'success');
+}
+
+function hse_removeAutomezzoRow(button) {
+    const row = button.closest('.hse_automezzo_row');
+    const container = document.getElementById('hse_automezzi_container');
+    
+    // Animazione di rimozione
+    row.style.transition = 'all 0.3s ease';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(-20px)';
+    
+    setTimeout(() => {
+        row.remove();
+        
+        // Aggiorna contatori
+        const currentCount = parseInt(document.getElementById('hse_numero_automezzi').value);
+        document.getElementById('hse_numero_automezzi').value = Math.max(0, currentCount - 1);
+        hse_updateAutomezziCount();
+        
+        // Mostra messaggio se non ci sono più automezzi
+        const remainingRows = container.querySelectorAll('.hse_automezzo_row');
+        if (remainingRows.length === 0) {
+            const noAutomezziMessage = document.createElement('div');
+            noAutomezziMessage.className = 'hse_no_automezzi_message';
+            noAutomezziMessage.style.cssText = 'text-align: center; padding: 20px; color: #856404; font-style: italic; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin-bottom: 15px;';
+            noAutomezziMessage.innerHTML = '🚛 Nessun automezzo inserito. Usa il pulsante qui sotto per aggiungere automezzi.';
+            container.appendChild(noAutomezziMessage);
+        }
+    }, 300);
+    
+    hse_showToast('🗑️ Automezzo rimosso', 'info');
+}
+
+function hse_removeLastAutomezzo() {
+    const container = document.getElementById('hse_automezzi_container');
+    const rows = container.querySelectorAll('.hse_automezzo_row');
+    
+    if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        const removeButton = lastRow.querySelector('.hse_remove_automezzo_btn');
+        if (removeButton) {
+            hse_removeAutomezzoRow(removeButton);
+        }
+    }
+}
+
+function hse_updateAutomezziCount() {
+    const count = parseInt(document.getElementById('hse_numero_automezzi').value);
+    const countElement = document.getElementById('hse_automezzi_count');
+    if (countElement) {
+        countElement.textContent = `(${count} automezzi)`;
+    }
+}
+
+function hse_validateTargaInput(input) {
+    const targa = input.value.toUpperCase();
+    const feedbackDiv = input.parentNode.querySelector('.hse_targa_validation_feedback');
+    
+    // Pattern targa italiana: AA123BB
+    const pattern = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
+    
+    if (targa.length === 0) {
+        input.style.borderColor = '#ddd';
+        input.style.backgroundColor = 'white';
+        feedbackDiv.innerHTML = '';
+        return;
+    }
+    
+    if (pattern.test(targa)) {
+        input.style.borderColor = '#28a745';
+        input.style.backgroundColor = '#f8fff8';
+        feedbackDiv.innerHTML = '<span style="color: #28a745;">✅ Targa valida</span>';
+    } else {
+        input.style.borderColor = '#dc3545';
+        input.style.backgroundColor = '#fff5f5';
+        
+        let message = '';
+        if (targa.length < 7) {
+            message = `⚠️ Formato: AA123BB (${7 - targa.length} caratteri mancanti)`;
+        } else if (targa.length > 7) {
+            message = '⚠️ Targa troppo lunga (max 7 caratteri)';
+        } else {
+            message = '❌ Formato non valido. Richiesto: AA123BB';
+        }
+        
+        feedbackDiv.innerHTML = `<span style="color: #dc3545;">${message}</span>`;
+    }
+    
+    input.value = targa; // Forza maiuscole
+}
+
+function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
+    if (isAssigned) {
+        if (!confirm(`⚠️ ATTENZIONE\n\nL'automezzo "${automezzoInfo}" è attualmente assegnato a dei cantieri.\n\nSe lo elimini, verrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?`)) {
+            return;
+        }
+    } else {
+        if (!confirm(`Sei sicuro di voler eliminare l'automezzo "${automezzoInfo}"?`)) {
+            return;
+        }
+    }
+    
+    // Mostra loading
+    const automezzoRow = document.querySelector(`[data-automezzo-id="${automezzoId}"]`);
+    if (automezzoRow) {
+        automezzoRow.style.opacity = '0.5';
+        automezzoRow.style.pointerEvents = 'none';
+    }
+    
+    // AJAX call
+    const formData = new FormData();
+    formData.append('automezzo_id', automezzoId);
+    formData.append('user_id', hse_currentUserId);
+    if (isAssigned) {
+        formData.append('force_delete', 'true');
+    }
+    
+    fetch('/cogei/ajax_fornitori/elimina_automezzo.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hse_showToast('✅ ' + data.message, 'success');
+            
+            // Rimuovi dalla DOM con animazione
+            if (automezzoRow) {
+                automezzoRow.style.transition = 'all 0.5s ease';
+                automezzoRow.style.opacity = '0';
+                automezzoRow.style.transform = 'translateX(-100%)';
+                
+                setTimeout(() => {
+                    automezzoRow.remove();
+                    hse_updateAutomezziCount();
+                }, 500);
+            }
+            
+            // Ricarica la pagina dopo un delay per aggiornare i dati
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+            
+        } else if (data.warning) {
+            // Mostra warning e chiedi conferma
+            if (confirm(`⚠️ ${data.message}`)) {
+                // Richiama con force_delete
+                hse_deleteAutomezzo(automezzoId, automezzoInfo, true);
+            } else {
+                // Ripristina lo stato
+                if (automezzoRow) {
+                    automezzoRow.style.opacity = '1';
+                    automezzoRow.style.pointerEvents = 'auto';
+                }
+            }
+        } else {
+            hse_showToast('❌ ' + data.message, 'error');
+            
+            // Ripristina lo stato
+            if (automezzoRow) {
+                automezzoRow.style.opacity = '1';
+                automezzoRow.style.pointerEvents = 'auto';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        hse_showToast('❌ Errore di connessione', 'error');
+        
+        // Ripristina lo stato
+        if (automezzoRow) {
+            automezzoRow.style.opacity = '1';
+            automezzoRow.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+// 🔧 NUOVE FUNZIONI: Gestione Attrezzi
+
+function hse_addAttrezzo() {
+    const container = document.getElementById('hse_attrezzi_container');
+    const currentCount = parseInt(document.getElementById('hse_numero_attrezzi').value);
+    const newIndex = currentCount;
+    
+    // Rimuovi messaggio "nessun attrezzo" se presente
+    const noAttrezziMessage = container.querySelector('.hse_no_attrezzi_message');
+    if (noAttrezziMessage) {
+        noAttrezziMessage.remove();
+    }
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'hse_attrezzo_row';
+    newRow.setAttribute('data-index', newIndex);
+    newRow.style.cssText = 'border: 1px solid #ddd; background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px;';
+    
+    newRow.innerHTML = `
+        <div class="hse_attrezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="hse_attrezzo_descrizione_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo:</label>
+                <input type="text" name="hse_attrezzi_descrizione[]" placeholder="es. Saldatrice elettrica 220V" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+            </div>
+            <div class="hse_attrezzo_revisione_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">📅 Data Revisione (opzionale):</label>
+                <input type="date" name="hse_attrezzi_data_revisione[]" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" onchange="hse_validateRevisioneDate(this)">
+                <div class="hse_revisione_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>
+            </div>
+            <div class="hse_attrezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">
+                <button type="button" onclick="hse_removeAttrezzoRow(this)" class="hse_remove_attrezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Rimuovi</button>
+            </div>
+        </div>
+    `;
+    
+    // Animazione di inserimento
+    newRow.style.opacity = '0';
+    newRow.style.transform = 'translateY(-10px)';
+    container.appendChild(newRow);
+    
+    setTimeout(() => {
+        newRow.style.transition = 'all 0.3s ease';
+        newRow.style.opacity = '1';
+        newRow.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Aggiorna contatori
+    document.getElementById('hse_numero_attrezzi').value = currentCount + 1;
+    hse_updateAttrezziCount();
+    
+    // Focus sul primo campo
+    const firstInput = newRow.querySelector('input[name="hse_attrezzi_descrizione[]"]');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 300);
+    }
+    
+    hse_showToast('✅ Nuovo attrezzo aggiunto', 'success');
+}
+
+function hse_removeAttrezzoRow(button) {
+    const row = button.closest('.hse_attrezzo_row');
+    const container = document.getElementById('hse_attrezzi_container');
+    
+    // Animazione di rimozione
+    row.style.transition = 'all 0.3s ease';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(-20px)';
+    
+    setTimeout(() => {
+        row.remove();
+        
+        // Aggiorna contatori
+        const currentCount = parseInt(document.getElementById('hse_numero_attrezzi').value);
+        document.getElementById('hse_numero_attrezzi').value = Math.max(0, currentCount - 1);
+        hse_updateAttrezziCount();
+        
+        // Mostra messaggio se non ci sono più attrezzi
+        const remainingRows = container.querySelectorAll('.hse_attrezzo_row');
+        if (remainingRows.length === 0) {
+            const noAttrezziMessage = document.createElement('div');
+            noAttrezziMessage.className = 'hse_no_attrezzi_message';
+            noAttrezziMessage.style.cssText = 'text-align: center; padding: 20px; color: #1565c0; font-style: italic; background: rgba(33, 150, 243, 0.1); border-radius: 8px; margin-bottom: 15px;';
+            noAttrezziMessage.innerHTML = '🔧 Nessun attrezzo inserito. Usa il pulsante qui sotto per aggiungere attrezzi.';
+            container.appendChild(noAttrezziMessage);
+        }
+    }, 300);
+    
+    hse_showToast('🗑️ Attrezzo rimosso', 'info');
+}
+
+function hse_removeLastAttrezzo() {
+    const container = document.getElementById('hse_attrezzi_container');
+    const rows = container.querySelectorAll('.hse_attrezzo_row');
+    
+    if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        const removeButton = lastRow.querySelector('.hse_remove_attrezzo_btn');
+        if (removeButton) {
+            hse_removeAttrezzoRow(removeButton);
+        }
+    }
+}
+
+function hse_updateAttrezziCount() {
+    const count = parseInt(document.getElementById('hse_numero_attrezzi').value);
+    const countElement = document.getElementById('hse_attrezzi_count');
+    if (countElement) {
+        countElement.textContent = `(${count} attrezzi)`;
+    }
+}
+
+function hse_validateRevisioneDate(input) {
+    const dataRevisione = input.value;
+    const feedbackDiv = input.parentNode.querySelector('.hse_revisione_validation_feedback');
+    
+    if (!dataRevisione) {
+        input.style.borderColor = '#ddd';
+        input.style.backgroundColor = 'white';
+        feedbackDiv.innerHTML = '';
+        return;
+    }
+    
+    const oggi = new Date();
+    const revisione = new Date(dataRevisione);
+    const diffTime = revisione - oggi;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        input.style.borderColor = '#dc3545';
+        input.style.backgroundColor = '#fff5f5';
+        feedbackDiv.innerHTML = `<span style="color: #dc3545;">🚨 Revisione scaduta da ${Math.abs(diffDays)} giorni</span>`;
+    } else if (diffDays <= 30) {
+        input.style.borderColor = '#ffc107';
+        input.style.backgroundColor = '#fffdf0';
+        feedbackDiv.innerHTML = `<span style="color: #856404;">⚠️ Revisione scade tra ${diffDays} giorni</span>`;
+    } else {
+        input.style.borderColor = '#28a745';
+        input.style.backgroundColor = '#f8fff8';
+        feedbackDiv.innerHTML = `<span style="color: #28a745;">✅ Revisione valida</span>`;
+    }
+}
+
+function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
+    if (isAssigned) {
+        if (!confirm(`⚠️ ATTENZIONE\n\nL'attrezzo "${attrezzoInfo}" è attualmente assegnato a dei cantieri.\n\nSe lo elimini, verrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?`)) {
+            return;
+        }
+    } else {
+        if (!confirm(`Sei sicuro di voler eliminare l'attrezzo "${attrezzoInfo}"?`)) {
+            return;
+        }
+    }
+    
+    // Mostra loading
+    const attrezzoRow = document.querySelector(`[data-attrezzo-id="${attrezzoId}"]`);
+    if (attrezzoRow) {
+        attrezzoRow.style.opacity = '0.5';
+        attrezzoRow.style.pointerEvents = 'none';
+    }
+    
+    // AJAX call
+    const formData = new FormData();
+    formData.append('attrezzo_id', attrezzoId);
+    formData.append('user_id', hse_currentUserId);
+    if (isAssigned) {
+        formData.append('force_delete', 'true');
+    }
+    
+    fetch('/cogei/ajax_fornitori/elimina_attrezzo.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hse_showToast('✅ ' + data.message, 'success');
+            
+            // Rimuovi dalla DOM con animazione
+            if (attrezzoRow) {
+                attrezzoRow.style.transition = 'all 0.5s ease';
+                attrezzoRow.style.opacity = '0';
+                attrezzoRow.style.transform = 'translateX(-100%)';
+                
+                setTimeout(() => {
+                    attrezzoRow.remove();
+                    hse_updateAttrezziCount();
+                }, 500);
+            }
+            
+            // Ricarica la pagina dopo un delay per aggiornare i dati
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+            
+        } else if (data.warning) {
+            // Mostra warning e chiedi conferma
+            if (confirm(`⚠️ ${data.message}`)) {
+                // Richiama con force_delete
+                hse_deleteAttrezzo(attrezzoId, attrezzoInfo, true);
+            } else {
+                // Ripristina lo stato
+                if (attrezzoRow) {
+                    attrezzoRow.style.opacity = '1';
+                    attrezzoRow.style.pointerEvents = 'auto';
+                }
+            }
+        } else {
+            hse_showToast('❌ ' + data.message, 'error');
+            
+            // Ripristina lo stato
+            if (attrezzoRow) {
+                attrezzoRow.style.opacity = '1';
+                attrezzoRow.style.pointerEvents = 'auto';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        hse_showToast('❌ Errore di connessione', 'error');
+        
+        // Ripristina lo stato
+        if (attrezzoRow) {
+            attrezzoRow.style.opacity = '1';
+            attrezzoRow.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+// Toast notifications helper
+function hse_showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = 'hse_toast';
+    
+    const colors = {
+        success: 'linear-gradient(135deg, #28a745, #20c997)',
+        error: 'linear-gradient(135deg, #dc3545, #c82333)',
+        warning: 'linear-gradient(135deg, #ffc107, #fd7e14)',
+        info: 'linear-gradient(135deg, #17a2b8, #138496)'
+    };
+    
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        background: ${colors[type] || colors.info};
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideInFromRight 0.5s ease-out;
+        max-width: 350px;
+        word-wrap: break-word;
+    `;
+    
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Auto rimozione dopo 4 secondi
+    setTimeout(() => {
+        toast.style.animation = 'slideOutToRight 0.5s ease-in forwards';
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 500);
+    }, 4000);
+}
+
+// CSS per animazioni toast
+const toastStyles = document.createElement('style');
+toastStyles.textContent = `
+    @keyframes slideInFromRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutToRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(toastStyles);
+
 function hse_togglePersonaAccordion(personaIndex) {
     const content = document.getElementById('hse_content_persona_' + personaIndex);
     const arrow = document.getElementById('hse_arrow_persona_' + personaIndex);
@@ -3407,6 +3926,65 @@ function hse_validateFormBeforeSubmit(formType) {
             hse_hasErrors = true;
         }
         
+        // 🚛 NUOVO: Validazione automezzi
+        const hse_automezziDescrizioneInputs = document.querySelectorAll('input[name="hse_automezzi_descrizione[]"]');
+        const hse_automezziTargaInputs = document.querySelectorAll('input[name="hse_automezzi_targa[]"]');
+        
+        for (let i = 0; i < hse_automezziDescrizioneInputs.length; i++) {
+            const automezzoNum = i + 1;
+            
+            if (!hse_automezziDescrizioneInputs[i].value.trim()) {
+                hse_errors.push(`Descrizione automezzo ${automezzoNum} è obbligatoria`);
+                hse_hasErrors = true;
+            }
+            
+            const targa = hse_automezziTargaInputs[i] ? hse_automezziTargaInputs[i].value.trim().toUpperCase() : '';
+            if (!targa) {
+                hse_errors.push(`Targa automezzo ${automezzoNum} è obbligatoria`);
+                hse_hasErrors = true;
+            } else {
+                // Validazione formato targa italiana AA123BB
+                const targaPattern = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
+                if (!targaPattern.test(targa)) {
+                    hse_errors.push(`Targa automezzo ${automezzoNum} non valida. Formato richiesto: AA123BB`);
+                    hse_hasErrors = true;
+                }
+            }
+        }
+        
+        // Controlla targhe duplicate
+        if (hse_automezziTargaInputs.length > 1) {
+            const targhe = Array.from(hse_automezziTargaInputs).map(input => input.value.trim().toUpperCase()).filter(t => t);
+            const targheUnique = [...new Set(targhe)];
+            if (targhe.length !== targheUnique.length) {
+                hse_errors.push('Trovate targhe duplicate nell\'elenco automezzi');
+                hse_hasErrors = true;
+            }
+        }
+        
+        // 🔧 NUOVO: Validazione attrezzi
+        const hse_attrezziDescrizioneInputs = document.querySelectorAll('input[name="hse_attrezzi_descrizione[]"]');
+        const hse_attrezziRevisioneInputs = document.querySelectorAll('input[name="hse_attrezzi_data_revisione[]"]');
+        
+        for (let i = 0; i < hse_attrezziDescrizioneInputs.length; i++) {
+            const attrezzoNum = i + 1;
+            
+            if (!hse_attrezziDescrizioneInputs[i].value.trim()) {
+                hse_errors.push(`Descrizione attrezzo ${attrezzoNum} è obbligatoria`);
+                hse_hasErrors = true;
+            }
+            
+            // Validazione data revisione se presente
+            const dataRevisione = hse_attrezziRevisioneInputs[i] ? hse_attrezziRevisioneInputs[i].value.trim() : '';
+            if (dataRevisione) {
+                const revisioneDate = new Date(dataRevisione);
+                if (isNaN(revisioneDate.getTime())) {
+                    hse_errors.push(`Data revisione non valida per l'attrezzo ${attrezzoNum}`);
+                    hse_hasErrors = true;
+                }
+            }
+        }
+        
         if (hse_hasErrors) {
             alert('⚠️ Errori di validazione:\n\n' + hse_errors.join('\n'));
             return false;
@@ -3784,6 +4362,23 @@ if (typeof window !== 'undefined') {
     window.hse_addPersona = hse_addPersona;
     window.hse_removePersonaFromDOM = hse_removePersonaFromDOM;
     window.hse_validateScadenze = hse_validateScadenze;
+    
+    // 🚛 NUOVO: Funzioni automezzi
+    window.hse_addAutomezzo = hse_addAutomezzo;
+    window.hse_removeLastAutomezzo = hse_removeLastAutomezzo;
+    window.hse_updateAutomezziCount = hse_updateAutomezziCount;
+    window.hse_validateTargaInput = hse_validateTargaInput;
+    window.hse_deleteAutomezzo = hse_deleteAutomezzo;
+    
+    // 🔧 NUOVO: Funzioni attrezzi
+    window.hse_addAttrezzo = hse_addAttrezzo;
+    window.hse_removeLastAttrezzo = hse_removeLastAttrezzo;
+    window.hse_updateAttrezziCount = hse_updateAttrezziCount;
+    window.hse_validateRevisioneDate = hse_validateRevisioneDate;
+    window.hse_deleteAttrezzo = hse_deleteAttrezzo;
+    
+    // Utility
+    window.hse_showToast = hse_showToast;
 }
 </script>
 <style>
@@ -3801,7 +4396,9 @@ if (typeof window !== 'undefined') {
 /* Stili Accordion Headers */
 .hse_accordion_header:hover,
 .hse_persona_accordion_header:hover,
-.hse_cantiere_accordion_header:hover {
+.hse_cantiere_accordion_header:hover,
+.hse_automezzi_accordion_header:hover,
+.hse_attrezzi_accordion_header:hover {
     background: rgba(33, 150, 243, 0.15) !important;
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
@@ -3813,6 +4410,16 @@ if (typeof window !== 'undefined') {
 
 .hse_cantiere_accordion_header:hover {
     background: linear-gradient(135deg, #1976d2, #1565c0) !important;
+}
+
+/* 🚛 NUOVO: Stili header automezzi */
+.hse_automezzi_accordion_header:hover {
+    background: rgba(255, 193, 7, 0.2) !important;
+}
+
+/* 🔧 NUOVO: Stili header attrezzi */
+.hse_attrezzi_accordion_header:hover {
+    background: rgba(33, 150, 243, 0.2) !important;
 }
 
 /* Accordion Arrow Animations */
@@ -3881,6 +4488,153 @@ if (typeof window !== 'undefined') {
 @keyframes hse_warningPulse {
     0%, 100% { box-shadow: 0 0 0 rgba(220, 53, 69, 0.4); }
     50% { box-shadow: 0 0 10px rgba(220, 53, 69, 0.6); }
+}
+
+/* 🚛 NUOVO: Stili Automezzi */
+.hse_automezzi_group {
+    animation: hse_slideInLeft 0.8s ease-out;
+}
+
+.hse_automezzo_row {
+    transition: all 0.4s ease;
+    position: relative;
+}
+
+.hse_automezzo_row:hover {
+    box-shadow: 0 4px 16px rgba(255, 193, 7, 0.2);
+    transform: translateY(-1px);
+}
+
+.hse_targa_info_box {
+    transition: all 0.3s ease;
+}
+
+.hse_targa_info_box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+}
+
+/* Validazione targa italiana */
+input[name="hse_automezzi_targa[]"] {
+    font-family: 'Courier New', monospace !important;
+    font-weight: bold !important;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+input[name="hse_automezzi_targa[]"]:focus {
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+    border-color: #ffc107 !important;
+}
+
+/* Feedback validazione targa */
+.hse_targa_validation_feedback {
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+/* 🔧 NUOVO: Stili Attrezzi */
+.hse_attrezzi_group {
+    animation: hse_slideInLeft 0.8s ease-out;
+}
+
+.hse_attrezzo_row {
+    transition: all 0.4s ease;
+    position: relative;
+}
+
+.hse_attrezzo_row:hover {
+    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+    transform: translateY(-1px);
+}
+
+.hse_revisione_info_box {
+    transition: all 0.3s ease;
+}
+
+.hse_revisione_info_box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
+}
+
+/* Validazione data revisione */
+input[name="hse_attrezzi_data_revisione[]"]:focus {
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3);
+    border-color: #2196f3 !important;
+}
+
+/* Feedback validazione revisione */
+.hse_revisione_validation_feedback {
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+/* Pulsanti rimozione veicoli/attrezzi */
+.hse_remove_automezzo_btn:hover,
+.hse_remove_attrezzo_btn:hover {
+    background: #c82333 !important;
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+.hse_remove_automezzo_btn:active,
+.hse_remove_attrezzo_btn:active {
+    transform: scale(0.95);
+}
+
+/* Pulsanti aggiungi veicoli/attrezzi */
+.hse_add_automezzo_btn:hover,
+.hse_add_attrezzo_btn:hover {
+    background: #218838 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+/* Cantieri assegnati info per veicoli/attrezzi */
+.hse_automezzo_cantieri_info,
+.hse_attrezzo_cantieri_info {
+    animation: hse_slideInDown 0.5s ease-out;
+}
+
+.hse_attrezzo_revisione_warning {
+    animation: hse_warningSlideIn 0.5s ease-out;
+}
+
+/* Checkbox selection in Part B */
+.hse_automezzo_checkbox input[type="checkbox"]:checked + .hse_automezzo_name,
+.hse_attrezzo_checkbox input[type="checkbox"]:checked + .hse_attrezzo_name {
+    color: #155724 !important;
+    font-weight: bold !important;
+    text-shadow: 0 1px 2px rgba(21, 87, 36, 0.2);
+}
+
+.hse_automezzo_input,
+.hse_attrezzo_input {
+    transform: scale(1.2);
+    margin-right: 10px;
+}
+
+/* Containers per selezione Part B */
+.hse_automezzi_selection_container {
+    border-left: 4px solid #ffc107;
+    transition: all 0.3s ease;
+}
+
+.hse_automezzi_selection_container:hover {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
+}
+
+.hse_attrezzi_selection_container {
+    border-left: 4px solid #2196f3;
+    transition: all 0.3s ease;
+}
+
+.hse_attrezzi_selection_container:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
 }
 
 /* Sezioni documenti personali (UNILAV + Idoneità) */
