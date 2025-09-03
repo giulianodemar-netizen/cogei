@@ -3648,10 +3648,6 @@ function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
         }
     });
 }
-            attrezzoRow.style.pointerEvents = 'auto';
-        }
-    });
-}
 
 // Toast notifications helper
 function hse_showToast(message, type = 'info') {
