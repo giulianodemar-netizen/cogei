@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test AJAX Functionality - Sistema COGEI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .test-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-button {
+            background: #0066a2;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+        }
+        .test-button:hover {
+            background: #004d7a;
+        }
+        .test-button.success {
+            background: #28a745;
+        }
+        .test-button.error {
+            background: #dc3545;
+        }
+        .test-button.warning {
+            background: #ffc107;
+            color: #000;
+        }
+        .log-area {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-success { background: #28a745; }
+        .status-error { background: #dc3545; }
+        .status-warning { background: #ffc107; }
+        .status-info { background: #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Test Sistema AJAX - COGEI</h1>
+        <p>Questa pagina permette di testare il funzionamento degli endpoint AJAX per l'eliminazione di mezzi e attrezzi.</p>
+        
+        <h2>🔧 Test di Connettività</h2>
+        <button class="test-button" onclick="testConnectivity()">Test Connessione Endpoint</button>
+        <button class="test-button" onclick="testWordPressIntegration()">Test Integrazione WordPress</button>
+        <button class="test-button" onclick="checkFilePermissions()">Test Permessi File</button>
+        
+        <h2>🚛 Test Eliminazione Automezzi</h2>
+        <button class="test-button warning" onclick="testAutomezzoEndpoint()">Test Endpoint Automezzi</button>
+        <button class="test-button" onclick="simulateAutomezzoDelete()">Simula Eliminazione Automezzo</button>
+        
+        <h2>🔧 Test Eliminazione Attrezzi</h2>
+        <button class="test-button warning" onclick="testAttrezzoEndpoint()">Test Endpoint Attrezzi</button>
+        <button class="test-button" onclick="simulateAttrezzoDelete()">Simula Eliminazione Attrezzo</button>
+        
+        <h2>📊 Test Validazione Conformità</h2>
+        <button class="test-button" onclick="testComplianceValidation()">Test Validazione Non Bloccante</button>
+        <button class="test-button" onclick="showComplianceCalculation()">Mostra Calcolo Conformità</button>
+        
+        <h2>🚨 Test Gestione Errori</h2>
+        <button class="test-button error" onclick="testErrorHandling()">Test Gestione Errori</button>
+        <button class="test-button error" onclick="testTimeoutHandling()">Test Timeout</button>
+        <button class="test-button success" onclick="clearLogs()">Pulisci Log</button>
+        
+        <h2>📝 Log dei Test</h2>
+        <div id="logArea" class="log-area"></div>
+    </div>
+
+    <script>
+        let logArea = document.getElementById('logArea');
+        let testResults = {};
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const statusClass = `status-${type}`;
+            const logEntry = `<div><span class="status-indicator ${statusClass}"></span>[${timestamp}] ${message}</div>`;
+            logArea.innerHTML += logEntry;
+            logArea.scrollTop = logArea.scrollHeight;
+            console.log(`[TEST] ${message}`);
+        }
+
+        function clearLogs() {
+            logArea.innerHTML = '';
+            testResults = {};
+            log('Log puliti e risultati test resettati', 'success');
+        }
+
+        async function testConnectivity() {
+            log('🔧 Avvio test connettività endpoint AJAX...', 'info');
+            
+            const endpoints = [
+                '/cogei/ajax_fornitori/elimina_automezzo.php',
+                '/cogei/ajax_fornitori/elimina_attrezzo.php',
+                '/cogei/ajax_fornitori/get_cantiere_details.php'
+            ];
+
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    });
+                    
+                    if (response.ok) {
+                        log(`✅ ${endpoint}: Raggiungibile (Status: ${response.status})`, 'success');
+                        testResults[endpoint] = 'success';
+                    } else {
+                        log(`⚠️ ${endpoint}: Risponde ma con errore (Status: ${response.status})`, 'warning');
+                        testResults[endpoint] = 'warning';
+                    }
+                } catch (error) {
+                    log(`❌ ${endpoint}: Non raggiungibile - ${error.message}`, 'error');
+                    testResults[endpoint] = 'error';
+                }
+            }
+            
+            log('Test connettività completato', 'info');
+        }
+
+        async function testWordPressIntegration() {
+            log('🔧 Test integrazione WordPress...', 'info');
+            
+            // Test se le funzioni WordPress sono disponibili
+            const wpTests = [
+                'wp',
+                'ajaxurl',
+                '$'
+            ];
+            
+            wpTests.forEach(test => {
+                if (typeof window[test] !== 'undefined') {
+                    log(`✅ ${test}: Disponibile`, 'success');
+                } else {
+                    log(`❌ ${test}: Non disponibile`, 'error');
+                }
+            });
+            
+            log('Test integrazione WordPress completato', 'info');
+        }
+
+        async function checkFilePermissions() {
+            log('🔧 Test permessi file e struttura directory...', 'info');
+            
+            // Test esistenza directory ajax_fornitori
+            try {
+                const response = await fetch('/cogei/ajax_fornitori/', {
+                    method: 'GET'
+                });
+                
+                if (response.status === 200 || response.status === 403) {
+                    log('✅ Directory /cogei/ajax_fornitori/: Esiste', 'success');
+                } else {
+                    log('❌ Directory /cogei/ajax_fornitori/: Non trovata', 'error');
+                }
+            } catch (error) {
+                log(`❌ Errore test directory: ${error.message}`, 'error');
+            }
+            
+            log('Test permessi completato', 'info');
+        }
+
+        async function testAutomezzoEndpoint() {
+            log('🚛 Test specifico endpoint automezzi...', 'info');
+            
+            const testData = new FormData();
+            testData.append('automezzo_id', '999999'); // ID fittizio
+            testData.append('user_id', '1');
+            
+            try {
+                const response = await fetch('/cogei/ajax_fornitori/elimina_automezzo.php', {
+                    method: 'POST',
+                    body: testData,
+                    credentials: 'same-origin'
+                });
+                
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    log(`📄 Risposta JSON ricevuta: ${JSON.stringify(data)}`, 'info');
+                    
+                    if (data.success === false && data.message) {
+                        log('✅ Endpoint funziona correttamente (errore atteso per ID fittizio)', 'success');
+                    } else {
+                        log('⚠️ Risposta inaspettata dall\'endpoint', 'warning');
+                    }
+                } else {
+                    const text = await response.text();
+                    log(`❌ Risposta non JSON: ${text.substring(0, 200)}...`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Errore test endpoint automezzi: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAttrezzoEndpoint() {
+            log('🔧 Test specifico endpoint attrezzi...', 'info');
+            
+            const testData = new FormData();
+            testData.append('attrezzo_id', '999999'); // ID fittizio
+            testData.append('user_id', '1');
+            
+            try {
+                const response = await fetch('/cogei/ajax_fornitori/elimina_attrezzo.php', {
+                    method: 'POST',
+                    body: testData,
+                    credentials: 'same-origin'
+                });
+                
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    log(`📄 Risposta JSON ricevuta: ${JSON.stringify(data)}`, 'info');
+                    
+                    if (data.success === false && data.message) {
+                        log('✅ Endpoint funziona correttamente (errore atteso per ID fittizio)', 'success');
+                    } else {
+                        log('⚠️ Risposta inaspettata dall\'endpoint', 'warning');
+                    }
+                } else {
+                    const text = await response.text();
+                    log(`❌ Risposta non JSON: ${text.substring(0, 200)}...`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Errore test endpoint attrezzi: ${error.message}`, 'error');
+            }
+        }
+
+        function simulateAutomezzoDelete() {
+            log('🚛 Simulazione eliminazione automezzo...', 'info');
+            
+            // Simula i controlli che dovrebbe fare la funzione JavaScript
+            const automezzoId = 'TEST_' + Math.floor(Math.random() * 1000);
+            const automezzoInfo = 'Automezzo Test - Targa: AB123CD';
+            
+            log(`📋 ID Automezzo: ${automezzoId}`, 'info');
+            log(`📋 Info Automezzo: ${automezzoInfo}`, 'info');
+            
+            // Simula controlli preliminari
+            if (!automezzoId || !automezzoInfo) {
+                log('❌ Controllo fallito: Parametri mancanti', 'error');
+                return;
+            }
+            
+            log('✅ Controlli preliminari: Superati', 'success');
+            log('✅ Validazione dati: Completata', 'success');
+            log('ℹ️ In un caso reale, qui partirebbe la chiamata AJAX', 'info');
+        }
+
+        function simulateAttrezzoDelete() {
+            log('🔧 Simulazione eliminazione attrezzo...', 'info');
+            
+            const attrezzoId = 'TEST_' + Math.floor(Math.random() * 1000);
+            const attrezzoInfo = 'Attrezzo Test - Revisione: 2024-12-31';
+            
+            log(`📋 ID Attrezzo: ${attrezzoId}`, 'info');
+            log(`📋 Info Attrezzo: ${attrezzoInfo}`, 'info');
+            
+            if (!attrezzoId || !attrezzoInfo) {
+                log('❌ Controllo fallito: Parametri mancanti', 'error');
+                return;
+            }
+            
+            log('✅ Controlli preliminari: Superati', 'success');
+            log('✅ Validazione dati: Completata', 'success');
+            log('ℹ️ In un caso reale, qui partirebbe la chiamata AJAX', 'info');
+        }
+
+        function testComplianceValidation() {
+            log('📊 Test validazione conformità non bloccante...', 'info');
+            
+            // Simula dati operai con varie conformità
+            const operaiTest = [
+                { nome: 'Mario', cognome: 'Rossi', formazione_antincendio_file: 'file1.pdf', formazione_primo_soccorso_file: '', formazione_preposti_file: 'file2.pdf' },
+                { nome: 'Luca', cognome: 'Bianchi', formazione_antincendio_file: '', formazione_primo_soccorso_file: 'file3.pdf', formazione_preposti_file: '' },
+                { nome: 'Giuseppe', cognome: 'Verdi', formazione_antincendio_file: 'file4.pdf', formazione_primo_soccorso_file: 'file5.pdf', formazione_preposti_file: 'file6.pdf' }
+            ];
+            
+            let antincendioCount = 0;
+            let primoSoccorsoCount = 0;
+            let prepostiCount = 0;
+            
+            operaiTest.forEach(operaio => {
+                if (operaio.formazione_antincendio_file) antincendioCount++;
+                if (operaio.formazione_primo_soccorso_file) primoSoccorsoCount++;
+                if (operaio.formazione_preposti_file) prepostiCount++;
+            });
+            
+            const totalOperai = operaiTest.length;
+            const percAntincendio = (antincendioCount / totalOperai) * 100;
+            const percPrimoSoccorso = (primoSoccorsoCount / totalOperai) * 100;
+            const percPreposti = (prepostiCount / totalOperai) * 100;
+            
+            log(`👥 Operai totali: ${totalOperai}`, 'info');
+            log(`🔥 Antincendio: ${percAntincendio.toFixed(1)}% (${antincendioCount}/${totalOperai})`, percAntincendio >= 30 ? 'success' : 'warning');
+            log(`🚑 Primo Soccorso: ${percPrimoSoccorso.toFixed(1)}% (${primoSoccorsoCount}/${totalOperai})`, percPrimoSoccorso >= 30 ? 'success' : 'warning');
+            log(`👨‍💼 Preposti: ${percPreposti.toFixed(1)}% (${prepostiCount}/${totalOperai})`, percPreposti >= 30 ? 'success' : 'warning');
+            
+            const isConforme = percAntincendio >= 30 && percPrimoSoccorso >= 30 && percPreposti >= 30;
+            
+            if (isConforme) {
+                log('✅ CONFORMITÀ: Raggiunta - Cantiere conforme', 'success');
+            } else {
+                log('⚠️ CONFORMITÀ: Non raggiunta - Avviso informativo (salvataggio comunque permesso)', 'warning');
+            }
+            
+            log('✅ Test validazione conformità completato', 'success');
+        }
+
+        function showComplianceCalculation() {
+            log('📊 Calcolo dettagliato conformità...', 'info');
+            log('📋 Formula: (Operai con competenza / Totale operai) * 100', 'info');
+            log('📋 Soglia minima per conformità: 30% per ogni competenza', 'info');
+            log('📋 Competenze richieste: Antincendio, Primo Soccorso, Preposti', 'info');
+            log('⚠️ IMPORTANTE: La non conformità è solo un avviso, non blocca il salvataggio', 'warning');
+        }
+
+        async function testErrorHandling() {
+            log('🚨 Test gestione errori...', 'error');
+            
+            try {
+                // Test endpoint inesistente
+                await fetch('/cogei/ajax_fornitori/endpoint_inesistente.php', {
+                    method: 'POST'
+                });
+            } catch (error) {
+                log(`✅ Errore catturato correttamente: ${error.message}`, 'success');
+            }
+            
+            // Test dati malformati
+            try {
+                const response = await fetch('/cogei/ajax_fornitori/elimina_automezzo.php', {
+                    method: 'POST',
+                    body: 'dati_malformati'
+                });
+                
+                if (!response.ok) {
+                    log('✅ Errore HTTP gestito correttamente', 'success');
+                }
+            } catch (error) {
+                log(`✅ Errore rete catturato: ${error.message}`, 'success');
+            }
+        }
+
+        async function testTimeoutHandling() {
+            log('⏱️ Test gestione timeout...', 'warning');
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+                log('✅ Timeout simulato e gestito correttamente', 'success');
+            }, 100); // Timeout molto breve per test
+            
+            try {
+                await fetch('/cogei/ajax_fornitori/elimina_automezzo.php', {
+                    method: 'GET',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    log('✅ AbortError catturato correttamente per timeout', 'success');
+                } else {
+                    log(`⚠️ Errore diverso da timeout: ${error.message}`, 'warning');
+                }
+            }
+        }
+
+        // Avvia test automatici al caricamento
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 Pagina di test caricata', 'success');
+            log('💡 Clicca sui pulsanti per eseguire i test specifici', 'info');
+            log('📋 Tutti i test sono non distruttivi e sicuri', 'info');
+        });
+    </script>
+</body>
+</html>

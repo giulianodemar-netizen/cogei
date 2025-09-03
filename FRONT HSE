@@ -53,6 +53,9 @@ function hse_createCantiereTablesIfNotExists() {
         formazione_antincendio_file varchar(255),
         formazione_primo_soccorso_file varchar(255),
         formazione_preposti_file varchar(255),
+        formazione_lavori_quota_file varchar(255),
+        formazione_dpi_terza_categoria_file varchar(255),
+        formazione_ambienti_confinati_file varchar(255),
         PRIMARY KEY (id),
         KEY richiesta_id (richiesta_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
@@ -216,6 +219,22 @@ function hse_migrateCantiereDatabase() {
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'idoneita_sanitaria_file'");
     if (empty($columns)) {
         $wpdb->query("ALTER TABLE $table_personale ADD COLUMN idoneita_sanitaria_file varchar(255) AFTER idoneita_sanitaria_scadenza");
+    }
+    
+    // 🚀 NUOVE COLONNE: Ulteriori documenti di formazione
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_lavori_quota_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_lavori_quota_file varchar(255) AFTER formazione_preposti_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_dpi_terza_categoria_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_dpi_terza_categoria_file varchar(255) AFTER formazione_lavori_quota_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_file varchar(255) AFTER formazione_dpi_terza_categoria_file");
     }
     
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'pos_file'");
@@ -892,6 +911,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             }
                         } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_preposti_file'])) {
                             $hse_persona_data['formazione_preposti_file'] = $hse_existing_personale[$i]['formazione_preposti_file'];
+                        }
+                        
+                        // 🚀 NUOVI: Upload ulteriori documenti formazione
+                        if (!empty($_FILES['hse_formazione_lavori_quota_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_lavori_quota_' . $i], $hse_current_user_id, 'formazione_lavori_quota_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_lavori_quota_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_lavori_quota_file'])) {
+                            $hse_persona_data['formazione_lavori_quota_file'] = $hse_existing_personale[$i]['formazione_lavori_quota_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_formazione_dpi_terza_categoria_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_dpi_terza_categoria_' . $i], $hse_current_user_id, 'formazione_dpi_terza_categoria_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_dpi_terza_categoria_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_dpi_terza_categoria_file'])) {
+                            $hse_persona_data['formazione_dpi_terza_categoria_file'] = $hse_existing_personale[$i]['formazione_dpi_terza_categoria_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_formazione_ambienti_confinati_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_ambienti_confinati_' . $i], $hse_current_user_id, 'formazione_ambienti_confinati_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_ambienti_confinati_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_ambienti_confinati_file'])) {
+                            $hse_persona_data['formazione_ambienti_confinati_file'] = $hse_existing_personale[$i]['formazione_ambienti_confinati_file'];
                         }
                         
                         // Upload file UNILAV
@@ -1722,6 +1769,78 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
         echo '</div>'; // Fine hse_formazione_section
         
+        // 🚀 NUOVA SEZIONE: Ulteriori documenti di formazione - layout 3 colonne orizzontali con pulsanti elimina
+        echo '<div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">';
+        echo '<h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>';
+        echo '<div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
+        
+        // Formazione Lavori in Quota
+        echo '<div class="hse_lavori_quota_field">';
+        echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
+        if (!empty($hse_persona['formazione_lavori_quota_file'])) {
+            echo '<div class="hse_lavori_quota_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🏗️ File Lavori in Quota Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_lavori_quota_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_lavori_quota_file']) . '\', \'formazione_lavori_quota_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_formazione_lavori_quota_' . $index . '" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        echo '</div>';
+        
+        // Formazione DPI 3° categoria
+        echo '<div class="hse_dpi_terza_categoria_field">';
+        echo '<label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>';
+        if (!empty($hse_persona['formazione_dpi_terza_categoria_file'])) {
+            echo '<div class="hse_dpi_terza_categoria_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🦺 File DPI 3° categoria Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_dpi_terza_categoria_file']) . '\', \'formazione_dpi_terza_categoria_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_formazione_dpi_terza_categoria_' . $index . '" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        echo '</div>';
+        
+        // Formazione Ambienti Confinati
+        echo '<div class="hse_ambienti_confinati_field">';
+        echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
+        if (!empty($hse_persona['formazione_ambienti_confinati_file'])) {
+            echo '<div class="hse_ambienti_confinati_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🕳️ File Ambienti Confinati Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_ambienti_confinati_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_ambienti_confinati_file']) . '\', \'formazione_ambienti_confinati_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_formazione_ambienti_confinati_' . $index . '" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_ulteriori_formazione_grid
+        echo '<small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>';
+        echo '</div>'; // Fine hse_ulteriori_formazione_section
+        
         echo '</div>'; // Fine hse_persona_accordion_content
         echo '</div>'; // Fine hse_personale_row accordion
     }
@@ -1828,6 +1947,30 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '</div>'; // Fine hse_formazione_grid
     echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
     echo '</div>'; // Fine hse_formazione_section
+    
+    // 🚀 NUOVA SEZIONE: Ulteriori documenti di formazione default - layout 3 colonne orizzontali
+    echo '<div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">';
+    echo '<h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>';
+    echo '<div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
+    
+    echo '<div class="hse_lavori_quota_field">';
+    echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
+    echo '<input type="file" name="hse_formazione_lavori_quota_0" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_dpi_terza_categoria_field">';
+    echo '<label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>';
+    echo '<input type="file" name="hse_formazione_dpi_terza_categoria_0" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_ambienti_confinati_field">';
+    echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
+    echo '<input type="file" name="hse_formazione_ambienti_confinati_0" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '</div>'; // Fine hse_ulteriori_formazione_grid
+    echo '<small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>';
+    echo '</div>'; // Fine hse_ulteriori_formazione_section
     
     echo '</div>'; // Fine hse_persona_accordion_content
     echo '</div>'; // Fine hse_personale_row accordion
@@ -2856,6 +2999,96 @@ function hse_validateScadenze(personaIndex) {
         }
     }
 }
+
+// Funzione AJAX per eliminazione file ulteriori documenti di formazione
+function hse_eliminaFile(fileName, fieldType, personaId, buttonElement) {
+    const fileNames = {
+        'formazione_lavori_quota_file': 'Formazione Lavori in Quota',
+        'formazione_dpi_terza_categoria_file': 'Formazione uso DPI 3° categoria',
+        'formazione_ambienti_confinati_file': 'Formazione Lavori in Ambienti Confinati'
+    };
+    
+    const displayName = fileNames[fieldType] || fieldType;
+    
+    if (confirm(`Sei sicuro di voler eliminare il file ${displayName}?\n\nQuesta operazione non può essere annullata.`)) {
+        
+        // Trova l'indice della persona dal DOM
+        const personaRow = buttonElement.closest('.hse_personale_row');
+        const personaIndex = personaRow ? parseInt(personaRow.getAttribute('data-index')) : 0;
+        
+        // Rimuovi il suffisso '_file' per il tipo di campo
+        const baseFieldType = fieldType.replace('_file', '');
+        
+        // Disabilita il pulsante durante la richiesta
+        buttonElement.disabled = true;
+        buttonElement.innerHTML = '⏳ Eliminando...';
+        
+        fetch(hse_ajaxBaseUrl + 'elimina_file.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'elimina_file',
+                'file_type': baseFieldType,
+                'persona_index': personaIndex,
+                'nonce': hse_nonce
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Trova e rimuovi la sezione di successo
+                const successSection = buttonElement.closest('.hse_' + baseFieldType.split('_').pop() + '_success') ||
+                                     buttonElement.closest('[class*="success"]');
+                
+                if (successSection) {
+                    successSection.style.animation = 'hse_fadeOut 0.3s ease-in forwards';
+                    setTimeout(() => {
+                        successSection.remove();
+                        
+                        // Aggiungi campo di input al posto del file eliminato
+                        const fieldContainer = successSection.parentNode || 
+                                             personaRow.querySelector('.' + baseFieldType.replace(/_/g, '_') + '_field');
+                        
+                        if (fieldContainer) {
+                            const inputElement = document.createElement('input');
+                            inputElement.type = 'file';
+                            inputElement.name = 'hse_' + baseFieldType + '_' + personaIndex;
+                            inputElement.accept = '.pdf';
+                            inputElement.className = 'hse_' + baseFieldType.split('_').pop() + '_input';
+                            inputElement.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;';
+                            
+                            fieldContainer.appendChild(inputElement);
+                        }
+                    }, 300);
+                }
+                
+                hse_showToast(`✅ File ${displayName} eliminato con successo.`, 'success');
+                
+                // Aggiorna i dati esistenti se presenti
+                if (hse_existingPersonaleData && hse_existingPersonaleData[personaIndex]) {
+                    hse_existingPersonaleData[personaIndex][fieldType] = '';
+                }
+                
+            } else {
+                hse_showToast(`❌ Errore: ${data.message}`, 'error');
+                
+                // Ripristina il pulsante
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '🗑️ Elimina';
+            }
+        })
+        .catch(error => {
+            console.error('Errore eliminazione file:', error);
+            hse_showToast('❌ Errore di connessione. Riprova.', 'error');
+            
+            // Ripristina il pulsante
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '🗑️ Elimina';
+        });
+    }
+}
 </script>
 <script>
 // Gestione Accordion Principale
@@ -3047,6 +3280,20 @@ function hse_validateTargaInput(input) {
 }
 
 function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
+    // Controlli preliminari migliorati
+    if (!automezzoId || !automezzoInfo) {
+        hse_showToast('❌ Errore: Parametri mancanti per l\'eliminazione', 'error');
+        console.error('AUTOMEZZO DELETE ERROR: Missing parameters', {automezzoId, automezzoInfo});
+        return;
+    }
+
+    // Verifica che l'utente sia definito
+    if (typeof hse_currentUserId === 'undefined' || !hse_currentUserId) {
+        hse_showToast('❌ Errore: Sessione utente non valida', 'error');
+        console.error('AUTOMEZZO DELETE ERROR: Invalid user session');
+        return;
+    }
+
     if (isAssigned) {
         if (!confirm(`⚠️ ATTENZIONE\n\nL'automezzo "${automezzoInfo}" è attualmente assegnato a dei cantieri.\n\nSe lo elimini, verrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?`)) {
             return;
@@ -3057,29 +3304,73 @@ function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
         }
     }
     
-    // Mostra loading
+    // Mostra loading con timeout
     const automezzoRow = document.querySelector(`[data-automezzo-id="${automezzoId}"]`);
     if (automezzoRow) {
         automezzoRow.style.opacity = '0.5';
         automezzoRow.style.pointerEvents = 'none';
     }
+
+    // Timeout per la richiesta AJAX
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        controller.abort();
+        hse_showToast('❌ Timeout: La richiesta ha impiegato troppo tempo', 'error');
+        console.error('AUTOMEZZO DELETE TIMEOUT');
+        
+        // Ripristina lo stato
+        if (automezzoRow) {
+            automezzoRow.style.opacity = '1';
+            automezzoRow.style.pointerEvents = 'auto';
+        }
+    }, 30000); // 30 secondi timeout
     
-    // AJAX call
+    // AJAX call migliorata
     const formData = new FormData();
     formData.append('automezzo_id', automezzoId);
     formData.append('user_id', hse_currentUserId);
     if (isAssigned) {
         formData.append('force_delete', 'true');
     }
+
+    console.log('AUTOMEZZO DELETE REQUEST:', {
+        automezzoId, 
+        userId: hse_currentUserId, 
+        isAssigned, 
+        timestamp: new Date().toISOString()
+    });
     
     fetch('/cogei/ajax_fornitori/elimina_automezzo.php', {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal,
+        credentials: 'same-origin' // Include cookies per sessione WordPress
     })
-    .then(response => response.json())
+    .then(response => {
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Verifica che la risposta sia JSON
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("La risposta non è in formato JSON valido");
+        }
+        
+        return response.json();
+    })
     .then(data => {
+        console.log('AUTOMEZZO DELETE RESPONSE:', data);
+        
         if (data.success) {
             hse_showToast('✅ ' + data.message, 'success');
+            
+            // Log dettagli operazione
+            if (data.debug) {
+                console.log('AUTOMEZZO DELETE SUCCESS DETAILS:', data.debug);
+            }
             
             // Rimuovi dalla DOM con animazione
             if (automezzoRow) {
@@ -3111,7 +3402,13 @@ function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
                 }
             }
         } else {
-            hse_showToast('❌ ' + data.message, 'error');
+            const errorMsg = data.message || 'Errore sconosciuto durante l\'eliminazione';
+            hse_showToast('❌ ' + errorMsg, 'error');
+            
+            // Log dettagli errore
+            if (data.debug) {
+                console.error('AUTOMEZZO DELETE ERROR DETAILS:', data.debug);
+            }
             
             // Ripristina lo stato
             if (automezzoRow) {
@@ -3121,8 +3418,17 @@ function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
         }
     })
     .catch(error => {
-        console.error('Errore:', error);
-        hse_showToast('❌ Errore di connessione', 'error');
+        clearTimeout(timeoutId);
+        console.error('AUTOMEZZO DELETE FETCH ERROR:', error);
+        
+        let errorMessage = '❌ Errore di connessione';
+        if (error.name === 'AbortError') {
+            errorMessage = '❌ Richiesta annullata per timeout';
+        } else if (error.message) {
+            errorMessage = `❌ ${error.message}`;
+        }
+        
+        hse_showToast(errorMessage, 'error');
         
         // Ripristina lo stato
         if (automezzoRow) {
@@ -3275,6 +3581,20 @@ function hse_validateRevisioneDate(input) {
 }
 
 function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
+    // Controlli preliminari migliorati
+    if (!attrezzoId || !attrezzoInfo) {
+        hse_showToast('❌ Errore: Parametri mancanti per l\'eliminazione', 'error');
+        console.error('ATTREZZO DELETE ERROR: Missing parameters', {attrezzoId, attrezzoInfo});
+        return;
+    }
+
+    // Verifica che l'utente sia definito
+    if (typeof hse_currentUserId === 'undefined' || !hse_currentUserId) {
+        hse_showToast('❌ Errore: Sessione utente non valida', 'error');
+        console.error('ATTREZZO DELETE ERROR: Invalid user session');
+        return;
+    }
+
     if (isAssigned) {
         if (!confirm(`⚠️ ATTENZIONE\n\nL'attrezzo "${attrezzoInfo}" è attualmente assegnato a dei cantieri.\n\nSe lo elimini, verrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?`)) {
             return;
@@ -3285,29 +3605,73 @@ function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
         }
     }
     
-    // Mostra loading
+    // Mostra loading con timeout
     const attrezzoRow = document.querySelector(`[data-attrezzo-id="${attrezzoId}"]`);
     if (attrezzoRow) {
         attrezzoRow.style.opacity = '0.5';
         attrezzoRow.style.pointerEvents = 'none';
     }
+
+    // Timeout per la richiesta AJAX
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        controller.abort();
+        hse_showToast('❌ Timeout: La richiesta ha impiegato troppo tempo', 'error');
+        console.error('ATTREZZO DELETE TIMEOUT');
+        
+        // Ripristina lo stato
+        if (attrezzoRow) {
+            attrezzoRow.style.opacity = '1';
+            attrezzoRow.style.pointerEvents = 'auto';
+        }
+    }, 30000); // 30 secondi timeout
     
-    // AJAX call
+    // AJAX call migliorata
     const formData = new FormData();
     formData.append('attrezzo_id', attrezzoId);
     formData.append('user_id', hse_currentUserId);
     if (isAssigned) {
         formData.append('force_delete', 'true');
     }
+
+    console.log('ATTREZZO DELETE REQUEST:', {
+        attrezzoId, 
+        userId: hse_currentUserId, 
+        isAssigned, 
+        timestamp: new Date().toISOString()
+    });
     
     fetch('/cogei/ajax_fornitori/elimina_attrezzo.php', {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal,
+        credentials: 'same-origin' // Include cookies per sessione WordPress
     })
-    .then(response => response.json())
+    .then(response => {
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Verifica che la risposta sia JSON
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("La risposta non è in formato JSON valido");
+        }
+        
+        return response.json();
+    })
     .then(data => {
+        console.log('ATTREZZO DELETE RESPONSE:', data);
+        
         if (data.success) {
             hse_showToast('✅ ' + data.message, 'success');
+            
+            // Log dettagli operazione
+            if (data.debug) {
+                console.log('ATTREZZO DELETE SUCCESS DETAILS:', data.debug);
+            }
             
             // Rimuovi dalla DOM con animazione
             if (attrezzoRow) {
@@ -3339,7 +3703,13 @@ function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
                 }
             }
         } else {
-            hse_showToast('❌ ' + data.message, 'error');
+            const errorMsg = data.message || 'Errore sconosciuto durante l\'eliminazione';
+            hse_showToast('❌ ' + errorMsg, 'error');
+            
+            // Log dettagli errore
+            if (data.debug) {
+                console.error('ATTREZZO DELETE ERROR DETAILS:', data.debug);
+            }
             
             // Ripristina lo stato
             if (attrezzoRow) {
@@ -3349,8 +3719,17 @@ function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
         }
     })
     .catch(error => {
-        console.error('Errore:', error);
-        hse_showToast('❌ Errore di connessione', 'error');
+        clearTimeout(timeoutId);
+        console.error('ATTREZZO DELETE FETCH ERROR:', error);
+        
+        let errorMessage = '❌ Errore di connessione';
+        if (error.name === 'AbortError') {
+            errorMessage = '❌ Richiesta annullata per timeout';
+        } else if (error.message) {
+            errorMessage = `❌ ${error.message}`;
+        }
+        
+        hse_showToast(errorMessage, 'error');
         
         // Ripristina lo stato
         if (attrezzoRow) {
@@ -3590,6 +3969,25 @@ function hse_addPersona() {
                     </div>
                 </div>
                 <small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l'assegnazione ai cantieri</small>
+            </div>
+            
+            <div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">
+                <h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>
+                <div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="hse_lavori_quota_field">
+                        <label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>
+                        <input type="file" name="hse_formazione_lavori_quota_${hse_newIndex}" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_dpi_terza_categoria_field">
+                        <label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>
+                        <input type="file" name="hse_formazione_dpi_terza_categoria_${hse_newIndex}" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_ambienti_confinati_field">
+                        <label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>
+                        <input type="file" name="hse_formazione_ambienti_confinati_${hse_newIndex}" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+                <small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>
             </div>
         </div>
     `;
@@ -4150,53 +4548,126 @@ document.addEventListener("DOMContentLoaded", function() {
                         return false;
                     }
                     
+                    // MODIFICA: Controllo selezionato almeno un elemento (operaio, automezzo o attrezzo)
                     const hse_selectedOperai = document.querySelectorAll(`input[name="hse_operai_selezionati_${hse_cantiereId}[]"]:checked`);
+                    const hse_selectedAutomezzi = document.querySelectorAll(`input[name="hse_automezzi_selezionati_${hse_cantiereId}[]"]:checked`);
+                    const hse_selectedAttrezzi = document.querySelectorAll(`input[name="hse_attrezzi_selezionati_${hse_cantiereId}[]"]:checked`);
                     
-                    if (hse_selectedOperai.length === 0) {
-                        alert(`⚠️ Devi selezionare almeno un operaio per questo cantiere (ID: ${hse_cantiereId})`);
+                    const hse_totalSelected = hse_selectedOperai.length + hse_selectedAutomezzi.length + hse_selectedAttrezzi.length;
+                    
+                    if (hse_totalSelected === 0) {
+                        alert(`⚠️ Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere (ID: ${hse_cantiereId})`);
                         e.preventDefault();
                         return false;
                     }
                     
+                    // NUOVO: Controlla conformità solo come informazione, non blocca il salvataggio
                     let hse_hasScaduti = false;
+                    let hse_hasConformityIssues = false;
                     let hse_operaiScaduti = [];
+                    let hse_conformityWarnings = [];
                     
-                    hse_selectedOperai.forEach(checkbox => {
-                        const operaioId = parseInt(checkbox.value);
-                        const operaio = hse_existingPersonaleData.find(p => p.id == operaioId);
+                    if (hse_selectedOperai.length > 0) {
+                        // Calcola statistiche conformità
+                        let antincendioCount = 0;
+                        let primoSoccorsoCount = 0;
+                        let prepostiCount = 0;
                         
-                        if (operaio) {
-                            const warnings = [];
-                            const oggi = new Date();
+                        hse_selectedOperai.forEach(checkbox => {
+                            const operaioId = parseInt(checkbox.value);
+                            const operaio = hse_existingPersonaleData.find(p => p.id == operaioId);
                             
-                            if (operaio.unilav_data_scadenza) {
-                                const scadenza = new Date(operaio.unilav_data_scadenza);
-                                if (oggi > scadenza) {
-                                    warnings.push('UNILAV scaduto');
-                                    hse_hasScaduti = true;
+                            if (operaio) {
+                                // Controlla scadenze documenti
+                                const warnings = [];
+                                const oggi = new Date();
+                                
+                                if (operaio.unilav_data_scadenza) {
+                                    const scadenza = new Date(operaio.unilav_data_scadenza);
+                                    if (oggi > scadenza) {
+                                        warnings.push('UNILAV scaduto');
+                                        hse_hasScaduti = true;
+                                    }
                                 }
-                            }
-                            
-                            if (operaio.idoneita_sanitaria_scadenza) {
-                                const scadenza = new Date(operaio.idoneita_sanitaria_scadenza);
-                                if (oggi > scadenza) {
-                                    warnings.push('Idoneità sanitaria scaduta');
-                                    hse_hasScaduti = true;
+                                
+                                if (operaio.idoneita_sanitaria_scadenza) {
+                                    const scadenza = new Date(operaio.idoneita_sanitaria_scadenza);
+                                    if (oggi > scadenza) {
+                                        warnings.push('Idoneità sanitaria scaduta');
+                                        hse_hasScaduti = true;
+                                    }
                                 }
+                                
+                                if (warnings.length > 0) {
+                                    hse_operaiScaduti.push(`${operaio.nome} ${operaio.cognome}: ${warnings.join(', ')}`);
+                                }
+                                
+                                // Conta competenze per conformità
+                                if (operaio.formazione_antincendio_file) antincendioCount++;
+                                if (operaio.formazione_primo_soccorso_file) primoSoccorsoCount++;
+                                if (operaio.formazione_preposti_file) prepostiCount++;
                             }
-                            
-                            if (warnings.length > 0) {
-                                hse_operaiScaduti.push(`${operaio.nome} ${operaio.cognome}: ${warnings.join(', ')}`);
-                            }
+                        });
+                        
+                        // Calcola percentuali conformità
+                        const totalOperai = hse_selectedOperai.length;
+                        const percAntincendio = (antincendioCount / totalOperai) * 100;
+                        const percPrimoSoccorso = (primoSoccorsoCount / totalOperai) * 100;
+                        const percPreposti = (prepostiCount / totalOperai) * 100;
+                        
+                        // Controlla conformità (30% minimo per ogni competenza)
+                        if (percAntincendio < 30) {
+                            hse_hasConformityIssues = true;
+                            hse_conformityWarnings.push(`Antincendio: ${percAntincendio.toFixed(1)}% (minimo 30%)`);
                         }
-                    });
+                        if (percPrimoSoccorso < 30) {
+                            hse_hasConformityIssues = true;
+                            hse_conformityWarnings.push(`Primo Soccorso: ${percPrimoSoccorso.toFixed(1)}% (minimo 30%)`);
+                        }
+                        if (percPreposti < 30) {
+                            hse_hasConformityIssues = true;
+                            hse_conformityWarnings.push(`Preposti: ${percPreposti.toFixed(1)}% (minimo 30%)`);
+                        }
+                    }
+                    
+                    // MODIFICA: Mostra avvisi informativi ma non blocca il salvataggio
+                    let confirmationMessage = '';
+                    let hasWarnings = false;
                     
                     if (hse_hasScaduti) {
-                        const confirmMessage = `⚠️ ATTENZIONE: Alcuni operai selezionati hanno documenti scaduti:\n\n${hse_operaiScaduti.join('\n')}\n\nVuoi continuare comunque?`;
-                        if (!confirm(confirmMessage)) {
+                        confirmationMessage += '⚠️ DOCUMENTI SCADUTI:\n\n' + hse_operaiScaduti.join('\n') + '\n\n';
+                        hasWarnings = true;
+                    }
+                    
+                    if (hse_hasConformityIssues) {
+                        confirmationMessage += '📊 CONFORMITÀ NON RAGGIUNTA:\n\n' + hse_conformityWarnings.join('\n') + '\n\n';
+                        confirmationMessage += 'Il cantiere risulta NON CONFORME ai requisiti di formazione del personale.\n\n';
+                        hasWarnings = true;
+                    }
+                    
+                    if (hasWarnings) {
+                        confirmationMessage += '💡 NOTA: Questi sono avvisi informativi. Puoi comunque salvare, ma ti consigliamo di risolvere le problematiche prima di accedere al cantiere.\n\nVuoi continuare con il salvataggio?';
+                        
+                        if (!confirm(confirmationMessage)) {
                             e.preventDefault();
                             return false;
                         }
+                        
+                        // Log degli avvisi per debugging
+                        console.log('CANTIERE SAVE WITH WARNINGS:', {
+                            cantiereId: hse_cantiereId,
+                            hasScaduti: hse_hasScaduti,
+                            hasConformityIssues: hse_hasConformityIssues,
+                            operaiScaduti: hse_operaiScaduti,
+                            conformityWarnings: hse_conformityWarnings,
+                            totalSelected: hse_totalSelected
+                        });
+                        
+                        // Mostra toast informativo
+                        hse_showToast('💾 Salvataggio in corso con avvisi informativi...', 'warning');
+                    } else {
+                        // Tutto OK, salvataggio normale
+                        hse_showToast('💾 Salvataggio in corso...', 'info');
                     }
                 }
             }
@@ -4379,6 +4850,145 @@ if (typeof window !== 'undefined') {
     
     // Utility
     window.hse_showToast = hse_showToast;
+    
+    // NUOVE FUNZIONI DI DEBUG E TESTING
+    window.hse_testAjaxConnection = hse_testAjaxConnection;
+    window.hse_showDebugInfo = hse_showDebugInfo;
+    window.hse_enhancedToast = hse_enhancedToast;
+}
+
+// NUOVE FUNZIONI MIGLIORATE
+
+// Toast notifications avanzate con più opzioni
+function hse_enhancedToast(message, type = 'info', duration = 5000, showDetails = false) {
+    // Rimuovi toast precedenti per evitare accumulo
+    const existingToasts = document.querySelectorAll('.hse_enhanced_toast');
+    existingToasts.forEach(toast => toast.remove());
+    
+    const toast = document.createElement('div');
+    toast.className = 'hse_enhanced_toast';
+    
+    // Colori e icone per tipo
+    const types = {
+        success: { bg: '#28a745', icon: '✅', color: 'white' },
+        error: { bg: '#dc3545', icon: '❌', color: 'white' },
+        warning: { bg: '#ffc107', icon: '⚠️', color: '#000' },
+        info: { bg: '#17a2b8', icon: 'ℹ️', color: 'white' }
+    };
+    
+    const typeConfig = types[type] || types.info;
+    
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        background: ${typeConfig.bg};
+        color: ${typeConfig.color};
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-weight: bold;
+        min-width: 300px;
+        max-width: 500px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.4;
+        animation: hse_slideInFromRight 0.5s ease-out;
+        cursor: pointer;
+        border-left: 5px solid rgba(255,255,255,0.3);
+    `;
+    
+    const content = document.createElement('div');
+    content.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="font-size: 18px; flex-shrink: 0;">${typeConfig.icon}</span>
+            <div style="flex: 1;">
+                <div style="font-weight: bold; margin-bottom: 5px;">${message}</div>
+                ${showDetails ? '<div style="font-size: 12px; opacity: 0.9; margin-top: 5px;">Clicca per nascondere • Auto-chiusura in ' + Math.ceil(duration/1000) + 's</div>' : ''}
+            </div>
+            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: none; border: none; color: ${typeConfig.color}; font-size: 16px; cursor: pointer; opacity: 0.7; padding: 0; margin-left: 10px;">✕</button>
+        </div>
+    `;
+    
+    toast.appendChild(content);
+    document.body.appendChild(toast);
+    
+    // Log del toast per debugging
+    console.log('ENHANCED TOAST SHOWN:', {
+        type: type,
+        message: message,
+        timestamp: new Date().toISOString(),
+        duration: duration
+    });
+    
+    // Auto-rimozione
+    const removeToast = () => {
+        if (toast && toast.parentNode) {
+            toast.style.animation = 'hse_slideOutToRight 0.3s ease-in forwards';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }
+    };
+    
+    // Click per rimuovere
+    toast.addEventListener('click', removeToast);
+    
+    // Auto-rimozione dopo duration
+    setTimeout(removeToast, duration);
+    
+    return toast;
+}
+
+// Funzione di test per connessione AJAX
+function hse_testAjaxConnection() {
+    console.log('🔧 Test connessione AJAX endpoints...');
+    
+    const endpoints = [
+        '/cogei/ajax_fornitori/elimina_automezzo.php',
+        '/cogei/ajax_fornitori/elimina_attrezzo.php'
+    ];
+    
+    endpoints.forEach(endpoint => {
+        fetch(endpoint, {
+            method: 'GET', // Solo test di raggiungibilità
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            console.log(`✅ ${endpoint}: Raggiungibile (Status: ${response.status})`);
+            return response.text();
+        })
+        .then(data => {
+            console.log(`📄 ${endpoint}: Response preview:`, data.substring(0, 100) + '...');
+        })
+        .catch(error => {
+            console.error(`❌ ${endpoint}: Errore connessione:`, error);
+            hse_enhancedToast(`❌ Endpoint non raggiungibile: ${endpoint}`, 'error');
+        });
+    });
+    
+    hse_enhancedToast('🔧 Test connessione AJAX avviato - controlla console per dettagli', 'info');
+}
+
+// Funzione per mostrare informazioni di debug
+function hse_showDebugInfo() {
+    const debugInfo = {
+        userAgent: navigator.userAgent,
+        currentUrl: window.location.href,
+        hasJQuery: typeof $ !== 'undefined',
+        hasWordPress: typeof wp !== 'undefined',
+        currentUserId: typeof hse_currentUserId !== 'undefined' ? hse_currentUserId : 'NON DEFINITO',
+        personaleData: typeof hse_existingPersonaleData !== 'undefined' ? hse_existingPersonaleData.length + ' records' : 'NON DEFINITO',
+        cantieriData: typeof hse_cantieriAssegnati !== 'undefined' ? hse_cantieriAssegnati.length + ' cantieri' : 'NON DEFINITO',
+        timestamp: new Date().toISOString()
+    };
+    
+    console.table(debugInfo);
+    hse_enhancedToast('ℹ️ Informazioni di debug inviate alla console', 'info', 3000, true);
+    return debugInfo;
 }
 </script>
 <style>
@@ -5020,6 +5630,44 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
 @keyframes hse_fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+/* Toast notifications migliorate */
+.hse_enhanced_toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 11000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: Arial, sans-serif;
+    transition: all 0.3s ease;
+}
+
+.hse_enhanced_toast:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+@keyframes hse_slideInFromRight {
+    from { 
+        transform: translateX(100%); 
+        opacity: 0; 
+    }
+    to { 
+        transform: translateX(0); 
+        opacity: 1; 
+    }
+}
+
+@keyframes hse_slideOutToRight {
+    from { 
+        transform: translateX(0); 
+        opacity: 1; 
+    }
+    to { 
+        transform: translateX(100%); 
+        opacity: 0; 
+    }
 }
 
 /* Toast notifications */
