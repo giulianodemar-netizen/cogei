@@ -1,0 +1,3765 @@
+<?php
+
+/**
+ * Form Gestione Cantiere ESTESO - Sistema Albo Fornitori Cogei HSE
+ * Per fornitori tipologia "Lavoro" che vogliono accedere al cantiere
+ * AGGIORNATO: Parte B per singolo cantiere + documenti formazione in Parte A + UNILAV + Idoneità Sanitaria
+ * Layout 3 colonne per documenti formazione + Classi CSS HSE + ACCORDION COMPATTO
+ * CON ELIMINAZIONI AJAX + NUOVI CAMPI OPERAI
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+global $wpdb;
+
+$hse_max_file_size = 10 * 1024 * 1024; // 10MB in bytes
+$hse_allowed_extensions = array('pdf');
+
+// ================== CREAZIONE TABELLE HSE ==================
+
+function hse_createCantiereTablesIfNotExists() {
+    global $wpdb;
+    
+    $table_richieste = $wpdb->prefix . 'cantiere_richieste';
+    $sql_richieste = "CREATE TABLE IF NOT EXISTS $table_richieste (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        user_id int(11) NOT NULL,
+        dvr_file varchar(255),
+        dvr_data_emissione date,
+        rct_file varchar(255),
+        numero_personale int(11) DEFAULT 0,
+        parte_b_completata tinyint(1) DEFAULT 0,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_richieste);
+    
+    $table_personale = $wpdb->prefix . 'cantiere_personale';
+    $sql_personale = "CREATE TABLE IF NOT EXISTS $table_personale (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        nome varchar(100) NOT NULL,
+        cognome varchar(100) NOT NULL,
+        data_nascita date NOT NULL,
+        unilav_data_emissione date,
+        unilav_data_scadenza date,
+        unilav_file varchar(255),
+        idoneita_sanitaria_scadenza date,
+        idoneita_sanitaria_file varchar(255),
+        formazione_antincendio_file varchar(255),
+        formazione_primo_soccorso_file varchar(255),
+        formazione_preposti_file varchar(255),
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_personale);
+    
+    $table_cantieri = $wpdb->prefix . 'cantieri';
+    $sql_cantieri = "CREATE TABLE IF NOT EXISTS $table_cantieri (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        nome varchar(255) NOT NULL,
+        descrizione text,
+        data_inizio date,
+        data_fine date,
+        stato enum('attivo','sospeso','completato') DEFAULT 'attivo',
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY nome (nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantieri);
+    
+    $table_cantieri_aziende = $wpdb->prefix . 'cantieri_aziende';
+    $sql_cantieri_aziende = "CREATE TABLE IF NOT EXISTS $table_cantieri_aziende (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        assegnato_da int(11),
+        note text,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user (cantiere_id, user_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantieri_aziende);
+    
+    $table_cantiere_operai = $wpdb->prefix . 'cantiere_operai_assegnazioni';
+    $sql_cantiere_operai = "CREATE TABLE IF NOT EXISTS $table_cantiere_operai (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        operaio_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_operaio (cantiere_id, user_id, operaio_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY operaio_id (operaio_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_operai);
+    
+    $table_cantiere_pos = $wpdb->prefix . 'cantiere_pos_files';
+    $sql_cantiere_pos = "CREATE TABLE IF NOT EXISTS $table_cantiere_pos (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        pos_file varchar(255) NOT NULL,
+        mezzi_file varchar(255),
+        data_caricamento datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user (cantiere_id, user_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_pos);
+    
+    hse_migrateCantiereDatabase();
+}
+
+function hse_migrateCantiereDatabase() {
+    global $wpdb;
+    
+    $table_richieste = $wpdb->prefix . 'cantiere_richieste';
+    $table_personale = $wpdb->prefix . 'cantiere_personale';
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'dvr_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN dvr_data_emissione date AFTER dvr_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'unilav_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN unilav_data_emissione date AFTER data_nascita");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'unilav_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN unilav_data_scadenza date AFTER unilav_data_emissione");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'unilav_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN unilav_file varchar(255) AFTER unilav_data_scadenza");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'idoneita_sanitaria_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN idoneita_sanitaria_file varchar(255) AFTER idoneita_sanitaria_scadenza");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'pos_file'");
+    if (!empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste DROP COLUMN pos_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'mezzi_file'");
+    if (!empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste DROP COLUMN mezzi_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'selezionato_parte_b'");
+    if (!empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale DROP COLUMN selezionato_parte_b");
+    }
+    
+    $old_columns = ['formazione_quota_file', 'formazione_dpi_file', 'formazione_confinati_file'];
+    foreach ($old_columns as $col) {
+        $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE '$col'");
+        if (!empty($columns)) {
+            $wpdb->query("ALTER TABLE $table_personale DROP COLUMN $col");
+        }
+    }
+}
+
+hse_createCantiereTablesIfNotExists();
+
+?>
+<?php
+
+// ================== FUNZIONI HELPER HSE ==================
+
+function hse_determineSupplierStatus($user_id) {
+    $forced_status = get_user_meta($user_id, 'forced_supplier_status', true);
+    if (!empty($forced_status)) {
+        return $forced_status;
+    }
+    
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    
+    $documenti_fondamentali = array(
+        'user_registration_scad_CCIAA', 
+        'user_registration_scad_wit',
+        'user_registration_scad_durc',
+        'user_registration_scadenza_altre_scadenze'
+    );
+    
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
+        if ($tipo === 'Forniture') {
+            $documenti_fondamentali[] = 'user_registration_scad_rct_rco_forni';
+        } else {
+            $documenti_fondamentali[] = 'user_registration_scad_rct_rco';
+        }
+    }
+    
+    $documenti_caricati = 0;
+    $documenti_totali = count($documenti_fondamentali);
+    $has_any_document = false;
+    
+    foreach ($documenti_fondamentali as $field) {
+        $date = get_user_meta($user_id, $field, true);
+        if (!empty($date)) {
+            $documenti_caricati++;
+            $has_any_document = true;
+        }
+    }
+    
+    if ($documenti_caricati === $documenti_totali) {
+        return 'Attivo';
+    } elseif (!$has_any_document) {
+        return 'Solo_Registrato';
+    } else {
+        return 'Solo_Registrato_In_Attesa';
+    }
+}
+
+function hse_getCantieriAssegnatiUser($user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT c.*, ca.data_assegnazione, ca.note,
+               DATEDIFF(c.data_fine, CURDATE()) as giorni_rimanenti
+        FROM {$wpdb->prefix}cantieri c
+        JOIN {$wpdb->prefix}cantieri_aziende ca ON c.id = ca.cantiere_id
+        WHERE ca.user_id = %d
+        ORDER BY 
+            CASE c.stato 
+                WHEN 'attivo' THEN 1 
+                WHEN 'sospeso' THEN 2 
+                WHEN 'completato' THEN 3 
+            END,
+            ca.data_assegnazione DESC
+    ", $user_id), ARRAY_A);
+}
+
+function hse_getOperaiAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT oa.*, p.nome, p.cognome, p.data_nascita,
+               p.unilav_data_emissione, p.unilav_data_scadenza, p.unilav_file,
+               p.idoneita_sanitaria_scadenza, p.idoneita_sanitaria_file,
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+        FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
+        JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
+        WHERE oa.cantiere_id = %d AND oa.user_id = %d
+        ORDER BY oa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getPosFileByCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_row($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_pos_files
+        WHERE cantiere_id = %d AND user_id = %d
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getOperaioCantieriAssegnazioni($operaio_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT oa.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
+        JOIN {$wpdb->prefix}cantieri c ON oa.cantiere_id = c.id
+        WHERE oa.operaio_id = %d AND oa.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $operaio_id, $user_id), ARRAY_A);
+}
+
+function hse_getCantiereProgress($cantiere, $user_id) {
+    if (!$cantiere['data_inizio'] || !$cantiere['data_fine']) {
+        return null;
+    }
+    
+    $data_inizio = new DateTime($cantiere['data_inizio']);
+    $data_fine = new DateTime($cantiere['data_fine']);
+    $oggi = new DateTime();
+    
+    $durata_totale = $data_fine->diff($data_inizio)->days;
+    $giorni_trascorsi = $oggi->diff($data_inizio)->days;
+    
+    if ($oggi < $data_inizio) {
+        return ['progress' => 0, 'status' => 'non_iniziato'];
+    } elseif ($oggi > $data_fine) {
+        return ['progress' => 100, 'status' => 'completato'];
+    } else {
+        $progress = min(100, max(0, ($giorni_trascorsi / $durata_totale) * 100));
+        return ['progress' => round($progress, 1), 'status' => 'in_corso'];
+    }
+}
+
+function hse_uploadFileToWordPress($file, $user_id, $tipo_file) {
+    if (!function_exists('wp_handle_upload')) {
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+    }
+    
+    if (empty($file['name']) || $file['error'] !== UPLOAD_ERR_OK) {
+        return false;
+    }
+    
+    $upload_overrides = array('test_form' => false);
+    $filename = sanitize_file_name($user_id . '_' . $tipo_file . '_' . date('Y-m-d_H-i-s') . '_' . $file['name']);
+    $file['name'] = $filename;
+    
+    $movefile = wp_handle_upload($file, $upload_overrides);
+    
+    if ($movefile && !isset($movefile['error'])) {
+        $attachment = array(
+            'post_mime_type' => $movefile['type'],
+            'post_title' => sanitize_file_name(pathinfo($filename, PATHINFO_FILENAME)),
+            'post_content' => '',
+            'post_status' => 'inherit'
+        );
+        
+        $attach_id = wp_insert_attachment($attachment, $movefile['file']);
+        
+        if (!is_wp_error($attach_id)) {
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+            $attach_data = wp_generate_attachment_metadata($attach_id, $movefile['file']);
+            wp_update_attachment_metadata($attach_id, $attach_data);
+        }
+        
+        return $movefile['url'];
+    }
+    
+    return false;
+}
+
+function hse_getCantiereData($user_id) {
+    global $wpdb;
+    
+    $richiesta = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d",
+        $user_id
+    ), ARRAY_A);
+    
+    if ($richiesta) {
+        $personale = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}cantiere_personale WHERE richiesta_id = %d ORDER BY id ASC",
+            $richiesta['id']
+        ), ARRAY_A);
+        
+        $richiesta['personale'] = $personale;
+    }
+    
+    return $richiesta;
+}
+
+function hse_validatePersonaleData($personale_data) {
+    $errors = array();
+    
+    foreach ($personale_data as $index => $persona) {
+        $persona_num = $index + 1;
+        
+        if (empty($persona['nome']) || empty($persona['cognome']) || empty($persona['data_nascita'])) {
+            $errors[] = "Nome, cognome e data di nascita del personale $persona_num sono obbligatori";
+        }
+        
+        $data_nascita = DateTime::createFromFormat('Y-m-d', $persona['data_nascita']);
+        if (!$data_nascita) {
+            $errors[] = "Data di nascita non valida per il personale $persona_num";
+        }
+        
+        if (!empty($persona['unilav_data_emissione'])) {
+            $unilav_emissione = DateTime::createFromFormat('Y-m-d', $persona['unilav_data_emissione']);
+            if (!$unilav_emissione) {
+                $errors[] = "Data emissione UNILAV non valida per il personale $persona_num";
+            }
+            
+            if (!empty($persona['unilav_data_scadenza'])) {
+                $unilav_scadenza = DateTime::createFromFormat('Y-m-d', $persona['unilav_data_scadenza']);
+                if (!$unilav_scadenza) {
+                    $errors[] = "Data scadenza UNILAV non valida per il personale $persona_num";
+                } elseif ($unilav_scadenza <= $unilav_emissione) {
+                    $errors[] = "Data scadenza UNILAV deve essere successiva alla data di emissione per il personale $persona_num";
+                }
+            }
+        }
+        
+        if (!empty($persona['idoneita_sanitaria_scadenza'])) {
+            $idoneita_scadenza = DateTime::createFromFormat('Y-m-d', $persona['idoneita_sanitaria_scadenza']);
+            if (!$idoneita_scadenza) {
+                $errors[] = "Data scadenza idoneità sanitaria non valida per il personale $persona_num";
+            }
+        }
+    }
+    
+    return $errors;
+}
+
+function hse_calculateSkillPercentagesForCantiere($operai_assegnati) {
+    if (empty($operai_assegnati)) {
+        return array(
+            'antincendio' => 0,
+            'primo_soccorso' => 0,
+            'preposti' => 0,
+            'totale_selezionato' => 0,
+            'distribuzione' => array('antincendio' => 0, 'primo_soccorso' => 0, 'preposti' => 0),
+            'competenze_personale' => array(),
+            'conforme' => false
+        );
+    }
+    
+    $totale_selezionato = count($operai_assegnati);
+    $competenze_personale = array();
+    $distribuzione = array('antincendio' => 0, 'primo_soccorso' => 0, 'preposti' => 0);
+    
+    foreach ($operai_assegnati as $operaio) {
+        $competenze = array();
+        $nome_completo = $operaio['nome'] . ' ' . $operaio['cognome'];
+        
+        if (!empty($operaio['formazione_antincendio_file'])) {
+            $competenze[] = 'antincendio';
+            $distribuzione['antincendio']++;
+        }
+        if (!empty($operaio['formazione_primo_soccorso_file'])) {
+            $competenze[] = 'primo_soccorso';
+            $distribuzione['primo_soccorso']++;
+        }
+        if (!empty($operaio['formazione_preposti_file'])) {
+            $competenze[] = 'preposti';
+            $distribuzione['preposti']++;
+        }
+        
+        $competenze_personale[] = array(
+            'nome' => $nome_completo,
+            'competenze' => $competenze
+        );
+    }
+    
+    $percentuale_antincendio = round(($distribuzione['antincendio'] / $totale_selezionato) * 100, 1);
+    $percentuale_primo_soccorso = round(($distribuzione['primo_soccorso'] / $totale_selezionato) * 100, 1);
+    $percentuale_preposti = round(($distribuzione['preposti'] / $totale_selezionato) * 100, 1);
+    
+    $conforme = ($percentuale_antincendio >= 30 && $percentuale_primo_soccorso >= 30 && $percentuale_preposti >= 30);
+    
+    return array(
+        'antincendio' => $percentuale_antincendio,
+        'primo_soccorso' => $percentuale_primo_soccorso,
+        'preposti' => $percentuale_preposti,
+        'totale_selezionato' => $totale_selezionato,
+        'distribuzione' => $distribuzione,
+        'competenze_personale' => $competenze_personale,
+        'conforme' => $conforme
+    );
+}
+
+function hse_checkOperaioScadenze($operaio) {
+    $warnings = array();
+    $oggi = new DateTime();
+    
+    if (!empty($operaio['unilav_data_scadenza'])) {
+        $unilav_scadenza = new DateTime($operaio['unilav_data_scadenza']);
+        $diff_giorni = $oggi->diff($unilav_scadenza)->days;
+        $is_scaduto = $oggi > $unilav_scadenza;
+        
+        if ($is_scaduto) {
+            $warnings[] = "🚨 UNILAV scaduto da $diff_giorni giorni";
+        } elseif ($diff_giorni <= 30) {
+            $warnings[] = "⚠️ UNILAV scade tra $diff_giorni giorni";
+        }
+    }
+    
+    if (!empty($operaio['idoneita_sanitaria_scadenza'])) {
+        $sanitaria_scadenza = new DateTime($operaio['idoneita_sanitaria_scadenza']);
+        $diff_giorni = $oggi->diff($sanitaria_scadenza)->days;
+        $is_scaduto = $oggi > $sanitaria_scadenza;
+        
+        if ($is_scaduto) {
+            $warnings[] = "🚨 Idoneità sanitaria scaduta da $diff_giorni giorni";
+        } elseif ($diff_giorni <= 30) {
+            $warnings[] = "⚠️ Idoneità sanitaria scade tra $diff_giorni giorni";
+        }
+    }
+    
+    return $warnings;
+}
+
+?>
+<?php
+
+// ================== INIZIALIZZAZIONE VARIABILI HSE ==================
+$hse_success_message = '';
+$hse_error_messages = array();
+$hse_current_user_id = get_current_user_id();
+
+if (!$hse_current_user_id) {
+    $hse_error_messages[] = "Devi essere loggato per accedere a questa sezione";
+} else {
+    $hse_user_tipo = get_user_meta($hse_current_user_id, 'user_registration_tip_ut_rad', true);
+    if ($hse_user_tipo !== 'Lavoro') {
+        $hse_error_messages[] = "Questa sezione è disponibile solo per fornitori di tipo 'Lavoro'";
+    } else {
+        $hse_user_status = hse_determineSupplierStatus($hse_current_user_id);
+        if ($hse_user_status !== 'Attivo') {
+            $hse_error_messages[] = "Per accedere al cantiere devi essere in stato 'Attivo' nell'albo fornitori. Stato attuale: " . $hse_user_status . ". Contatta l'amministrazione per attivare il tuo account.";
+        }
+    }
+}
+
+// PROCESSO DI SALVATAGGIO HSE
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
+    
+    if (!wp_verify_nonce($_POST['hse_cantiere_nonce'], 'hse_cantiere_form_' . $hse_current_user_id)) {
+        $hse_error_messages[] = "Errore di sicurezza. Riprova.";
+    } else {
+        
+        if (isset($_POST['hse_cantiere_submit_parte_a'])) {
+            // SALVATAGGIO PARTE A
+            
+            $hse_numero_personale = intval($_POST['hse_numero_personale']);
+            $hse_personale_data = array();
+            
+            if ($hse_numero_personale <= 0) {
+                $hse_error_messages[] = "Il numero del personale deve essere maggiore di 0";
+            }
+            
+            for ($i = 0; $i < $hse_numero_personale; $i++) {
+                if (isset($_POST['hse_personale_nome'][$i])) {
+                    $hse_personale_data[] = array(
+                        'nome' => sanitize_text_field($_POST['hse_personale_nome'][$i]),
+                        'cognome' => sanitize_text_field($_POST['hse_personale_cognome'][$i]),
+                        'data_nascita' => sanitize_text_field($_POST['hse_personale_data_nascita'][$i]),
+                        'unilav_data_emissione' => sanitize_text_field($_POST['hse_personale_unilav_emissione'][$i] ?? ''),
+                        'unilav_data_scadenza' => sanitize_text_field($_POST['hse_personale_unilav_scadenza'][$i] ?? ''),
+                        'idoneita_sanitaria_scadenza' => sanitize_text_field($_POST['hse_personale_idoneita_scadenza'][$i] ?? '')
+                    );
+                }
+            }
+            
+            $hse_personale_errors = hse_validatePersonaleData($hse_personale_data);
+            $hse_error_messages = array_merge($hse_error_messages, $hse_personale_errors);
+            
+            if (empty($hse_error_messages)) {
+                $hse_dvr_file = '';
+                $hse_rct_file = '';
+                $hse_dvr_data_emissione = sanitize_text_field($_POST['hse_dvr_data_emissione'] ?? '');
+                
+                if (!empty($_FILES['hse_dvr_file']['name'])) {
+                    $hse_dvr_file = hse_uploadFileToWordPress($_FILES['hse_dvr_file'], $hse_current_user_id, 'dvr');
+                    if (!$hse_dvr_file) {
+                        $hse_error_messages[] = "Errore durante l'upload del file DVR";
+                    }
+                }
+                
+                if (!empty($_FILES['hse_rct_file']['name'])) {
+                    $hse_rct_file = hse_uploadFileToWordPress($_FILES['hse_rct_file'], $hse_current_user_id, 'rct');
+                    if (!$hse_rct_file) {
+                        $hse_error_messages[] = "Errore durante l'upload del file RCT";
+                    }
+                }
+                
+                if (empty($hse_error_messages)) {
+                    $hse_existing_request = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d",
+                        $hse_current_user_id
+                    ), ARRAY_A);
+                    
+                    $hse_richiesta_data = array(
+                        'user_id' => $hse_current_user_id,
+                        'numero_personale' => $hse_numero_personale
+                    );
+                    
+                    if ($hse_dvr_file) $hse_richiesta_data['dvr_file'] = $hse_dvr_file;
+                    if ($hse_rct_file) $hse_richiesta_data['rct_file'] = $hse_rct_file;
+                    if ($hse_dvr_data_emissione) $hse_richiesta_data['dvr_data_emissione'] = $hse_dvr_data_emissione;
+                    
+                    if ($hse_existing_request) {
+                        $wpdb->update(
+                            $wpdb->prefix . 'cantiere_richieste',
+                            $hse_richiesta_data,
+                            array('id' => $hse_existing_request['id'])
+                        );
+                        $hse_richiesta_id = $hse_existing_request['id'];
+                    } else {
+                        $wpdb->insert($wpdb->prefix . 'cantiere_richieste', $hse_richiesta_data);
+                        $hse_richiesta_id = $wpdb->insert_id;
+                    }
+                    
+                    // Gestione personale con documenti formazione
+                    $hse_existing_personale = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM {$wpdb->prefix}cantiere_personale WHERE richiesta_id = %d ORDER BY id ASC",
+                        $hse_richiesta_id
+                    ), ARRAY_A);
+                    
+                    $hse_existing_count = count($hse_existing_personale);
+                    $hse_new_count = count($hse_personale_data);
+                    
+                    for ($i = 0; $i < $hse_new_count; $i++) {
+                        $hse_persona_data = array(
+                            'richiesta_id' => $hse_richiesta_id,
+                            'nome' => $hse_personale_data[$i]['nome'],
+                            'cognome' => $hse_personale_data[$i]['cognome'],
+                            'data_nascita' => $hse_personale_data[$i]['data_nascita'],
+                            'unilav_data_emissione' => $hse_personale_data[$i]['unilav_data_emissione'] ?: null,
+                            'unilav_data_scadenza' => $hse_personale_data[$i]['unilav_data_scadenza'] ?: null,
+                            'idoneita_sanitaria_scadenza' => $hse_personale_data[$i]['idoneita_sanitaria_scadenza'] ?: null
+                        );
+                        
+                        // Upload documenti formazione per questa persona
+                        if (!empty($_FILES['hse_formazione_antincendio_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_antincendio_' . $i], $hse_current_user_id, 'formazione_antincendio_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_antincendio_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_antincendio_file'])) {
+                            $hse_persona_data['formazione_antincendio_file'] = $hse_existing_personale[$i]['formazione_antincendio_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_formazione_primo_soccorso_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_primo_soccorso_' . $i], $hse_current_user_id, 'formazione_primo_soccorso_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_primo_soccorso_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_primo_soccorso_file'])) {
+                            $hse_persona_data['formazione_primo_soccorso_file'] = $hse_existing_personale[$i]['formazione_primo_soccorso_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_formazione_preposti_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_preposti_' . $i], $hse_current_user_id, 'formazione_preposti_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_preposti_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_preposti_file'])) {
+                            $hse_persona_data['formazione_preposti_file'] = $hse_existing_personale[$i]['formazione_preposti_file'];
+                        }
+                        
+                        // Upload file UNILAV
+                        if (!empty($_FILES['hse_unilav_file_' . $i]['name'])) {
+                            $hse_unilav_file = hse_uploadFileToWordPress($_FILES['hse_unilav_file_' . $i], $hse_current_user_id, 'unilav_' . $i);
+                            if ($hse_unilav_file) {
+                                $hse_persona_data['unilav_file'] = $hse_unilav_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['unilav_file'])) {
+                            $hse_persona_data['unilav_file'] = $hse_existing_personale[$i]['unilav_file'];
+                        }
+                        
+                        // Upload file Idoneità Sanitaria
+                        if (!empty($_FILES['hse_idoneita_file_' . $i]['name'])) {
+                            $hse_idoneita_file = hse_uploadFileToWordPress($_FILES['hse_idoneita_file_' . $i], $hse_current_user_id, 'idoneita_sanitaria_' . $i);
+                            if ($hse_idoneita_file) {
+                                $hse_persona_data['idoneita_sanitaria_file'] = $hse_idoneita_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['idoneita_sanitaria_file'])) {
+                            $hse_persona_data['idoneita_sanitaria_file'] = $hse_existing_personale[$i]['idoneita_sanitaria_file'];
+                        }
+                        
+                        if ($i < $hse_existing_count) {
+                            $wpdb->update(
+                                $wpdb->prefix . 'cantiere_personale',
+                                $hse_persona_data,
+                                array('id' => $hse_existing_personale[$i]['id'])
+                            );
+                        } else {
+                            $wpdb->insert($wpdb->prefix . 'cantiere_personale', $hse_persona_data);
+                        }
+                    }
+                    
+                    // Rimuovi persone in eccesso
+                    if ($hse_new_count < $hse_existing_count) {
+                        for ($i = $hse_new_count; $i < $hse_existing_count; $i++) {
+                            if (isset($hse_existing_personale[$i])) {
+                                $wpdb->delete(
+                                    $wpdb->prefix . 'cantiere_operai_assegnazioni',
+                                    array('user_id' => $hse_current_user_id, 'operaio_id' => $hse_existing_personale[$i]['id'])
+                                );
+                                
+                                $wpdb->delete(
+                                    $wpdb->prefix . 'cantiere_personale',
+                                    array('id' => $hse_existing_personale[$i]['id'])
+                                );
+                            }
+                        }
+                    }
+                    
+                    $hse_success_message = "✅ Parte A salvata con successo! Dati personale e documenti formazione aggiornati ($hse_new_count persone).";
+                }
+            }
+        } elseif (isset($_POST['hse_cantiere_submit_parte_b'])) {
+            // SALVATAGGIO PARTE B
+            
+            $hse_cantiere_id = isset($_POST['hse_cantiere_submit_parte_b']) ? intval($_POST['hse_cantiere_submit_parte_b']) : 0;
+            
+            $hse_operai_key = 'hse_operai_selezionati_' . $hse_cantiere_id;
+            $hse_operai_selezionati = isset($_POST[$hse_operai_key]) && is_array($_POST[$hse_operai_key]) ? array_map('intval', $_POST[$hse_operai_key]) : array();
+            
+            if ($hse_cantiere_id && !empty($hse_operai_selezionati)) {
+                $hse_pos_file = '';
+                $hse_mezzi_file = '';
+                
+                if (!empty($_FILES['hse_pos_file_' . $hse_cantiere_id]['name'])) {
+                    $hse_pos_file = hse_uploadFileToWordPress($_FILES['hse_pos_file_' . $hse_cantiere_id], $hse_current_user_id, 'pos_cantiere_' . $hse_cantiere_id);
+                    if (!$hse_pos_file) {
+                        $hse_error_messages[] = "Errore durante l'upload del file POS per il cantiere";
+                    }
+                }
+                
+                if (!empty($_FILES['hse_mezzi_file_' . $hse_cantiere_id]['name'])) {
+                    $hse_mezzi_file = hse_uploadFileToWordPress($_FILES['hse_mezzi_file_' . $hse_cantiere_id], $hse_current_user_id, 'mezzi_cantiere_' . $hse_cantiere_id);
+                    if (!$hse_mezzi_file) {
+                        $hse_error_messages[] = "Errore durante l'upload del file Mezzi per il cantiere";
+                    }
+                }
+                
+                if (empty($hse_error_messages)) {
+                    $hse_existing_pos = hse_getPosFileByCantiere($hse_cantiere_id, $hse_current_user_id);
+                    
+                    $hse_pos_data = array(
+                        'cantiere_id' => $hse_cantiere_id,
+                        'user_id' => $hse_current_user_id
+                    );
+                    
+                    if ($hse_pos_file) $hse_pos_data['pos_file'] = $hse_pos_file;
+                    if ($hse_mezzi_file) $hse_pos_data['mezzi_file'] = $hse_mezzi_file;
+                    
+                    if ($hse_existing_pos) {
+                        if (!$hse_pos_file && !empty($hse_existing_pos['pos_file'])) {
+                            $hse_pos_data['pos_file'] = $hse_existing_pos['pos_file'];
+                        }
+                        if (!$hse_mezzi_file && !empty($hse_existing_pos['mezzi_file'])) {
+                            $hse_pos_data['mezzi_file'] = $hse_existing_pos['mezzi_file'];
+                        }
+                        
+                        $wpdb->update(
+                            $wpdb->prefix . 'cantiere_pos_files',
+                            $hse_pos_data,
+                            array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
+                        );
+                    } else {
+                        if ($hse_pos_file) {
+                            $wpdb->insert($wpdb->prefix . 'cantiere_pos_files', $hse_pos_data);
+                        }
+                    }
+                    
+                    // Aggiorna assegnazioni operai per questo cantiere
+                    $wpdb->delete(
+                        $wpdb->prefix . 'cantiere_operai_assegnazioni',
+                        array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
+                    );
+                    
+                    $hse_assigned_count = 0;
+                    foreach ($hse_operai_selezionati as $hse_operaio_id) {
+                        $result = $wpdb->insert(
+                            $wpdb->prefix . 'cantiere_operai_assegnazioni',
+                            array(
+                                'cantiere_id' => $hse_cantiere_id,
+                                'user_id' => $hse_current_user_id,
+                                'operaio_id' => $hse_operaio_id
+                            )
+                        );
+                        
+                        if ($result) {
+                            $hse_assigned_count++;
+                        }
+                    }
+                    
+                    $hse_cantiere_nome = $wpdb->get_var($wpdb->prepare(
+                        "SELECT nome FROM {$wpdb->prefix}cantieri WHERE id = %d", $hse_cantiere_id
+                    ));
+                    
+                    $hse_success_message = "✅ Parte B salvata con successo per il cantiere '$hse_cantiere_nome'! $hse_assigned_count operai assegnati.";
+                    
+                    $hse_has_any_assignment = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_operai_assegnazioni WHERE user_id = %d",
+                        $hse_current_user_id
+                    ));
+                    
+                    if ($hse_has_any_assignment > 0) {
+                        $wpdb->update(
+                            $wpdb->prefix . 'cantiere_richieste',
+                            array('parte_b_completata' => 1),
+                            array('user_id' => $hse_current_user_id)
+                        );
+                    }
+                }
+            } else {
+                $hse_error_messages[] = "Devi selezionare almeno un operaio per il cantiere";
+            }
+        }
+    }
+}
+
+// Carica dati esistenti per precompilazione
+$hse_existing_data = null;
+if ($hse_current_user_id && empty($hse_error_messages)) {
+    $hse_existing_data = hse_getCantiereData($hse_current_user_id);
+}
+
+$hse_abilita_cantiere = get_user_meta($hse_current_user_id, 'abilita_cantiere', true);
+
+// Carica cantieri assegnati
+$hse_cantieri_assegnati = array();
+if ($hse_current_user_id && empty($hse_error_messages)) {
+    $hse_cantieri_assegnati = hse_getCantieriAssegnatiUser($hse_current_user_id);
+}
+
+?>
+<?php
+
+// ================== OUTPUT HTML HSE ==================
+
+echo '<div class="hse_cantiere_form_container" style="max-width: 1000px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">';
+
+// Titolo principale
+echo '<div class="hse_header_section" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 3px solid #0066a2; padding-bottom: 15px;">';
+echo '<h2 class="hse_main_title" style="color: #0066a2; margin: 0;">🏗️ Richiesta Accesso Cantiere</h2>';
+if (!empty($hse_cantieri_assegnati)) {
+    echo '<div class="hse_cantieri_counter" style="text-align: right;">';
+    echo '<span class="hse_counter_badge" style="background: #e3f2fd; color: #1565c0; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">📊 ' . count($hse_cantieri_assegnati) . ' cantieri assegnati</span>';
+    echo '</div>';
+}
+echo '</div>';
+
+// ACCORDION: SEZIONE CANTIERI ASSEGNATI
+if (!empty($hse_cantieri_assegnati)) {
+    echo '<div class="hse_cantieri_assegnati_accordion" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #2196f3; overflow: hidden;">';
+    
+    // Header accordion cantieri
+    echo '<div class="hse_accordion_header" onclick="hse_toggleAccordion(\'cantieri_assegnati\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(33, 150, 243, 0.1); transition: all 0.3s ease;">';
+    echo '<h3 class="hse_cantieri_title" style="color: #1565c0; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🏗️</span>I Tuoi Cantieri Assegnati (' . count($hse_cantieri_assegnati) . ')</h3>';
+    echo '<span class="hse_accordion_arrow" id="hse_arrow_cantieri_assegnati" style="font-size: 18px; font-weight: bold; color: #1565c0; transition: transform 0.3s ease;">▼</span>';
+    echo '</div>';
+    
+    // Content accordion cantieri (chiuso di default)
+    echo '<div class="hse_accordion_content" id="hse_content_cantieri_assegnati" style="display: none; padding: 25px; transition: all 0.3s ease;">';
+    
+    echo '<div class="hse_cantieri_grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">';
+    
+    foreach ($hse_cantieri_assegnati as $hse_cantiere) {
+        $hse_stato_color = ($hse_cantiere['stato'] === 'attivo') ? '#28a745' : (($hse_cantiere['stato'] === 'sospeso') ? '#ffc107' : '#6c757d');
+        $hse_stato_text_color = ($hse_cantiere['stato'] === 'sospeso') ? '#000' : '#fff';
+        
+        $hse_progress_info = hse_getCantiereProgress($hse_cantiere, $hse_current_user_id);
+        
+        echo '<div class="hse_cantiere_card" style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1); position: relative; overflow: hidden;">';
+        
+        echo '<div class="hse_card_header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">';
+        echo '<h4 class="hse_cantiere_nome" style="margin: 0; color: #1565c0; font-size: 16px; line-height: 1.3;">' . htmlspecialchars($hse_cantiere['nome']) . '</h4>';
+        echo '<span class="hse_stato_badge" style="background: ' . $hse_stato_color . '; color: ' . $hse_stato_text_color . '; padding: 3px 10px; border-radius: 12px; font-size: 10px; text-transform: uppercase; font-weight: bold; white-space: nowrap;">' . $hse_cantiere['stato'] . '</span>';
+        echo '</div>';
+        
+        if ($hse_cantiere['descrizione']) {
+            echo '<p class="hse_cantiere_descrizione" style="margin: 8px 0; color: #666; font-size: 13px; line-height: 1.4;">' . htmlspecialchars($hse_cantiere['descrizione']) . '</p>';
+        }
+        
+        echo '<div class="hse_cantiere_info" style="margin: 12px 0; font-size: 12px; color: #666;">';
+        
+        if ($hse_cantiere['data_inizio']) {
+            echo '<div class="hse_data_inizio" style="margin-bottom: 3px;">📅 <strong>Inizio:</strong> ' . date('d/m/Y', strtotime($hse_cantiere['data_inizio'])) . '</div>';
+        }
+        
+        if ($hse_cantiere['data_fine']) {
+            $hse_giorni_rimanenti = $hse_cantiere['giorni_rimanenti'];
+            $hse_scadenza_style = '';
+            $hse_scadenza_text = '';
+            
+            if ($hse_giorni_rimanenti < 0) {
+                $hse_scadenza_style = 'color: #dc3545; font-weight: bold;';
+                $hse_scadenza_text = ' (Scaduto da ' . abs($hse_giorni_rimanenti) . ' giorni)';
+            } elseif ($hse_giorni_rimanenti <= 7) {
+                $hse_scadenza_style = 'color: #ffc107; font-weight: bold;';
+                $hse_scadenza_text = ' (Scade tra ' . $hse_giorni_rimanenti . ' giorni)';
+            } elseif ($hse_giorni_rimanenti <= 30) {
+                $hse_scadenza_style = 'color: #fd7e14; font-weight: bold;';
+                $hse_scadenza_text = ' (Scade tra ' . $hse_giorni_rimanenti . ' giorni)';
+            }
+            
+            echo '<div class="hse_data_fine" style="margin-bottom: 3px; ' . $hse_scadenza_style . '">🏁 <strong>Fine:</strong> ' . date('d/m/Y', strtotime($hse_cantiere['data_fine'])) . $hse_scadenza_text . '</div>';
+        }
+        
+        echo '<div class="hse_data_assegnazione">📅 <strong>Assegnato:</strong> ' . date('d/m/Y H:i', strtotime($hse_cantiere['data_assegnazione'])) . '</div>';
+        echo '</div>';
+        
+        if ($hse_progress_info && $hse_cantiere['stato'] === 'attivo') {
+            $hse_progress = $hse_progress_info['progress'];
+            $hse_progress_color = ($hse_progress < 25) ? '#28a745' : (($hse_progress < 75) ? '#ffc107' : '#fd7e14');
+            
+            echo '<div class="hse_progress_section" style="margin: 10px 0;">';
+            echo '<div class="hse_progress_header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; font-size: 11px;">';
+            echo '<span class="hse_progress_label" style="color: #666; font-weight: bold;">Progress:</span>';
+            echo '<span class="hse_progress_value" style="color: ' . $hse_progress_color . '; font-weight: bold;">' . $hse_progress . '%</span>';
+            echo '</div>';
+            echo '<div class="hse_progress_bar_container" style="background: #e9ecef; height: 6px; border-radius: 3px; overflow: hidden;">';
+            echo '<div class="hse_progress_bar" style="background: ' . $hse_progress_color . '; height: 100%; width: ' . $hse_progress . '%; transition: width 0.3s ease; border-radius: 3px;"></div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        
+        if ($hse_cantiere['note']) {
+            echo '<div class="hse_cantiere_note" style="margin-top: 12px; padding: 8px; background: rgba(33, 150, 243, 0.1); border-radius: 4px; border-left: 3px solid #2196f3;">';
+            echo '<div class="hse_note_label" style="font-size: 11px; color: #1565c0; font-weight: bold; margin-bottom: 2px;">📝 Note:</div>';
+            echo '<div class="hse_note_content" style="font-size: 12px; color: #666;">' . htmlspecialchars($hse_cantiere['note']) . '</div>';
+            echo '</div>';
+        }
+        
+        echo '</div>';
+    }
+    
+    echo '</div>'; // Fine hse_cantieri_grid
+    echo '</div>'; // Fine hse_accordion_content
+    echo '</div>'; // Fine hse_cantieri_assegnati_accordion
+}
+
+// Messaggi di errore
+if (!empty($hse_error_messages)) {
+    echo '<div class="hse_error_messages" style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #dc3545;">';
+    echo '<strong class="hse_error_title">❌ Errori:</strong><ul class="hse_error_list" style="margin: 5px 0 0 20px;">';
+    foreach ($hse_error_messages as $hse_error) {
+        echo '<li class="hse_error_item">' . htmlspecialchars($hse_error) . '</li>';
+    }
+    echo '</ul></div>';
+}
+
+// Messaggio di successo
+if (!empty($hse_success_message)) {
+    echo '<div class="hse_success_message" style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #28a745;">';
+    echo $hse_success_message;
+    echo '</div>';
+}
+
+// Verifica che l'utente possa accedere
+if (!empty($hse_error_messages) && $hse_current_user_id) {
+    echo '</div>';
+    return;
+}
+
+// Form principale
+echo '<form method="post" enctype="multipart/form-data" class="hse_cantiere_form" id="hse_cantiere_form_main">';
+echo wp_nonce_field('hse_cantiere_form_' . $hse_current_user_id, 'hse_cantiere_nonce');
+
+// PARTE A - Sempre aperta
+echo '<div class="hse_parte_a" style="background: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #0066a2;">';
+echo '<h3 class="hse_parte_a_title" style="color: #0066a2; margin-top: 0; display: flex; align-items: center;"><span class="hse_parte_a_icon" style="background: #0066a2; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">A</span>Documenti Aziendali + Personale</h3>';
+
+// DVR File con data emissione
+echo '<div class="hse_form_group hse_dvr_group" style="margin-bottom: 20px;">';
+echo '<label class="hse_dvr_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">📄 DVR (Documento Valutazione Rischi) *</label>';
+
+// Avviso importante per DVR
+echo '<div class="hse_dvr_warning_box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 15px;">';
+echo '<div class="hse_dvr_warning_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
+echo '<span class="hse_dvr_warning_icon" style="background: #ffc107; color: #000; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">⚠️</span>';
+echo '<strong class="hse_dvr_warning_title" style="color: #856404; font-size: 14px;">IMPORTANTE: Aggiornamento DVR</strong>';
+echo '</div>';
+echo '<div class="hse_dvr_warning_text" style="color: #856404; font-size: 13px; line-height: 1.4;">';
+echo 'Il DVR deve essere <strong>aggiornato ogni qual volta ci sia un cambiamento dei soggetti coinvolti o un cambiamento del processo lavorativo</strong>. ';
+echo 'Assicurati che il documento sia sempre aggiornato prima di iniziare i lavori in cantiere.';
+echo '</div>';
+echo '</div>';
+
+// Grid DVR File + Data Emissione
+echo '<div class="hse_dvr_fields_grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 10px;">';
+
+// Campo File DVR
+echo '<div class="hse_dvr_file_field">';
+$hse_dvr_style = ($hse_existing_data && $hse_existing_data['dvr_file']) ? 
+    'width: 100%; padding: 10px; border: 3px solid #28a745; border-radius: 5px; background: #f8fff8;' : 
+    'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
+echo '<input type="file" name="hse_dvr_file" accept=".pdf" class="hse_dvr_input" style="' . $hse_dvr_style . '">';
+echo '</div>';
+
+// Campo Data Emissione DVR
+echo '<div class="hse_dvr_data_field">';
+echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR:</label>';
+$hse_dvr_data_value = ($hse_existing_data && $hse_existing_data['dvr_data_emissione']) ? $hse_existing_data['dvr_data_emissione'] : '';
+echo '<input type="date" name="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white;">';
+echo '</div>';
+
+echo '</div>'; // Fine hse_dvr_fields_grid
+
+if ($hse_existing_data && $hse_existing_data['dvr_file']) {
+    echo '<div class="hse_dvr_success" style="margin-top: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 8px; border-left: 5px solid #28a745;">';
+    echo '<div class="hse_success_content" style="display: flex; align-items: center; gap: 10px;">';
+    echo '<span class="hse_success_icon" style="background: #28a745; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">✓</span>';
+    echo '<div class="hse_success_info" style="flex: 1;">';
+    echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📄 File DVR Caricato</div>';
+    if ($hse_existing_data['dvr_data_emissione']) {
+        echo '<div class="hse_success_date" style="font-size: 11px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_existing_data['dvr_data_emissione'])) . '</div>';
+    }
+    echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
+    echo '<a href="' . esc_url($hse_existing_data['dvr_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza Documento</a>';
+    echo '<button type="button" onclick="hse_deleteFile(\'dvr\')" class="hse_delete_file_btn" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">🗑️ Elimina</button>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+    echo '<div class="hse_replace_hint" style="font-size: 11px; color: #6c757d; margin-top: 5px;">💡 Puoi caricare un nuovo file per sostituire quello esistente</div>';
+    echo '</div>';
+} else {
+    echo '<div class="hse_dvr_warning" style="margin-top: 5px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">';
+    echo '<div class="hse_warning_text" style="font-size: 12px; color: #856404;">⚠️ Nessun file caricato - Campo obbligatorio</div>';
+    echo '</div>';
+}
+echo '<small class="hse_dvr_help" style="color: #666;">Formato: PDF, Max: 10MB</small>';
+echo '</div>';
+
+// RCT File
+echo '<div class="hse_form_group hse_rct_group" style="margin-bottom: 20px;">';
+echo '<label class="hse_rct_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">🛡️ Assicurazione RCT *</label>';
+$hse_rct_style = ($hse_existing_data && $hse_existing_data['rct_file']) ? 
+    'width: 100%; padding: 10px; border: 3px solid #28a745; border-radius: 5px; background: #f8fff8;' : 
+    'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
+echo '<input type="file" name="hse_rct_file" accept=".pdf" class="hse_rct_input" style="' . $hse_rct_style . '">';
+if ($hse_existing_data && $hse_existing_data['rct_file']) {
+    echo '<div class="hse_rct_success" style="margin-top: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 8px; border-left: 5px solid #28a745;">';
+    echo '<div class="hse_success_content" style="display: flex; align-items: center; gap: 10px;">';
+    echo '<span class="hse_success_icon" style="background: #28a745; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">✓</span>';
+    echo '<div class="hse_success_info" style="flex: 1;">';
+    echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">🛡️ File RCT Caricato</div>';
+    echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
+    echo '<a href="' . esc_url($hse_existing_data['rct_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza Documento</a>';
+    echo '<button type="button" onclick="hse_deleteFile(\'rct\')" class="hse_delete_file_btn" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">🗑️ Elimina</button>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+    echo '<div class="hse_replace_hint" style="font-size: 11px; color: #6c757d; margin-top: 5px;">💡 Puoi caricare un nuovo file per sostituire quello esistente</div>';
+    echo '</div>';
+} else {
+    echo '<div class="hse_rct_warning" style="margin-top: 5px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">';
+    echo '<div class="hse_rct_warning_text" style="font-size: 12px; color: #856404;">⚠️ Nessun file caricato - Campo obbligatorio</div>';
+    echo '</div>';
+}
+echo '<small class="hse_rct_help" style="color: #666;">Formato: PDF, Max: 10MB</small>';
+echo '</div>';
+
+?>
+<?php
+
+// Elenco Personale Dinamico con formazioni + UNILAV + Idoneità Sanitaria
+echo '<div class="hse_form_group hse_personale_group" style="margin-bottom: 20px;">';
+$hse_numero_personale_value = $hse_existing_data ? count($hse_existing_data['personale']) : 1;
+echo '<label class="hse_personale_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">📋 Elenco Personale + Documenti Formazione + UNILAV + Idoneità Sanitaria <span id="hse_personale_count" class="hse_personale_count" style="background: #0066a2; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_personale_value . ' persone)</span></label>';
+
+echo '<input type="hidden" name="hse_numero_personale" id="hse_numero_personale" value="' . $hse_numero_personale_value . '">';
+
+echo '<div id="hse_personale_container" class="hse_personale_container">';
+// Precompila personale esistente con formazioni + nuovi campi - ACCORDION per ogni persona
+if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
+    foreach ($hse_existing_data['personale'] as $index => $hse_persona) {
+        
+        // Verifica se questo operaio è assegnato a cantieri
+        $hse_operaio_cantieri = hse_getOperaioCantieriAssegnazioni($hse_persona['id'], $hse_current_user_id);
+        $hse_is_assigned = !empty($hse_operaio_cantieri);
+        
+        // Controlla scadenze
+        $hse_scadenze_warnings = hse_checkOperaioScadenze($hse_persona);
+        $hse_has_warnings = !empty($hse_scadenze_warnings);
+        
+        $hse_assigned_style = $hse_is_assigned ? 'border: 2px solid #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);' : 'border: 1px solid #ddd; background: white;';
+        if ($hse_has_warnings) {
+            $hse_assigned_style = 'border: 2px solid #dc3545; background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);';
+        }
+        
+        echo '<div class="hse_personale_row hse_personale_accordion" data-index="' . $index . '" data-operaio-id="' . $hse_persona['id'] . '" style="' . $hse_assigned_style . ' padding: 0; margin-bottom: 15px; border-radius: 8px; position: relative; overflow: hidden;">';
+        
+        // Header accordion persona
+        $hse_persona_name = htmlspecialchars($hse_persona['nome'] . ' ' . $hse_persona['cognome']);
+        $hse_assignment_badge = '';
+        $hse_warning_badge = '';
+        
+        if ($hse_is_assigned) {
+            $hse_cantieri_names = array_map(function($c) { return $c['cantiere_nome']; }, $hse_operaio_cantieri);
+            $hse_assignment_badge = '<span class="hse_assignment_badge" style="background: #ffc107; color: #000; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 8px;">🏗️ Assegnato (' . count($hse_operaio_cantieri) . ')</span>';
+        }
+        
+        if ($hse_has_warnings) {
+            $hse_warning_badge = '<span class="hse_warning_badge" style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 8px;">⚠️ Scadenze</span>';
+        }
+        
+        echo '<div class="hse_persona_accordion_header" onclick="hse_togglePersonaAccordion(' . $index . ')" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 102, 162, 0.05); transition: all 0.3s ease;">';
+        echo '<div class="hse_persona_header_left" style="display: flex; align-items: center;">';
+        echo '<h4 class="hse_persona_title" style="margin: 0; color: #0066a2; padding-right: 20px;">👤 Persona ' . ($index + 1) . ': ' . $hse_persona_name . '</h4>';
+        echo $hse_assignment_badge . $hse_warning_badge;
+        echo '</div>';
+        echo '<div class="hse_persona_header_right" style="display: flex; align-items: center; gap: 10px;">';
+        
+        if (count($hse_existing_data['personale']) > 1) {
+            echo '<button type="button" onclick="hse_deleteOperaio(' . $hse_persona['id'] . ', \'' . addslashes($hse_persona_name) . '\', ' . ($hse_is_assigned ? 'true' : 'false') . ')" class="hse_remove_persona_btn" style="background: #dc3545; color: white; border: none; width: 25px; height: 25px; border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 1; transition: all 0.3s;">✕</button>';
+        }
+        
+        echo '<span class="hse_persona_accordion_arrow" id="hse_arrow_persona_' . $index . '" style="font-size: 16px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>';
+        echo '</div>';
+        echo '</div>';
+        
+        // Content accordion persona (chiuso di default)
+        echo '<div class="hse_persona_accordion_content" id="hse_content_persona_' . $index . '" style="display: none; padding: 20px; transition: all 0.3s ease;">';
+        
+        // Mostra cantieri assegnati se presente
+        if ($hse_is_assigned) {
+            echo '<div class="hse_operaio_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            foreach ($hse_operaio_cantieri as $cantiere_info) {
+                $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
+                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Mostra avvisi scadenze se presenti
+        if ($hse_has_warnings) {
+            echo '<div class="hse_operaio_scadenze_warning" style="background: rgba(220, 53, 69, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #dc3545;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #721c24; font-size: 13px; font-weight: bold;">⚠️ Avvisi Scadenze:</h5>';
+            foreach ($hse_scadenze_warnings as $warning) {
+                echo '<div style="color: #721c24; font-size: 12px; margin-bottom: 4px;">' . $warning . '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Dati personali - layout 3 colonne
+        echo '<div class="hse_dati_personali" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #0066a2;">';
+        echo '<h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>';
+        echo '<div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
+        echo '<div class="hse_nome_field">';
+        echo '<label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome:</label>';
+        echo '<input type="text" name="hse_personale_nome[]" value="' . esc_attr($hse_persona['nome']) . '" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">';
+        echo '</div>';
+        echo '<div class="hse_cognome_field">';
+        echo '<label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome:</label>';
+        echo '<input type="text" name="hse_personale_cognome[]" value="' . esc_attr($hse_persona['cognome']) . '" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">';
+        echo '</div>';
+        echo '<div class="hse_data_nascita_field">';
+        echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>';
+        echo '<input type="date" name="hse_personale_data_nascita[]" value="' . esc_attr($hse_persona['data_nascita']) . '" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        echo '</div>'; // Fine hse_dati_personali_grid
+        echo '</div>'; // Fine hse_dati_personali
+        
+        // UNILAV e Idoneità Sanitaria - layout 3 colonne con file
+        echo '<div class="hse_documenti_personali_section" style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #2196f3;">';
+        echo '<h5 class="hse_documenti_personali_title" style="margin: 0 0 15px 0; color: #2196f3;">📋 UNILAV e Idoneità Sanitaria</h5>';
+        
+        // Date UNILAV + File
+        echo '<div class="hse_unilav_section" style="background: rgba(33, 150, 243, 0.05); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 3px solid #2196f3;">';
+        echo '<h6 style="margin: 0 0 10px 0; color: #2196f3; font-size: 13px; font-weight: bold;">📋 UNILAV</h6>';
+        echo '<div class="hse_unilav_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">';
+        
+        // UNILAV Data Emissione
+        echo '<div class="hse_unilav_emissione_field">';
+        echo '<label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione:</label>';
+        $hse_unilav_emissione_value = !empty($hse_persona['unilav_data_emissione']) ? $hse_persona['unilav_data_emissione'] : '';
+        echo '<input type="date" name="hse_personale_unilav_emissione[]" value="' . esc_attr($hse_unilav_emissione_value) . '" class="hse_unilav_emissione_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">';
+        echo '</div>';
+        
+        // UNILAV Data Scadenza (opzionale)
+        echo '<div class="hse_unilav_scadenza_field">';
+        echo '<label class="hse_unilav_scadenza_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza (se prevista):</label>';
+        $hse_unilav_scadenza_value = !empty($hse_persona['unilav_data_scadenza']) ? $hse_persona['unilav_data_scadenza'] : '';
+        $hse_unilav_scadenza_style = 'width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;';
+        
+        // Evidenzia se in scadenza o scaduto
+        if ($hse_unilav_scadenza_value) {
+            $oggi = new DateTime();
+            $scadenza = new DateTime($hse_unilav_scadenza_value);
+            $diff_giorni = $oggi->diff($scadenza)->days;
+            $is_scaduto = $oggi > $scadenza;
+            
+            if ($is_scaduto) {
+                $hse_unilav_scadenza_style = 'width: 100%; padding: 6px; border: 2px solid #dc3545; border-radius: 4px; background: #f8d7da; font-size: 12px;';
+            } elseif ($diff_giorni <= 30) {
+                $hse_unilav_scadenza_style = 'width: 100%; padding: 6px; border: 2px solid #ffc107; border-radius: 4px; background: #fff3cd; font-size: 12px;';
+            }
+        }
+        
+        echo '<input type="date" name="hse_personale_unilav_scadenza[]" value="' . esc_attr($hse_unilav_scadenza_value) . '" class="hse_unilav_scadenza_input" style="' . $hse_unilav_scadenza_style . '">';
+        echo '</div>';
+        
+        // UNILAV File
+        echo '<div class="hse_unilav_file_field">';
+        echo '<label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV:</label>';
+        if (!empty($hse_persona['unilav_file'])) {
+            echo '<div class="hse_unilav_file_success" style="margin-bottom: 6px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 6px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">📄 UNILAV caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 4px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['unilav_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 9px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteDocumentoFile(\'unilav\', ' . $index . ')" class="hse_delete_documento_btn" style="background: #dc3545; color: white; border: none; padding: 1px 4px; border-radius: 2px; font-size: 8px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_unilav_file_' . $index . '" accept=".pdf" class="hse_unilav_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_unilav_grid
+        echo '</div>'; // Fine hse_unilav_section
+        
+        // Idoneità Sanitaria + File
+        echo '<div class="hse_idoneita_section" style="background: rgba(40, 167, 69, 0.05); padding: 12px; border-radius: 6px; border-left: 3px solid #28a745;">';
+        echo '<h6 style="margin: 0 0 10px 0; color: #28a745; font-size: 13px; font-weight: bold;">🏥 Idoneità Sanitaria</h6>';
+        echo '<div class="hse_idoneita_grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">';
+        
+        // Idoneità Sanitaria Scadenza
+        echo '<div class="hse_idoneita_sanitaria_field">';
+        echo '<label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza:</label>';
+        $hse_idoneita_scadenza_value = !empty($hse_persona['idoneita_sanitaria_scadenza']) ? $hse_persona['idoneita_sanitaria_scadenza'] : '';
+        $hse_idoneita_scadenza_style = 'width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;';
+        
+        // Evidenzia se in scadenza o scaduto
+        if ($hse_idoneita_scadenza_value) {
+            $oggi = new DateTime();
+            $scadenza = new DateTime($hse_idoneita_scadenza_value);
+            $diff_giorni = $oggi->diff($scadenza)->days;
+            $is_scaduto = $oggi > $scadenza;
+            
+            if ($is_scaduto) {
+                $hse_idoneita_scadenza_style = 'width: 100%; padding: 6px; border: 2px solid #dc3545; border-radius: 4px; background: #f8d7da; font-size: 12px;';
+            } elseif ($diff_giorni <= 30) {
+                $hse_idoneita_scadenza_style = 'width: 100%; padding: 6px; border: 2px solid #ffc107; border-radius: 4px; background: #fff3cd; font-size: 12px;';
+            }
+        }
+        
+        echo '<input type="date" name="hse_personale_idoneita_scadenza[]" value="' . esc_attr($hse_idoneita_scadenza_value) . '" class="hse_idoneita_sanitaria_input" style="' . $hse_idoneita_scadenza_style . '">';
+        echo '</div>';
+        
+        // Idoneità Sanitaria File
+        echo '<div class="hse_idoneita_file_field">';
+        echo '<label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità:</label>';
+        if (!empty($hse_persona['idoneita_sanitaria_file'])) {
+            echo '<div class="hse_idoneita_file_success" style="margin-bottom: 6px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 6px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">🏥 Idoneità caricata</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 4px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['idoneita_sanitaria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 9px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteDocumentoFile(\'idoneita_sanitaria\', ' . $index . ')" class="hse_delete_documento_btn" style="background: #dc3545; color: white; border: none; padding: 1px 4px; border-radius: 2px; font-size: 8px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_idoneita_file_' . $index . '" accept=".pdf" class="hse_idoneita_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_idoneita_grid
+        echo '</div>'; // Fine hse_idoneita_section
+        
+        echo '<small class="hse_documenti_personali_help" style="color: #2196f3; font-weight: bold; margin-top: 10px; display: block;">💡 UNILAV: Data emissione sempre richiesta. Scadenza e file solo se il contratto ha termine. Idoneità sanitaria sempre con scadenza e file.</small>';
+        echo '</div>'; // Fine hse_documenti_personali_section
+        
+        // Documenti formazione - layout 3 colonne orizzontali con pulsanti elimina
+        echo '<div class="hse_formazione_section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8;">';
+        echo '<h5 class="hse_formazione_title" style="margin: 0 0 15px 0; color: #17a2b8;">🎓 Documenti Formazione</h5>';
+        echo '<div class="hse_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
+        
+        // Formazione Antincendio
+        echo '<div class="hse_antincendio_field">';
+        echo '<label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione Antincendio:</label>';
+        if (!empty($hse_persona['formazione_antincendio_file'])) {
+            echo '<div class="hse_antincendio_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🔥 File Antincendio Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_antincendio_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_antincendio\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_formazione_antincendio_' . $index . '" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        
+        // Formazione Primo Soccorso
+        echo '<div class="hse_primo_soccorso_field">';
+        echo '<label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione Primo Soccorso:</label>';
+        if (!empty($hse_persona['formazione_primo_soccorso_file'])) {
+            echo '<div class="hse_primo_soccorso_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🚑 File Primo Soccorso Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_primo_soccorso_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_primo_soccorso\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_formazione_primo_soccorso_' . $index . '" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        
+        // Formazione Preposti
+        echo '<div class="hse_preposti_field">';
+        echo '<label class="hse_preposti_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👮 Formazione Preposti:</label>';
+        if (!empty($hse_persona['formazione_preposti_file'])) {
+            echo '<div class="hse_preposti_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">👮 File Preposti Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_preposti_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_preposti\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_formazione_preposti_' . $index . '" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_formazione_grid
+        echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
+        echo '</div>'; // Fine hse_formazione_section
+        
+        echo '</div>'; // Fine hse_persona_accordion_content
+        echo '</div>'; // Fine hse_personale_row accordion
+    }
+} else {
+    // Campo default per 1 persona - ACCORDION con nuovi campi
+    echo '<div class="hse_personale_row hse_personale_accordion" data-index="0" style="background: white; padding: 0; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ddd; position: relative; overflow: hidden;">';
+    
+    // Header accordion persona default
+    echo '<div class="hse_persona_accordion_header" onclick="hse_togglePersonaAccordion(0)" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 102, 162, 0.05); transition: all 0.3s ease;">';
+    echo '<h4 class="hse_persona_title" style="margin: 0; color: #0066a2;">👤 Persona 1: Nuovo Operaio</h4>';
+    echo '<span class="hse_persona_accordion_arrow" id="hse_arrow_persona_0" style="font-size: 16px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>';
+    echo '</div>';
+    
+    // Content accordion persona default (chiuso di default)
+    echo '<div class="hse_persona_accordion_content" id="hse_content_persona_0" style="display: none; padding: 20px; transition: all 0.3s ease;">';
+    
+    // Dati personali - layout 3 colonne
+    echo '<div class="hse_dati_personali" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #0066a2;">';
+    echo '<h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>';
+    echo '<div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
+    echo '<div class="hse_nome_field">';
+    echo '<label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome:</label>';
+    echo '<input type="text" name="hse_personale_nome[]" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">';
+    echo '</div>';
+    echo '<div class="hse_cognome_field">';
+    echo '<label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome:</label>';
+    echo '<input type="text" name="hse_personale_cognome[]" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">';
+    echo '</div>';
+    echo '<div class="hse_data_nascita_field">';
+    echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>';
+    echo '<input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    echo '</div>'; // Fine hse_dati_personali_grid
+    echo '</div>'; // Fine hse_dati_personali
+    
+    // UNILAV e Idoneità Sanitaria default - layout con file
+    echo '<div class="hse_documenti_personali_section" style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #2196f3;">';
+    echo '<h5 class="hse_documenti_personali_title" style="margin: 0 0 15px 0; color: #2196f3;">📋 UNILAV e Idoneità Sanitaria</h5>';
+    
+    // UNILAV Section
+    echo '<div class="hse_unilav_section" style="background: rgba(33, 150, 243, 0.05); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 3px solid #2196f3;">';
+    echo '<h6 style="margin: 0 0 10px 0; color: #2196f3; font-size: 13px; font-weight: bold;">📋 UNILAV</h6>';
+    echo '<div class="hse_unilav_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">';
+    
+    echo '<div class="hse_unilav_emissione_field">';
+    echo '<label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione:</label>';
+    echo '<input type="date" name="hse_personale_unilav_emissione[]" class="hse_unilav_emissione_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_unilav_scadenza_field">';
+    echo '<label class="hse_unilav_scadenza_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza (se prevista):</label>';
+    echo '<input type="date" name="hse_personale_unilav_scadenza[]" class="hse_unilav_scadenza_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_unilav_file_field">';
+    echo '<label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV:</label>';
+    echo '<input type="file" name="hse_unilav_file_0" accept=".pdf" class="hse_unilav_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+    echo '</div>';
+    
+    echo '</div>'; // Fine hse_unilav_grid
+    echo '</div>'; // Fine hse_unilav_section
+    
+    // Idoneità Sanitaria Section
+    echo '<div class="hse_idoneita_section" style="background: rgba(40, 167, 69, 0.05); padding: 12px; border-radius: 6px; border-left: 3px solid #28a745;">';
+    echo '<h6 style="margin: 0 0 10px 0; color: #28a745; font-size: 13px; font-weight: bold;">🏥 Idoneità Sanitaria</h6>';
+    echo '<div class="hse_idoneita_grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">';
+    
+    echo '<div class="hse_idoneita_sanitaria_field">';
+    echo '<label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza:</label>';
+    echo '<input type="date" name="hse_personale_idoneita_scadenza[]" class="hse_idoneita_sanitaria_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_idoneita_file_field">';
+    echo '<label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità:</label>';
+    echo '<input type="file" name="hse_idoneita_file_0" accept=".pdf" class="hse_idoneita_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+    echo '</div>';
+    
+    echo '</div>'; // Fine hse_idoneita_grid
+    echo '</div>'; // Fine hse_idoneita_section
+    
+    echo '<small class="hse_documenti_personali_help" style="color: #2196f3; font-weight: bold; margin-top: 10px; display: block;">💡 UNILAV: Data emissione sempre richiesta. Scadenza e file solo se il contratto ha termine. Idoneità sanitaria sempre con scadenza e file.</small>';
+    echo '</div>'; // Fine hse_documenti_personali_section
+    
+    // Documenti formazione default - layout 3 colonne orizzontali
+    echo '<div class="hse_formazione_section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8;">';
+    echo '<h5 class="hse_formazione_title" style="margin: 0 0 15px 0; color: #17a2b8;">🎓 Documenti Formazione</h5>';
+    echo '<div class="hse_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
+    
+    echo '<div class="hse_antincendio_field">';
+    echo '<label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione Antincendio:</label>';
+    echo '<input type="file" name="hse_formazione_antincendio_0" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_primo_soccorso_field">';
+    echo '<label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione Primo Soccorso:</label>';
+    echo '<input type="file" name="hse_formazione_primo_soccorso_0" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_preposti_field">';
+    echo '<label class="hse_preposti_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👮 Formazione Preposti:</label>';
+    echo '<input type="file" name="hse_formazione_preposti_0" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '</div>'; // Fine hse_formazione_grid
+    echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
+    echo '</div>'; // Fine hse_formazione_section
+    
+    echo '</div>'; // Fine hse_persona_accordion_content
+    echo '</div>'; // Fine hse_personale_row accordion
+}
+
+echo '</div>'; // Fine hse_personale_container
+
+// Pulsante Aggiungi Persona
+echo '<div class="hse_add_persona_section" style="text-align: center; margin-top: 15px;">';
+echo '<button type="button" onclick="hse_addPersona()" class="hse_add_persona_btn" style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.3s;">➕ Aggiungi Persona</button>';
+echo '</div>';
+
+echo '</div>'; // Fine hse_personale_group
+
+// Pulsante Salva Parte A
+echo '<div class="hse_submit_parte_a_section" style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 2px solid #e9ecef;">';
+echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti Aziendali + Personale</button>';
+echo '</div>';
+
+echo '</div>'; // Fine hse_parte_a
+
+?>
+<?php
+
+// PARTE B PER SINGOLO CANTIERE CON ACCORDION
+if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
+    echo '<div class="hse_parte_b" style="background: #e3f2fd; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #2196f3;">';
+    echo '<h3 class="hse_parte_b_title" style="color: #2196f3; margin-top: 0; display: flex; align-items: center;"><span class="hse_parte_b_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">B</span>Documenti per Cantiere</h3>';
+    
+    echo '<div class="hse_cantieri_sections">';
+    
+    foreach ($hse_cantieri_assegnati as $cantiere_index => $hse_cantiere) {
+        if ($hse_cantiere['stato'] !== 'attivo') continue; // Solo cantieri attivi
+        
+        echo '<div class="hse_cantiere_accordion" style="background: white; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden;">';
+        
+        // Header accordion cantiere
+        echo '<div class="hse_cantiere_accordion_header" onclick="hse_toggleCantiereAccordion(' . $hse_cantiere['id'] . ')" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #2196f3, #1976d2); color: white; transition: all 0.3s ease;">';
+        echo '<div class="hse_cantiere_header_left">';
+        echo '<h4 class="hse_cantiere_section_title" style="margin: 0;">🏗️ ' . htmlspecialchars($hse_cantiere['nome']) . '</h4>';
+        if ($hse_cantiere['descrizione']) {
+            echo '<p class="hse_cantiere_section_desc" style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">' . htmlspecialchars($hse_cantiere['descrizione']) . '</p>';
+        }
+        echo '</div>';
+        echo '<span class="hse_cantiere_accordion_arrow" id="hse_arrow_cantiere_' . $hse_cantiere['id'] . '" style="font-size: 18px; font-weight: bold; transition: transform 0.3s ease;">▼</span>';
+        echo '</div>';
+        
+        // Content accordion cantiere (chiuso di default)
+        echo '<div class="hse_cantiere_accordion_content" id="hse_content_cantiere_' . $hse_cantiere['id'] . '" style="display: none; padding: 20px; transition: all 0.3s ease;">';
+        
+        // POS File per questo cantiere
+        $hse_pos_data = hse_getPosFileByCantiere($hse_cantiere['id'], $hse_current_user_id);
+        
+        echo '<div class="hse_pos_group" style="margin-bottom: 20px;">';
+        echo '<label class="hse_pos_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">📋 POS (Piano Operativo Sicurezza) per questo cantiere</label>';
+        $hse_pos_style = ($hse_pos_data && $hse_pos_data['pos_file']) ? 
+            'width: 100%; padding: 10px; border: 3px solid #28a745; border-radius: 5px; background: #f8fff8;' : 
+            'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
+        echo '<input type="file" name="hse_pos_file_' . $hse_cantiere['id'] . '" accept=".pdf" class="hse_pos_input" style="' . $hse_pos_style . '">';
+        if ($hse_pos_data && $hse_pos_data['pos_file']) {
+            echo '<div class="hse_pos_success" style="margin-top: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 8px; border-left: 5px solid #28a745;">';
+            echo '<div class="hse_success_content" style="display: flex; align-items: center; gap: 10px;">';
+            echo '<span class="hse_success_icon" style="background: #28a745; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px;">✓</span>';
+            echo '<div class="hse_success_info" style="flex: 1;">';
+            echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📋 File POS Caricato</div>';
+            echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_pos_data['pos_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza POS</a>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<small class="hse_pos_help" style="color: #666;">Formato: PDF, Max: 10MB</small>';
+        echo '</div>';
+        
+        // Elenco Mezzi per questo cantiere
+        echo '<div class="hse_mezzi_group" style="margin-bottom: 20px;">';
+        echo '<label class="hse_mezzi_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">🚛 Elenco Mezzi per questo cantiere</label>';
+        $hse_mezzi_style = ($hse_pos_data && $hse_pos_data['mezzi_file']) ? 
+            'width: 100%; padding: 10px; border: 3px solid #28a745; border-radius: 5px; background: #f8fff8;' : 
+            'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
+        echo '<input type="file" name="hse_mezzi_file_' . $hse_cantiere['id'] . '" accept=".pdf" class="hse_mezzi_input" style="' . $hse_mezzi_style . '">';
+        if ($hse_pos_data && $hse_pos_data['mezzi_file']) {
+            echo '<div class="hse_mezzi_success" style="margin-top: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 8px; border-left: 5px solid #28a745;">';
+            echo '<div class="hse_success_content" style="display: flex; align-items: center; gap: 10px;">';
+            echo '<span class="hse_success_icon" style="background: #28a745; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px;">✓</span>';
+            echo '<div class="hse_success_info" style="flex: 1;">';
+            echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">🚛 File Mezzi Caricato</div>';
+            echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_pos_data['mezzi_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza Mezzi</a>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<small class="hse_mezzi_help" style="color: #666;">Formato: PDF, Max: 10MB (opzionale)</small>';
+        echo '</div>';
+        
+        // Selezione operai per questo cantiere
+        echo '<div class="hse_operai_selection_group" style="margin-bottom: 20px;">';
+        echo '<label class="hse_operai_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">👷 Seleziona Operai per questo Cantiere</label>';
+        
+        if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
+            $hse_operai_assegnati = hse_getOperaiAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
+            $hse_operai_assegnati_ids = array_map(function($op) { return $op['operaio_id']; }, $hse_operai_assegnati);
+            
+            echo '<div class="hse_operai_selection_container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">';
+            echo '<p class="hse_operai_help" style="color: #666; margin-bottom: 15px;">Seleziona gli operai che lavoreranno in questo cantiere specifico:</p>';
+            
+            foreach ($hse_existing_data['personale'] as $index => $hse_persona) {
+                $hse_fullName = $hse_persona['nome'] . ' ' . $hse_persona['cognome'];
+                $hse_isSelected = in_array($hse_persona['id'], $hse_operai_assegnati_ids) ? 'checked' : '';
+                
+                // Verifica se ha formazioni
+                $hse_has_formazioni = (!empty($hse_persona['formazione_antincendio_file']) || 
+                                      !empty($hse_persona['formazione_primo_soccorso_file']) || 
+                                      !empty($hse_persona['formazione_preposti_file']));
+                
+                // Verifica se ha documenti obbligatori
+                $hse_has_unilav = !empty($hse_persona['unilav_data_emissione']);
+                $hse_has_unilav_file = !empty($hse_persona['unilav_file']);
+                $hse_has_idoneita = !empty($hse_persona['idoneita_sanitaria_scadenza']);
+                $hse_has_idoneita_file = !empty($hse_persona['idoneita_sanitaria_file']);
+                
+                // Verifica se è assegnato ad altri cantieri
+                $hse_operaio_cantieri = hse_getOperaioCantieriAssegnazioni($hse_persona['id'], $hse_current_user_id);
+                $hse_is_assigned_elsewhere = false;
+                foreach ($hse_operaio_cantieri as $cantiere_info) {
+                    if ($cantiere_info['cantiere_id'] != $hse_cantiere['id']) {
+                        $hse_is_assigned_elsewhere = true;
+                        break;
+                    }
+                }
+                
+                // Controlla scadenze
+                $hse_scadenze_warnings = hse_checkOperaioScadenze($hse_persona);
+                $hse_has_warnings = !empty($hse_scadenze_warnings);
+                
+                $hse_label_style = 'color: #333;';
+                $hse_warning_text = '';
+                
+                if ($hse_has_warnings) {
+                    $hse_label_style = 'color: #dc3545; font-weight: bold;';
+                    $hse_warning_text .= ' 🚨 (Scadenze!)';
+                } elseif ($hse_has_formazioni && $hse_has_unilav && $hse_has_unilav_file && $hse_has_idoneita && $hse_has_idoneita_file) {
+                    $hse_label_style = 'color: #155724; font-weight: bold;';
+                    $hse_warning_text .= ' ✅ (Completo)';
+                } else {
+                    $warnings = array();
+                    if (!$hse_has_formazioni) $warnings[] = 'Formazione';
+                    if (!$hse_has_unilav) $warnings[] = 'UNILAV data';
+                    if (!$hse_has_unilav_file) $warnings[] = 'UNILAV file';
+                    if (!$hse_has_idoneita) $warnings[] = 'Idoneità data';
+                    if (!$hse_has_idoneita_file) $warnings[] = 'Idoneità file';
+                    if (!empty($warnings)) {
+                        $hse_warning_text .= ' ⚠️ (Manca: ' . implode(', ', $warnings) . ')';
+                    }
+                }
+                
+                $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
+                
+                echo '<label class="hse_operaio_checkbox" style="display: block; margin-bottom: 10px; cursor: pointer; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_operai_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_persona['id'] . '" ' . $hse_isSelected . ' onchange="hse_updateSkillsForCantiere(' . $hse_cantiere['id'] . ')" class="hse_operaio_input" style="margin-right: 8px;">';
+                echo '<span class="hse_operaio_name">' . htmlspecialchars($hse_fullName) . $hse_warning_text . $hse_assignment_info . '</span>';
+                echo '</label>';
+            }
+            
+            echo '</div>';
+        } else {
+            echo '<div class="hse_operai_warning" style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">';
+            echo '<p class="hse_warning_text" style="color: #856404; margin: 0;">⚠️ Prima completa la Parte A con l\'elenco del personale</p>';
+            echo '</div>';
+        }
+        echo '</div>';
+        
+        // Riepilogo competenze per questo cantiere
+        if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
+            $hse_operai_assegnati = hse_getOperaiAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
+            $hse_skill_stats = hse_calculateSkillPercentagesForCantiere($hse_operai_assegnati);
+            
+            echo '<div class="hse_skill_summary" id="hse_skill_summary_' . $hse_cantiere['id'] . '" style="margin-top: 20px; padding: 20px; background: #f1f8ff; border-radius: 8px; border-left: 5px solid #17a2b8;">';
+            echo '<h5 class="hse_skill_title" style="color: #17a2b8; margin-top: 0;">📊 Competenze per questo Cantiere</h5>';
+            
+            echo '<div id="hse_skill_content_' . $hse_cantiere['id'] . '" class="hse_skill_content">';
+            if ($hse_skill_stats['totale_selezionato'] > 0) {
+                // Statistiche generali
+                echo '<div class="hse_skill_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px;">';
+                
+                $hse_competenze = [
+                    'antincendio' => ['label' => '🔥 Antincendio', 'value' => $hse_skill_stats['antincendio']],
+                    'primo_soccorso' => ['label' => '🚑 Primo Soccorso', 'value' => $hse_skill_stats['primo_soccorso']],
+                    'preposti' => ['label' => '👮 Preposti', 'value' => $hse_skill_stats['preposti']]
+                ];
+                
+                foreach ($hse_competenze as $hse_key => $hse_competenza) {
+                    $hse_color = $hse_competenza['value'] >= 30 ? '#28a745' : '#dc3545';
+                    echo '<div class="hse_skill_card hse_skill_' . $hse_key . '" style="text-align: center; padding: 10px; background: ' . $hse_color . '; color: white; border-radius: 6px;">';
+                    echo '<div class="hse_skill_percentage" style="font-size: 18px; font-weight: bold;">' . $hse_competenza['value'] . '%</div>';
+                    echo '<div class="hse_skill_label" style="font-size: 11px;">' . $hse_competenza['label'] . '</div>';
+                    echo '<div class="hse_skill_count" style="font-size: 10px;">(' . $hse_skill_stats['distribuzione'][$hse_key] . '/' . $hse_skill_stats['totale_selezionato'] . ' operai)</div>';
+                    echo '</div>';
+                }
+                
+                echo '</div>';
+                
+                // Status generale
+                if ($hse_skill_stats['conforme']) {
+                    echo '<div class="hse_skill_status hse_skill_conforme" style="background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; text-align: center; font-weight: bold;">';
+                    echo '✅ CONFORME: Tutte le competenze raggiungono il 30% minimo richiesto';
+                    echo '</div>';
+                } else {
+                    echo '<div class="hse_skill_status hse_skill_non_conforme" style="background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; text-align: center;">';
+                    echo '<div class="hse_skill_warning_title" style="font-weight: bold; margin-bottom: 5px;">⚠️ NON CONFORME: Alcune competenze sotto il 30% minimo</div>';
+                    echo '<div class="hse_skill_warning_text" style="font-size: 11px;">Per accedere al cantiere è necessario avere almeno il 30% del personale preparato in ogni competenza</div>';
+                    echo '</div>';
+                }
+            } else {
+                echo '<div class="hse_skill_empty" style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; text-align: center;">';
+                echo '📋 Nessun operaio selezionato per questo cantiere';
+                echo '</div>';
+            }
+            echo '</div>';
+            
+            echo '</div>';
+        }
+        
+        // Pulsante salva per questo cantiere
+        echo '<div class="hse_submit_parte_b_section" style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px solid #e9ecef;">';
+        echo '<input type="hidden" name="hse_cantiere_id_' . $hse_cantiere['id'] . '" value="' . $hse_cantiere['id'] . '" class="hse_cantiere_id_input">';
+        echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s;">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_cantiere_accordion_content
+        echo '</div>'; // Fine hse_cantiere_accordion
+    }
+    
+    echo '</div>'; // Fine hse_cantieri_sections
+    
+    echo '</div>'; // Fine hse_parte_b
+    
+} elseif ($hse_abilita_cantiere == '1' && empty($hse_cantieri_assegnati)) {
+    echo '<div class="hse_parte_b_waiting" style="background: #e7f3ff; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #17a2b8;">';
+    echo '<h3 class="hse_parte_b_waiting_title" style="color: #17a2b8; margin-top: 0; display: flex; align-items: center;"><span class="hse_parte_b_waiting_icon" style="background: #17a2b8; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">B</span>Documenti per Cantiere</h3>';
+    echo '<div class="hse_waiting_content" style="background: #d1ecf1; color: #0c5460; padding: 20px; border-radius: 8px; text-align: center;">';
+    echo '<div class="hse_waiting_icon" style="font-size: 48px; margin-bottom: 15px;">⏳</div>';
+    echo '<h4 class="hse_waiting_title" style="margin: 0 0 10px 0;">Nessun Cantiere Assegnato</h4>';
+    echo '<p class="hse_waiting_text" style="margin: 0; font-size: 14px;">Completa la Parte A e attendi che l\'amministrazione ti assegni ad uno o più cantieri per procedere con la Parte B.</p>';
+    echo '</div>';
+    echo '</div>';
+    
+} else {
+    echo '<div class="hse_parte_b_disabled" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #6c757d; position: relative; overflow: hidden;">';
+    echo '<div class="hse_disabled_decoration" style="position: absolute; top: -10px; right: -10px; background: #dc3545; color: white; width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; opacity: 0.1;">🔒</div>';
+    echo '<h3 class="hse_parte_b_disabled_title" style="color: #6c757d; margin-top: 0; display: flex; align-items: center;"><span class="hse_parte_b_disabled_icon" style="background: #6c757d; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">B</span>Documenti per Cantiere (Non Abilitato)</h3>';
+    echo '<div class="hse_disabled_content" style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin: 15px 0;">';
+    echo '<div class="hse_disabled_header" style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">';
+    echo '<div class="hse_disabled_warning_icon" style="background: #ffc107; color: #000; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold;">⚠️</div>';
+    echo '<div class="hse_disabled_info">';
+    echo '<h4 class="hse_disabled_info_title" style="margin: 0; color: #856404; font-size: 16px;">Accesso al Cantiere Non Abilitato</h4>';
+    echo '<p class="hse_disabled_info_text" style="margin: 5px 0 0 0; color: #856404; font-size: 14px;">La sezione Parte B verrà sbloccata dopo l\'abilitazione da parte dell\'amministrazione</p>';
+    echo '</div>';
+    echo '</div>';
+    echo '<div class="hse_disabled_help" style="background: rgba(255, 255, 255, 0.7); padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8;">';
+    echo '<h5 class="hse_disabled_help_title" style="margin: 0 0 10px 0; color: #0c5460;">📋 Cosa puoi fare nel frattempo:</h5>';
+    echo '<ul class="hse_disabled_help_list" style="margin: 0; padding-left: 20px; color: #0c5460;">';
+    echo '<li class="hse_disabled_help_item">✅ Completa e salva la <strong>Parte A - Documenti Aziendali + Personale</strong></li>';
+    echo '<li class="hse_disabled_help_item">📞 Contatta l\'ufficio per richiedere l\'abilitazione al cantiere</li>';
+    echo '<li class="hse_disabled_help_item">📄 Prepara i documenti richiesti per la Parte B (POS, elenco mezzi per ogni cantiere)</li>';
+    echo '</ul>';
+    echo '</div>';
+    echo '</div>';
+    echo '<p class="hse_disabled_hint" style="color: #6c757d; font-style: italic; margin: 10px 0 0 0; font-size: 13px;">💡 Una volta abilitato, riceverai una notifica via email e potrai accedere alla Parte B</p>';
+    echo '</div>';
+}
+
+echo '</form>';
+echo '</div>'; // Fine hse_cantiere_form_container
+
+?>
+<script>
+// Dati HSE per frontend con nuovi campi
+var hse_existingPersonaleData = <?php echo json_encode($hse_existing_data && !empty($hse_existing_data['personale']) ? $hse_existing_data['personale'] : array()); ?>;
+var hse_cantieriAssegnati = <?php echo json_encode($hse_cantieri_assegnati); ?>;
+var hse_ajaxBaseUrl = '<?php echo home_url('/cogei/ajax_fornitori/'); ?>';
+var hse_nonce = '<?php echo wp_create_nonce('cantiere_form_' . $hse_current_user_id); ?>';
+
+// Funzioni AJAX per eliminazione operai - usa file esterno
+function hse_deleteOperaio(operaioId, operaioName, isAssigned) {
+    let confirmMessage = `Sei sicuro di voler eliminare "${operaioName}" dal database?\n\nQuesta operazione rimuoverà permanentemente l'operaio e tutti i suoi dati.`;
+    
+    if (isAssigned) {
+        confirmMessage += '\n\n⚠️ ATTENZIONE: Questo operaio è attualmente assegnato a uno o più cantieri.\nVerrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?';
+    }
+    
+    if (confirm(confirmMessage)) {
+        const operaioRow = document.querySelector(`[data-operaio-id="${operaioId}"]`);
+        if (operaioRow) {
+            operaioRow.style.opacity = '0.5';
+            operaioRow.style.pointerEvents = 'none';
+        }
+        
+        fetch(hse_ajaxBaseUrl + 'elimina_operaio.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'elimina_operaio',
+                'operaio_id': operaioId,
+                'nonce': hse_nonce
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (operaioRow) {
+                    operaioRow.style.animation = 'hse_slideOut 0.3s ease-in forwards';
+                    setTimeout(() => {
+                        operaioRow.remove();
+                        hse_reorderPersonaleRows();
+                        hse_updatePersonaleCount();
+                        
+                        if (hse_cantieriAssegnati && hse_cantieriAssegnati.length > 0) {
+                            hse_cantieriAssegnati.forEach(cantiere => {
+                                if (cantiere.stato === 'attivo') {
+                                    hse_updateSkillsForCantiere(cantiere.id);
+                                }
+                            });
+                        }
+                    }, 300);
+                }
+                
+                hse_showToast(`✅ "${operaioName}" eliminato con successo dal database.`, 'success');
+                hse_existingPersonaleData = hse_existingPersonaleData.filter(p => p.id != operaioId);
+                
+            } else {
+                if (operaioRow) {
+                    operaioRow.style.opacity = '1';
+                    operaioRow.style.pointerEvents = 'auto';
+                }
+                hse_showToast(`❌ Errore: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            if (operaioRow) {
+                operaioRow.style.opacity = '1';
+                operaioRow.style.pointerEvents = 'auto';
+            }
+            hse_showToast('❌ Errore di connessione. Riprova.', 'error');
+        });
+    }
+}
+
+// Funzioni AJAX per eliminazione file principali (DVR, RCT) - usa file esterno
+function hse_deleteFile(fileType) {
+    const fileNames = {
+        'dvr': 'DVR (Documento Valutazione Rischi)',
+        'rct': 'RCT (Assicurazione)'
+    };
+    
+    const fileName = fileNames[fileType] || fileType;
+    
+    if (confirm(`Sei sicuro di voler eliminare il file ${fileName}?\n\nQuesta operazione non può essere annullata.`)) {
+        
+        fetch(hse_ajaxBaseUrl + 'elimina_file.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'elimina_file',
+                'file_type': fileType,
+                'nonce': hse_nonce
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const successSection = document.querySelector(`.hse_${fileType}_success`);
+                const warningSection = document.querySelector(`.hse_${fileType}_warning`);
+                const fileInput = document.querySelector(`input[name="hse_${fileType}_file"]`);
+                
+                if (successSection) {
+                    successSection.style.animation = 'hse_fadeOut 0.3s ease-in forwards';
+                    setTimeout(() => {
+                        successSection.remove();
+                        
+                        if (!warningSection && fileInput) {
+                            const warningDiv = document.createElement('div');
+                            warningDiv.className = `hse_${fileType}_warning`;
+                            warningDiv.style.cssText = 'margin-top: 5px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107; animation: hse_fadeIn 0.3s ease-out;';
+                            warningDiv.innerHTML = '<div class="hse_warning_text" style="font-size: 12px; color: #856404;">⚠️ Nessun file caricato - Campo obbligatorio</div>';
+                            fileInput.parentNode.insertBefore(warningDiv, fileInput.nextSibling);
+                        }
+                        
+                        if (fileInput) {
+                            fileInput.style.cssText = 'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
+                        }
+                        
+                        if (fileType === 'dvr') {
+                            const dataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
+                            if (dataInput) {
+                                dataInput.value = '';
+                            }
+                        }
+                    }, 300);
+                }
+                
+                hse_showToast(`✅ File ${fileName} eliminato con successo.`, 'success');
+                
+            } else {
+                hse_showToast(`❌ Errore: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            hse_showToast('❌ Errore di connessione. Riprova.', 'error');
+        });
+    }
+}
+
+// Funzioni AJAX per eliminazione file formazione e documenti personali - usa file esterno
+function hse_deleteFormazioneFile(fileType, personaIndex) {
+    const fileNames = {
+        'formazione_antincendio': 'Formazione Antincendio',
+        'formazione_primo_soccorso': 'Formazione Primo Soccorso',
+        'formazione_preposti': 'Formazione Preposti'
+    };
+    
+    const fileName = fileNames[fileType] || fileType;
+    
+    if (confirm(`Sei sicuro di voler eliminare il file ${fileName} per questa persona?\n\nQuesta operazione non può essere annullata.`)) {
+        
+        fetch(hse_ajaxBaseUrl + 'elimina_file.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'elimina_file',
+                'file_type': fileType,
+                'persona_index': personaIndex,
+                'nonce': hse_nonce
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const personaRow = document.querySelector(`[data-index="${personaIndex}"]`);
+                if (personaRow) {
+                    const successSection = personaRow.querySelector(`.hse_${fileType.split('_')[1]}_success`);
+                    if (successSection) {
+                        successSection.style.animation = 'hse_fadeOut 0.3s ease-in forwards';
+                        setTimeout(() => {
+                            successSection.remove();
+                        }, 300);
+                    }
+                }
+                
+                hse_showToast(`✅ File ${fileName} eliminato con successo.`, 'success');
+                
+                if (hse_cantieriAssegnati && hse_cantieriAssegnati.length > 0) {
+                    setTimeout(() => {
+                        hse_cantieriAssegnati.forEach(cantiere => {
+                            if (cantiere.stato === 'attivo') {
+                                hse_updateSkillsForCantiere(cantiere.id);
+                            }
+                        });
+                    }, 500);
+                }
+                
+                if (hse_existingPersonaleData && hse_existingPersonaleData[personaIndex]) {
+                    hse_existingPersonaleData[personaIndex][fileType + '_file'] = '';
+                }
+                
+            } else {
+                hse_showToast(`❌ Errore: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            hse_showToast('❌ Errore di connessione. Riprova.', 'error');
+        });
+    }
+}
+
+// Funzione AJAX per eliminazione file documenti personali (UNILAV, Idoneità)
+function hse_deleteDocumentoFile(fileType, personaIndex) {
+    const fileNames = {
+        'unilav': 'UNILAV',
+        'idoneita_sanitaria': 'Idoneità Sanitaria'
+    };
+    
+    const fileName = fileNames[fileType] || fileType;
+    
+    if (confirm(`Sei sicuro di voler eliminare il file ${fileName} per questa persona?\n\nQuesta operazione non può essere annullata.`)) {
+        
+        fetch(hse_ajaxBaseUrl + 'elimina_file.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'elimina_file',
+                'file_type': fileType,
+                'persona_index': personaIndex,
+                'nonce': hse_nonce
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const personaRow = document.querySelector(`[data-index="${personaIndex}"]`);
+                if (personaRow) {
+                    const selectorMap = {
+                        'unilav': '.hse_unilav_file_success',
+                        'idoneita_sanitaria': '.hse_idoneita_file_success'
+                    };
+                    
+                    const successSelector = selectorMap[fileType];
+                    if (successSelector) {
+                        const successSection = personaRow.querySelector(successSelector);
+                        if (successSection) {
+                            successSection.style.animation = 'hse_fadeOut 0.3s ease-in forwards';
+                            setTimeout(() => {
+                                successSection.remove();
+                            }, 300);
+                        }
+                    }
+                }
+                
+                hse_showToast(`✅ File ${fileName} eliminato con successo.`, 'success');
+                
+                if (hse_existingPersonaleData && hse_existingPersonaleData[personaIndex]) {
+                    hse_existingPersonaleData[personaIndex][fileType + '_file'] = '';
+                }
+                
+            } else {
+                hse_showToast(`❌ Errore: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            hse_showToast('❌ Errore di connessione. Riprova.', 'error');
+        });
+    }
+}
+
+// Utility per toast notifications
+function hse_showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = 'hse_toast';
+    
+    const bgColor = type === 'success' ? '#28a745' : 
+                   type === 'error' ? '#dc3545' : 
+                   type === 'warning' ? '#ffc107' : '#17a2b8';
+    
+    const textColor = type === 'warning' ? '#000' : '#fff';
+    
+    toast.style.cssText = `
+        position: fixed; 
+        top: 20px; 
+        right: 20px; 
+        background: ${bgColor}; 
+        color: ${textColor}; 
+        padding: 12px 16px; 
+        border-radius: 6px; 
+        font-size: 14px; 
+        font-weight: bold;
+        z-index: 9999; 
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        animation: hse_fadeIn 0.3s ease-out;
+    `;
+    
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'hse_fadeOut 0.3s ease-in forwards';
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, type === 'error' ? 5000 : 3000);
+}
+
+// Riordina righe personale dopo eliminazione
+function hse_reorderPersonaleRows() {
+    const container = document.getElementById('hse_personale_container');
+    const rows = container.querySelectorAll('.hse_personale_row');
+    
+    rows.forEach((row, newIndex) => {
+        row.setAttribute('data-index', newIndex);
+        
+        const title = row.querySelector('.hse_persona_title');
+        if (title) {
+            const currentText = title.textContent;
+            if (currentText.includes(':')) {
+                const namePart = currentText.split(':')[1].trim();
+                title.textContent = `👤 Persona ${newIndex + 1}: ${namePart}`;
+            } else {
+                title.textContent = `👤 Persona ${newIndex + 1}: Nuovo Operaio`;
+            }
+        }
+        
+        const arrow = row.querySelector('.hse_persona_accordion_arrow');
+        if (arrow) {
+            arrow.id = `hse_arrow_persona_${newIndex}`;
+        }
+        
+        const content = row.querySelector('.hse_persona_accordion_content');
+        if (content) {
+            content.id = `hse_content_persona_${newIndex}`;
+        }
+        
+        const header = row.querySelector('.hse_persona_accordion_header');
+        if (header) {
+            header.setAttribute('onclick', `hse_togglePersonaAccordion(${newIndex})`);
+        }
+        
+        ['hse_formazione_antincendio', 'hse_formazione_primo_soccorso', 'hse_formazione_preposti'].forEach(tipo => {
+            const input = row.querySelector(`input[name^="${tipo}"]`);
+            if (input) {
+                input.name = `${tipo}_${newIndex}`;
+            }
+        });
+        
+        const deleteButtons = row.querySelectorAll('.hse_delete_formazione_btn');
+        deleteButtons.forEach(btn => {
+            const onclick = btn.getAttribute('onclick');
+            if (onclick) {
+                const updatedOnclick = onclick.replace(/\d+\)$/, newIndex + ')');
+                btn.setAttribute('onclick', updatedOnclick);
+            }
+        });
+        
+        const removeBtn = row.querySelector('.hse_remove_persona_btn');
+        if (removeBtn && rows.length > 1) {
+            const operaioId = row.getAttribute('data-operaio-id') || 'new';
+            removeBtn.setAttribute('onclick', `hse_deleteOperaio(${operaioId}, 'Operaio ${newIndex + 1}', false)`);
+        } else if (removeBtn && rows.length === 1) {
+            removeBtn.remove();
+        }
+    });
+}
+
+// Validazione scadenze in tempo reale
+function hse_validateScadenze(personaIndex) {
+    const personaRow = document.querySelector(`[data-index="${personaIndex}"]`);
+    if (!personaRow) return;
+    
+    const unilavEmissioneInput = personaRow.querySelector('input[name="hse_personale_unilav_emissione[]"]');
+    const unilavScadenzaInput = personaRow.querySelector('input[name="hse_personale_unilav_scadenza[]"]');
+    const idoneitaScadenzaInput = personaRow.querySelector('input[name="hse_personale_idoneita_scadenza[]"]');
+    
+    const oggi = new Date();
+    let hasWarnings = false;
+    
+    if (unilavScadenzaInput && unilavScadenzaInput.value) {
+        const scadenza = new Date(unilavScadenzaInput.value);
+        const diffTime = scadenza - oggi;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) {
+            unilavScadenzaInput.style.cssText = 'width: 100%; padding: 8px; border: 2px solid #dc3545; border-radius: 4px; background: #f8d7da;';
+            hasWarnings = true;
+        } else if (diffDays <= 30) {
+            unilavScadenzaInput.style.cssText = 'width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; background: #fff3cd;';
+            hasWarnings = true;
+        } else {
+            unilavScadenzaInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;';
+        }
+    }
+    
+    if (idoneitaScadenzaInput && idoneitaScadenzaInput.value) {
+        const scadenza = new Date(idoneitaScadenzaInput.value);
+        const diffTime = scadenza - oggi;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) {
+            idoneitaScadenzaInput.style.cssText = 'width: 100%; padding: 8px; border: 2px solid #dc3545; border-radius: 4px; background: #f8d7da;';
+            hasWarnings = true;
+        } else if (diffDays <= 30) {
+            idoneitaScadenzaInput.style.cssText = 'width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; background: #fff3cd;';
+            hasWarnings = true;
+        } else {
+            idoneitaScadenzaInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;';
+        }
+    }
+    
+    const header = personaRow.querySelector('.hse_persona_accordion_header');
+    const existingWarningBadge = header.querySelector('.hse_warning_badge');
+    
+    if (hasWarnings && !existingWarningBadge) {
+        const warningBadge = document.createElement('span');
+        warningBadge.className = 'hse_warning_badge';
+        warningBadge.style.cssText = 'background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 8px;';
+        warningBadge.textContent = '⚠️ Scadenze';
+        
+        const headerLeft = header.querySelector('.hse_persona_header_left');
+        headerLeft.appendChild(warningBadge);
+        
+        personaRow.style.border = '2px solid #dc3545';
+        personaRow.style.background = 'linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%)';
+        
+    } else if (!hasWarnings && existingWarningBadge) {
+        existingWarningBadge.remove();
+        
+        const assignmentBadge = header.querySelector('.hse_assignment_badge');
+        if (!assignmentBadge) {
+            personaRow.style.border = '1px solid #ddd';
+            personaRow.style.background = 'white';
+        }
+    }
+}
+</script>
+<script>
+// Gestione Accordion Principale
+function hse_toggleAccordion(sectionId) {
+    const content = document.getElementById('hse_content_' + sectionId);
+    const arrow = document.getElementById('hse_arrow_' + sectionId);
+    const header = content.previousElementSibling;
+    
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+        header.style.background = 'rgba(33, 150, 243, 0.2)';
+        
+        content.style.maxHeight = '0px';
+        content.style.overflow = 'hidden';
+        setTimeout(() => {
+            content.style.transition = 'max-height 0.3s ease-out';
+            content.style.maxHeight = content.scrollHeight + 'px';
+        }, 10);
+        
+        setTimeout(() => {
+            content.style.maxHeight = 'none';
+            content.style.overflow = 'visible';
+        }, 350);
+        
+    } else {
+        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.overflow = 'hidden';
+        content.style.transition = 'max-height 0.3s ease-in';
+        
+        setTimeout(() => {
+            content.style.maxHeight = '0px';
+        }, 10);
+        
+        setTimeout(() => {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+            header.style.background = 'rgba(33, 150, 243, 0.1)';
+        }, 350);
+    }
+}
+
+// Gestione Accordion Personale
+function hse_togglePersonaAccordion(personaIndex) {
+    const content = document.getElementById('hse_content_persona_' + personaIndex);
+    const arrow = document.getElementById('hse_arrow_persona_' + personaIndex);
+    const header = content.previousElementSibling;
+    
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+        header.style.background = 'rgba(0, 102, 162, 0.1)';
+        
+        content.style.maxHeight = '0px';
+        content.style.overflow = 'hidden';
+        setTimeout(() => {
+            content.style.transition = 'max-height 0.3s ease-out';
+            content.style.maxHeight = content.scrollHeight + 'px';
+        }, 10);
+        
+        setTimeout(() => {
+            content.style.maxHeight = 'none';
+            content.style.overflow = 'visible';
+        }, 350);
+        
+    } else {
+        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.overflow = 'hidden';
+        content.style.transition = 'max-height 0.3s ease-in';
+        
+        setTimeout(() => {
+            content.style.maxHeight = '0px';
+        }, 10);
+        
+        setTimeout(() => {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+            header.style.background = 'rgba(0, 102, 162, 0.05)';
+        }, 350);
+    }
+}
+
+// Gestione Accordion Cantieri
+function hse_toggleCantiereAccordion(cantiereId) {
+    const content = document.getElementById('hse_content_cantiere_' + cantiereId);
+    const arrow = document.getElementById('hse_arrow_cantiere_' + cantiereId);
+    const header = content.previousElementSibling;
+    
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+        header.style.background = 'linear-gradient(135deg, #1976d2, #1565c0)';
+        
+        content.style.maxHeight = '0px';
+        content.style.overflow = 'hidden';
+        setTimeout(() => {
+            content.style.transition = 'max-height 0.3s ease-out';
+            content.style.maxHeight = content.scrollHeight + 'px';
+        }, 10);
+        
+        setTimeout(() => {
+            content.style.maxHeight = 'none';
+            content.style.overflow = 'visible';
+        }, 350);
+        
+    } else {
+        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.overflow = 'hidden';
+        content.style.transition = 'max-height 0.3s ease-in';
+        
+        setTimeout(() => {
+            content.style.maxHeight = '0px';
+        }, 10);
+        
+        setTimeout(() => {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+            header.style.background = 'linear-gradient(135deg, #2196f3, #1976d2)';
+        }, 350);
+    }
+}
+
+// Gestione personale dinamico con formazioni + nuovi campi + controllo assegnazioni
+function hse_addPersona() {
+    const hse_container = document.getElementById('hse_personale_container');
+    const hse_currentRows = hse_container.querySelectorAll('.hse_personale_row');
+    const hse_newIndex = hse_currentRows.length;
+    
+    const hse_personaDiv = document.createElement('div');
+    hse_personaDiv.className = 'hse_personale_row hse_personale_accordion';
+    hse_personaDiv.setAttribute('data-index', hse_newIndex);
+    hse_personaDiv.style.cssText = 'background: white; padding: 0; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ddd; position: relative; overflow: hidden; animation: hse_slideIn 0.3s ease-out;';
+    
+    hse_personaDiv.innerHTML = `
+        <div class="hse_persona_accordion_header" onclick="hse_togglePersonaAccordion(${hse_newIndex})" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 102, 162, 0.05); transition: all 0.3s ease;">
+            <h4 class="hse_persona_title" style="margin: 0; color: #0066a2;">👤 Persona ${hse_newIndex + 1}: Nuovo Operaio</h4>
+            <div class="hse_persona_header_right" style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" onclick="hse_removePersonaFromDOM(${hse_newIndex})" class="hse_remove_persona_btn" style="background: #dc3545; color: white; border: none; width: 25px; height: 25px; border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 1; transition: all 0.3s;">✕</button>
+                <span class="hse_persona_accordion_arrow" id="hse_arrow_persona_${hse_newIndex}" style="font-size: 16px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>
+            </div>
+        </div>
+        
+        <div class="hse_persona_accordion_content" id="hse_content_persona_${hse_newIndex}" style="display: block; padding: 20px; transition: all 0.3s ease;">
+            <div class="hse_dati_personali" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #0066a2;">
+                <h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>
+                <div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <div class="hse_nome_field">
+                        <label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome:</label>
+                        <input type="text" name="hse_personale_nome[]" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">
+                    </div>
+                    <div class="hse_cognome_field">
+                        <label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome:</label>
+                        <input type="text" name="hse_personale_cognome[]" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">
+                    </div>
+                    <div class="hse_data_nascita_field">
+                        <label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>
+                        <input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="hse_documenti_personali_section" style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                <h5 class="hse_documenti_personali_title" style="margin: 0 0 15px 0; color: #2196f3;">📋 UNILAV e Idoneità Sanitaria</h5>
+                
+                <div class="hse_unilav_section" style="background: rgba(33, 150, 243, 0.05); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 3px solid #2196f3;">
+                    <h6 style="margin: 0 0 10px 0; color: #2196f3; font-size: 13px; font-weight: bold;">📋 UNILAV</h6>
+                    <div class="hse_unilav_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div class="hse_unilav_emissione_field">
+                            <label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione:</label>
+                            <input type="date" name="hse_personale_unilav_emissione[]" class="hse_unilav_emissione_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
+                        </div>
+                        <div class="hse_unilav_scadenza_field">
+                            <label class="hse_unilav_scadenza_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza (se prevista):</label>
+                            <input type="date" name="hse_personale_unilav_scadenza[]" class="hse_unilav_scadenza_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
+                        </div>
+                        <div class="hse_unilav_file_field">
+                            <label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV:</label>
+                            <input type="file" name="hse_unilav_file_${hse_newIndex}" accept=".pdf" class="hse_unilav_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hse_idoneita_section" style="background: rgba(40, 167, 69, 0.05); padding: 12px; border-radius: 6px; border-left: 3px solid #28a745;">
+                    <h6 style="margin: 0 0 10px 0; color: #28a745; font-size: 13px; font-weight: bold;">🏥 Idoneità Sanitaria</h6>
+                    <div class="hse_idoneita_grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="hse_idoneita_sanitaria_field">
+                            <label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza:</label>
+                            <input type="date" name="hse_personale_idoneita_scadenza[]" class="hse_idoneita_sanitaria_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
+                        </div>
+                        <div class="hse_idoneita_file_field">
+                            <label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità:</label>
+                            <input type="file" name="hse_idoneita_file_${hse_newIndex}" accept=".pdf" class="hse_idoneita_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <small class="hse_documenti_personali_help" style="color: #2196f3; font-weight: bold; margin-top: 10px; display: block;">💡 UNILAV: Data emissione sempre richiesta. Scadenza e file solo se il contratto ha termine. Idoneità sanitaria sempre con scadenza e file.</small>
+            </div>
+            
+            <div class="hse_formazione_section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #17a2b8;">
+                <h5 class="hse_formazione_title" style="margin: 0 0 15px 0; color: #17a2b8;">🎓 Documenti Formazione</h5>
+                <div class="hse_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="hse_antincendio_field">
+                        <label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione Antincendio:</label>
+                        <input type="file" name="hse_formazione_antincendio_${hse_newIndex}" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_primo_soccorso_field">
+                        <label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione Primo Soccorso:</label>
+                        <input type="file" name="hse_formazione_primo_soccorso_${hse_newIndex}" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_preposti_field">
+                        <label class="hse_preposti_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👮 Formazione Preposti:</label>
+                        <input type="file" name="hse_formazione_preposti_${hse_newIndex}" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+                <small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l'assegnazione ai cantieri</small>
+            </div>
+        </div>
+    `;
+    
+    hse_container.appendChild(hse_personaDiv);
+    
+    setTimeout(() => {
+        const hse_nomeInput = hse_personaDiv.querySelector('input[name="hse_personale_nome[]"]');
+        if (hse_nomeInput) hse_nomeInput.focus();
+    }, 100);
+    
+    hse_updatePersonaleCount();
+    hse_showToast('✅ Nuova persona aggiunta! Compila i dati e carica le formazioni.', 'success');
+}
+
+// Rimozione persona solo dal DOM (per nuove persone non salvate)
+function hse_removePersonaFromDOM(index) {
+    const hse_container = document.getElementById('hse_personale_container');
+    const hse_rows = hse_container.querySelectorAll('.hse_personale_row');
+    
+    if (hse_rows.length <= 1) {
+        alert('⚠️ Deve esserci almeno una persona nel team.');
+        return;
+    }
+    
+    const hse_rowToRemove = hse_container.querySelector(`[data-index="${index}"]`);
+    if (hse_rowToRemove) {
+        hse_rowToRemove.style.animation = 'hse_slideOut 0.3s ease-in forwards';
+        
+        setTimeout(() => {
+            hse_rowToRemove.remove();
+            hse_reorderPersonaleRows();
+            hse_updatePersonaleCount();
+        }, 300);
+        
+        hse_showToast('❌ Persona rimossa dal modulo.', 'info');
+    }
+}
+
+function hse_updatePersonaleCount() {
+    const hse_container = document.getElementById('hse_personale_container');
+    const hse_rows = hse_container.querySelectorAll('.hse_personale_row');
+    const hse_count = hse_rows.length;
+    
+    const hse_numeroPersonaleInput = document.getElementById('hse_numero_personale');
+    hse_numeroPersonaleInput.value = hse_count;
+    
+    const hse_countDisplay = document.getElementById('hse_personale_count');
+    hse_countDisplay.textContent = `(${hse_count} ${hse_count === 1 ? 'persona' : 'persone'})`;
+    
+    if (hse_count <= 2) {
+        hse_countDisplay.style.background = '#dc3545';
+    } else if (hse_count <= 5) {
+        hse_countDisplay.style.background = '#ffc107';
+        hse_countDisplay.style.color = '#000';
+    } else {
+        hse_countDisplay.style.background = '#28a745';
+        hse_countDisplay.style.color = '#fff';
+    }
+    
+    hse_rows.forEach((row, index) => {
+        const hse_nomeInput = row.querySelector('input[name="hse_personale_nome[]"]');
+        const hse_cognomeInput = row.querySelector('input[name="hse_personale_cognome[]"]');
+        const hse_title = row.querySelector('.hse_persona_title');
+        
+        if (hse_nomeInput && hse_cognomeInput && hse_title) {
+            const hse_nome = hse_nomeInput.value.trim();
+            const hse_cognome = hse_cognomeInput.value.trim();
+            
+            if (hse_nome && hse_cognome) {
+                hse_title.textContent = `👤 Persona ${index + 1}: ${hse_nome} ${hse_cognome}`;
+            } else {
+                hse_title.textContent = `👤 Persona ${index + 1}: Nuovo Operaio`;
+            }
+        }
+    });
+}
+
+// Gestione cantieri multipli
+function hse_showCantieriInfo() {
+    if (hse_cantieriAssegnati && hse_cantieriAssegnati.length > 0) {
+        var hse_infoText = 'I tuoi cantieri assegnati:\n\n';
+        hse_cantieriAssegnati.forEach(function(hse_cantiere, index) {
+            hse_infoText += (index + 1) + '. ' + hse_cantiere.nome + ' (' + hse_cantiere.stato + ')\n';
+            if (hse_cantiere.descrizione) {
+                hse_infoText += '   ' + hse_cantiere.descrizione + '\n';
+            }
+            if (hse_cantiere.data_fine) {
+                var hse_dataFine = new Date(hse_cantiere.data_fine);
+                var hse_oggi = new Date();
+                var hse_diffTime = hse_dataFine - hse_oggi;
+                var hse_diffDays = Math.ceil(hse_diffTime / (1000 * 60 * 60 * 24));
+                
+                if (hse_diffDays < 0) {
+                    hse_infoText += '   ⚠️ Scaduto da ' + Math.abs(hse_diffDays) + ' giorni\n';
+                } else if (hse_diffDays <= 7) {
+                    hse_infoText += '   🔥 Scade tra ' + hse_diffDays + ' giorni\n';
+                } else {
+                    hse_infoText += '   📅 Scade tra ' + hse_diffDays + ' giorni\n';
+                }
+            }
+            hse_infoText += '\n';
+        });
+        
+        alert(hse_infoText);
+    } else {
+        alert('Nessun cantiere assegnato al momento.');
+    }
+}
+
+function hse_checkScadenzeCantieri() {
+    if (!hse_cantieriAssegnati || hse_cantieriAssegnati.length === 0) return;
+    
+    var hse_cantieriInScadenza = [];
+    var hse_cantieriScaduti = [];
+    
+    hse_cantieriAssegnati.forEach(function(hse_cantiere) {
+        if (hse_cantiere.data_fine && hse_cantiere.stato === 'attivo') {
+            var hse_dataFine = new Date(hse_cantiere.data_fine);
+            var hse_oggi = new Date();
+            var hse_diffTime = hse_dataFine - hse_oggi;
+            var hse_diffDays = Math.ceil(hse_diffTime / (1000 * 60 * 60 * 24));
+            
+            if (hse_diffDays < 0) {
+                hse_cantieriScaduti.push({
+                    nome: hse_cantiere.nome,
+                    giorni: Math.abs(hse_diffDays)
+                });
+            } else if (hse_diffDays <= 7) {
+                hse_cantieriInScadenza.push({
+                    nome: hse_cantiere.nome,
+                    giorni: hse_diffDays
+                });
+            }
+        }
+    });
+    
+    if (hse_cantieriScaduti.length > 0) {
+        setTimeout(function() {
+            var hse_message = '🚨 ATTENZIONE: Hai ' + hse_cantieriScaduti.length + ' cantiere/i scaduto/i:\n\n';
+            hse_cantieriScaduti.forEach(function(hse_cantiere) {
+                hse_message += '• ' + hse_cantiere.nome + ' (scaduto da ' + hse_cantiere.giorni + ' giorni)\n';
+            });
+            hse_message += '\nContatta l\'amministrazione per informazioni sui cantieri scaduti.';
+            
+            if (confirm(hse_message + '\n\nVuoi visualizzare i dettagli di tutti i tuoi cantieri?')) {
+                hse_showCantieriInfo();
+            }
+        }, 2000);
+    } else if (hse_cantieriInScadenza.length > 0) {
+        setTimeout(function() {
+            var hse_message = '⚠️ PROMEMORIA: Hai ' + hse_cantieriInScadenza.length + ' cantiere/i in scadenza:\n\n';
+            hse_cantieriInScadenza.forEach(function(hse_cantiere) {
+                hse_message += '• ' + hse_cantiere.nome + ' (scade tra ' + hse_cantiere.giorni + ' giorni)\n';
+            });
+            hse_message += '\nPrepara i documenti necessari per la conclusione.';
+            
+            alert(hse_message);
+        }, 3000);
+    }
+}
+</script>
+<script>
+// Calcolo competenze per cantiere specifico
+function hse_updateSkillsForCantiere(cantiereId) {
+    const hse_checkboxes = document.querySelectorAll(`input[name="hse_operai_selezionati_${cantiereId}[]"]:checked`);
+    const hse_totaleSelezionato = hse_checkboxes.length;
+    
+    if (hse_totaleSelezionato === 0) {
+        hse_updateSkillSummaryForCantiere(cantiereId, null);
+        return;
+    }
+    
+    const hse_competenzePersonale = [];
+    const hse_distribuzione = {antincendio: 0, primo_soccorso: 0, preposti: 0};
+    
+    hse_checkboxes.forEach(checkbox => {
+        const hse_operaioId = parseInt(checkbox.value);
+        
+        let hse_operaio = null;
+        if (hse_existingPersonaleData && hse_existingPersonaleData.length > 0) {
+            hse_operaio = hse_existingPersonaleData.find(p => p.id == hse_operaioId);
+        }
+        
+        if (!hse_operaio) {
+            return;
+        }
+        
+        const hse_competenze = [];
+        const hse_nomeCompleto = hse_operaio.nome + ' ' + hse_operaio.cognome;
+        
+        if (hse_operaio.formazione_antincendio_file) {
+            hse_competenze.push('antincendio');
+            hse_distribuzione.antincendio++;
+        }
+        
+        if (hse_operaio.formazione_primo_soccorso_file) {
+            hse_competenze.push('primo_soccorso');
+            hse_distribuzione.primo_soccorso++;
+        }
+        
+        if (hse_operaio.formazione_preposti_file) {
+            hse_competenze.push('preposti');
+            hse_distribuzione.preposti++;
+        }
+        
+        hse_competenzePersonale.push({
+            nome: hse_nomeCompleto,
+            competenze: hse_competenze
+        });
+    });
+    
+    const hse_percentualeAntincendio = Math.round((hse_distribuzione.antincendio / hse_totaleSelezionato) * 100 * 10) / 10;
+    const hse_percentualePrimoSoccorso = Math.round((hse_distribuzione.primo_soccorso / hse_totaleSelezionato) * 100 * 10) / 10;
+    const hse_percentualePreposti = Math.round((hse_distribuzione.preposti / hse_totaleSelezionato) * 100 * 10) / 10;
+    
+    const hse_conforme = (hse_percentualeAntincendio >= 30 && hse_percentualePrimoSoccorso >= 30 && hse_percentualePreposti >= 30);
+    
+    const hse_skillStats = {
+        antincendio: hse_percentualeAntincendio,
+        primo_soccorso: hse_percentualePrimoSoccorso,
+        preposti: hse_percentualePreposti,
+        totale_selezionato: hse_totaleSelezionato,
+        distribuzione: hse_distribuzione,
+        competenze_personale: hse_competenzePersonale,
+        conforme: hse_conforme
+    };
+    
+    hse_updateSkillSummaryForCantiere(cantiereId, hse_skillStats);
+}
+
+function hse_updateSkillSummaryForCantiere(cantiereId, skillStats) {
+    const hse_skillContent = document.getElementById('hse_skill_content_' + cantiereId);
+    
+    if (!skillStats || skillStats.totale_selezionato === 0) {
+        hse_skillContent.innerHTML = '<div class="hse_skill_empty" style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; text-align: center;">📋 Nessun operaio selezionato per questo cantiere</div>';
+        return;
+    }
+    
+    let hse_contentHTML = '';
+    
+    hse_contentHTML += '<div class="hse_skill_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px;">';
+    
+    const hse_competenze = [
+        {key: 'antincendio', label: '🔥 Antincendio', value: skillStats.antincendio},
+        {key: 'primo_soccorso', label: '🚑 Primo Soccorso', value: skillStats.primo_soccorso},
+        {key: 'preposti', label: '👮 Preposti', value: skillStats.preposti}
+    ];
+    
+    hse_competenze.forEach(competenza => {
+        const hse_color = competenza.value >= 30 ? '#28a745' : '#dc3545';
+        hse_contentHTML += `<div class="hse_skill_card hse_skill_${competenza.key}" style="text-align: center; padding: 10px; background: ${hse_color}; color: white; border-radius: 6px;">`;
+        hse_contentHTML += `<div class="hse_skill_percentage" style="font-size: 18px; font-weight: bold;">${competenza.value}%</div>`;
+        hse_contentHTML += `<div class="hse_skill_label" style="font-size: 11px;">${competenza.label}</div>`;
+        hse_contentHTML += `<div class="hse_skill_count" style="font-size: 10px;">(${skillStats.distribuzione[competenza.key]}/${skillStats.totale_selezionato} operai)</div>`;
+        hse_contentHTML += '</div>';
+    });
+    
+    hse_contentHTML += '</div>';
+    
+    if (skillStats.conforme) {
+        hse_contentHTML += '<div class="hse_skill_status hse_skill_conforme" style="background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; text-align: center; font-weight: bold;">';
+        hse_contentHTML += '✅ CONFORME: Tutte le competenze raggiungono il 30% minimo richiesto';
+        hse_contentHTML += '</div>';
+    } else {
+        hse_contentHTML += '<div class="hse_skill_status hse_skill_non_conforme" style="background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; text-align: center;">';
+        hse_contentHTML += '<div class="hse_skill_warning_title" style="font-weight: bold; margin-bottom: 5px;">⚠️ NON CONFORME: Alcune competenze sotto il 30% minimo</div>';
+        hse_contentHTML += '<div class="hse_skill_warning_text" style="font-size: 11px;">Per accedere al cantiere è necessario avere almeno il 30% del personale preparato in ogni competenza</div>';
+        hse_contentHTML += '</div>';
+    }
+    
+    hse_skillContent.innerHTML = hse_contentHTML;
+}
+
+// Controlli validazione form migliorati con nuovi campi
+function hse_validateFormBeforeSubmit(formType) {
+    if (formType === 'parte_a') {
+        const hse_nomeInputs = document.querySelectorAll('input[name="hse_personale_nome[]"]');
+        const hse_cognomeInputs = document.querySelectorAll('input[name="hse_personale_cognome[]"]');
+        const hse_dataInputs = document.querySelectorAll('input[name="hse_personale_data_nascita[]"]');
+        const hse_unilavEmissioneInputs = document.querySelectorAll('input[name="hse_personale_unilav_emissione[]"]');
+        const hse_unilavScadenzaInputs = document.querySelectorAll('input[name="hse_personale_unilav_scadenza[]"]');
+        const hse_idoneitaInputs = document.querySelectorAll('input[name="hse_personale_idoneita_scadenza[]"]');
+        
+        let hse_hasErrors = false;
+        const hse_errors = [];
+        
+        for (let i = 0; i < hse_nomeInputs.length; i++) {
+            const personaNum = i + 1;
+            
+            if (!hse_nomeInputs[i].value.trim()) {
+                hse_errors.push(`Nome della persona ${personaNum} è obbligatorio`);
+                hse_hasErrors = true;
+            }
+            if (!hse_cognomeInputs[i].value.trim()) {
+                hse_errors.push(`Cognome della persona ${personaNum} è obbligatorio`);
+                hse_hasErrors = true;
+            }
+            if (!hse_dataInputs[i].value.trim()) {
+                hse_errors.push(`Data di nascita della persona ${personaNum} è obbligatoria`);
+                hse_hasErrors = true;
+            }
+            
+            const unilavEmissione = hse_unilavEmissioneInputs[i] ? hse_unilavEmissioneInputs[i].value.trim() : '';
+            const unilavScadenza = hse_unilavScadenzaInputs[i] ? hse_unilavScadenzaInputs[i].value.trim() : '';
+            
+            if (unilavEmissione && unilavScadenza) {
+                const emissioneDate = new Date(unilavEmissione);
+                const scadenzaDate = new Date(unilavScadenza);
+                
+                if (scadenzaDate <= emissioneDate) {
+                    hse_errors.push(`Data scadenza UNILAV deve essere successiva alla data di emissione per la persona ${personaNum}`);
+                    hse_hasErrors = true;
+                }
+            }
+            
+            const idoneitaScadenza = hse_idoneitaInputs[i] ? hse_idoneitaInputs[i].value.trim() : '';
+            if (idoneitaScadenza) {
+                const scadenzaDate = new Date(idoneitaScadenza);
+                const oggi = new Date();
+                
+                if (scadenzaDate < oggi) {
+                    hse_errors.push(`Idoneità sanitaria della persona ${personaNum} è scaduta`);
+                    hse_hasErrors = true;
+                }
+            }
+        }
+        
+        const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
+        const dvrFileInput = document.querySelector('input[name="hse_dvr_file"]');
+        
+        if (dvrFileInput && dvrFileInput.files.length > 0 && dvrDataInput && !dvrDataInput.value.trim()) {
+            hse_errors.push('Data emissione DVR è obbligatoria quando carichi un nuovo file DVR');
+            hse_hasErrors = true;
+        }
+        
+        if (hse_hasErrors) {
+            alert('⚠️ Errori di validazione:\n\n' + hse_errors.join('\n'));
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Stato accordion intelligente
+function hse_saveAccordionStates() {
+    const hse_states = {
+        cantieri_assegnati: document.getElementById('hse_content_cantieri_assegnati')?.style.display !== 'none',
+        personale: {},
+        cantieri: {}
+    };
+    
+    document.querySelectorAll('.hse_persona_accordion_content').forEach(content => {
+        const hse_id = content.id.replace('hse_content_persona_', '');
+        hse_states.personale[hse_id] = content.style.display !== 'none';
+    });
+    
+    document.querySelectorAll('.hse_cantiere_accordion_content').forEach(content => {
+        const hse_id = content.id.replace('hse_content_cantiere_', '');
+        hse_states.cantieri[hse_id] = content.style.display !== 'none';
+    });
+    
+    try {
+        sessionStorage.setItem('hse_accordion_states', JSON.stringify(hse_states));
+    } catch(e) {}
+}
+
+function hse_restoreAccordionStates() {
+    try {
+        const hse_savedStates = sessionStorage.getItem('hse_accordion_states');
+        if (hse_savedStates) {
+            const hse_states = JSON.parse(hse_savedStates);
+            
+            if (hse_states.cantieri_assegnati && document.getElementById('hse_content_cantieri_assegnati')) {
+                hse_toggleAccordion('cantieri_assegnati');
+            }
+            
+            Object.keys(hse_states.personale).forEach(personaId => {
+                if (hse_states.personale[personaId] && document.getElementById('hse_content_persona_' + personaId)) {
+                    hse_togglePersonaAccordion(parseInt(personaId));
+                }
+            });
+            
+            Object.keys(hse_states.cantieri).forEach(cantiereId => {
+                if (hse_states.cantieri[cantiereId] && document.getElementById('hse_content_cantiere_' + cantiereId)) {
+                    hse_toggleCantiereAccordion(parseInt(cantiereId));
+                }
+            });
+        }
+    } catch(e) {}
+}
+
+// Animazioni per cantieri assegnati
+function hse_animateCantieriCards() {
+    const hse_cantieriCards = document.querySelectorAll('.hse_cantieri_assegnati_section .hse_cantiere_card');
+    
+    if (hse_cantieriCards.length > 0) {
+        hse_cantieriCards.forEach((card, index) => {
+            setTimeout(() => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'all 0.4s ease-out';
+                
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 100);
+            }, index * 100);
+        });
+    }
+}
+</script>
+<script>
+// Setup auto-aggiornamento titoli persona in tempo reale con validazione scadenze
+function hse_setupPersonaTitleUpdate() {
+    document.addEventListener('input', function(e) {
+        if (e.target.name === 'hse_personale_nome[]' || e.target.name === 'hse_personale_cognome[]') {
+            const hse_personaRow = e.target.closest('.hse_personale_row');
+            if (hse_personaRow) {
+                const hse_nomeInput = hse_personaRow.querySelector('input[name="hse_personale_nome[]"]');
+                const hse_cognomeInput = hse_personaRow.querySelector('input[name="hse_personale_cognome[]"]');
+                const hse_title = hse_personaRow.querySelector('.hse_persona_title');
+                
+                if (hse_nomeInput && hse_cognomeInput && hse_title) {
+                    const hse_nome = hse_nomeInput.value.trim();
+                    const hse_cognome = hse_cognomeInput.value.trim();
+                    const hse_index = parseInt(hse_personaRow.getAttribute('data-index'));
+                    
+                    if (hse_nome && hse_cognome) {
+                        hse_title.textContent = `👤 Persona ${hse_index + 1}: ${hse_nome} ${hse_cognome}`;
+                    } else if (hse_nome) {
+                        hse_title.textContent = `👤 Persona ${hse_index + 1}: ${hse_nome}`;
+                    } else {
+                        hse_title.textContent = `👤 Persona ${hse_index + 1}: Nuovo Operaio`;
+                    }
+                }
+            }
+        }
+        
+        if (e.target.name && (e.target.name.includes('unilav') || e.target.name.includes('idoneita'))) {
+            const hse_personaRow = e.target.closest('.hse_personale_row');
+            if (hse_personaRow) {
+                const hse_index = parseInt(hse_personaRow.getAttribute('data-index'));
+                setTimeout(() => {
+                    hse_validateScadenze(hse_index);
+                }, 100);
+            }
+        }
+    });
+}
+
+// Inizializzazione HSE con nuovi campi
+document.addEventListener("DOMContentLoaded", function() {
+    hse_updatePersonaleCount();
+    
+    hse_setupPersonaTitleUpdate();
+    
+    setTimeout(() => {
+        hse_restoreAccordionStates();
+    }, 500);
+    
+    setTimeout(() => {
+        const hse_cantieriContent = document.getElementById('hse_content_cantieri_assegnati');
+        if (hse_cantieriContent && hse_cantieriContent.style.display !== 'none') {
+            hse_animateCantieriCards();
+        }
+    }, 800);
+    
+    setTimeout(hse_checkScadenzeCantieri, 1500);
+    
+    if (hse_existingPersonaleData && hse_existingPersonaleData.length > 0) {
+        hse_existingPersonaleData.forEach((persona, index) => {
+            setTimeout(() => {
+                hse_validateScadenze(index);
+            }, 1000 + (index * 100));
+        });
+    }
+    
+    const hse_form = document.getElementById('hse_cantiere_form_main');
+    if (hse_form) {
+        hse_form.addEventListener('submit', function(e) {
+            hse_saveAccordionStates();
+            
+            const hse_submitButton = e.submitter;
+            
+            if (hse_submitButton) {
+                if (hse_submitButton.name === 'hse_cantiere_submit_parte_a') {
+                    if (!hse_validateFormBeforeSubmit('parte_a')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                } else if (hse_submitButton.name === 'hse_cantiere_submit_parte_b') {
+                    const hse_cantiereId = hse_submitButton.value;
+                    
+                    if (!hse_cantiereId) {
+                        alert('⚠️ Errore: Impossibile identificare il cantiere. Riprova.');
+                        e.preventDefault();
+                        return false;
+                    }
+                    
+                    const hse_selectedOperai = document.querySelectorAll(`input[name="hse_operai_selezionati_${hse_cantiereId}[]"]:checked`);
+                    
+                    if (hse_selectedOperai.length === 0) {
+                        alert(`⚠️ Devi selezionare almeno un operaio per questo cantiere (ID: ${hse_cantiereId})`);
+                        e.preventDefault();
+                        return false;
+                    }
+                    
+                    let hse_hasScaduti = false;
+                    let hse_operaiScaduti = [];
+                    
+                    hse_selectedOperai.forEach(checkbox => {
+                        const operaioId = parseInt(checkbox.value);
+                        const operaio = hse_existingPersonaleData.find(p => p.id == operaioId);
+                        
+                        if (operaio) {
+                            const warnings = [];
+                            const oggi = new Date();
+                            
+                            if (operaio.unilav_data_scadenza) {
+                                const scadenza = new Date(operaio.unilav_data_scadenza);
+                                if (oggi > scadenza) {
+                                    warnings.push('UNILAV scaduto');
+                                    hse_hasScaduti = true;
+                                }
+                            }
+                            
+                            if (operaio.idoneita_sanitaria_scadenza) {
+                                const scadenza = new Date(operaio.idoneita_sanitaria_scadenza);
+                                if (oggi > scadenza) {
+                                    warnings.push('Idoneità sanitaria scaduta');
+                                    hse_hasScaduti = true;
+                                }
+                            }
+                            
+                            if (warnings.length > 0) {
+                                hse_operaiScaduti.push(`${operaio.nome} ${operaio.cognome}: ${warnings.join(', ')}`);
+                            }
+                        }
+                    });
+                    
+                    if (hse_hasScaduti) {
+                        const confirmMessage = `⚠️ ATTENZIONE: Alcuni operai selezionati hanno documenti scaduti:\n\n${hse_operaiScaduti.join('\n')}\n\nVuoi continuare comunque?`;
+                        if (!confirm(confirmMessage)) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    const hse_fileInputs = document.querySelectorAll('.hse_cantiere_form input[type="file"]');
+    hse_fileInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                this.style.borderColor = '#28a745';
+                this.style.background = '#f8fff8';
+                
+                const hse_fileName = this.files[0].name;
+                const hse_fileSize = (this.files[0].size / 1024 / 1024).toFixed(2);
+                
+                let hse_existingInfo = this.parentNode.querySelector('.hse_file_info');
+                if (hse_existingInfo) {
+                    hse_existingInfo.remove();
+                }
+                
+                const hse_fileInfo = document.createElement('div');
+                hse_fileInfo.className = 'hse_file_info';
+                hse_fileInfo.style.cssText = 'margin-top: 5px; font-size: 11px; color: #28a745; padding: 5px; background: rgba(40, 167, 69, 0.1); border-radius: 3px;';
+                hse_fileInfo.innerHTML = `📎 ${hse_fileName} (${hse_fileSize} MB)`;
+                
+                this.parentNode.insertBefore(hse_fileInfo, this.nextSibling);
+                
+                if (this.name === 'hse_dvr_file') {
+                    const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
+                    if (dvrDataInput && !dvrDataInput.value) {
+                        hse_showToast('💡 Non dimenticare di inserire la data di emissione del DVR!', 'warning');
+                        setTimeout(() => {
+                            dvrDataInput.focus();
+                        }, 1000);
+                    }
+                }
+            } else {
+                this.style.borderColor = '#ddd';
+                this.style.background = 'white';
+                
+                const hse_existingInfo = this.parentNode.querySelector('.hse_file_info');
+                if (hse_existingInfo) {
+                    hse_existingInfo.remove();
+                }
+            }
+        });
+    });
+    
+    const hse_cantieriCards = document.querySelectorAll('.hse_cantiere_card');
+    hse_cantieriCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 4px 12px rgba(33, 150, 243, 0.2)';
+            this.style.transition = 'all 0.3s ease';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 2px 8px rgba(33, 150, 243, 0.1)';
+        });
+    });
+    
+    document.addEventListener('change', function(e) {
+        if (e.target.type === 'file' && e.target.files.length > 0 && e.target.closest('.hse_cantiere_form')) {
+            const hse_file = e.target.files[0];
+            const hse_maxSize = 10 * 1024 * 1024;
+            
+            if (hse_file.size > hse_maxSize) {
+                alert(`⚠️ File troppo grande!\n\nIl file "${hse_file.name}" è ${(hse_file.size / 1024 / 1024).toFixed(2)} MB.\nLa dimensione massima consentita è 10 MB.\n\nRiduci le dimensioni del file e riprova.`);
+                e.target.value = '';
+                e.target.style.borderColor = '#dc3545';
+                
+                const hse_existingInfo = e.target.parentNode.querySelector('.hse_file_info');
+                if (hse_existingInfo) {
+                    hse_existingInfo.remove();
+                }
+            }
+        }
+    });
+    
+    if (hse_cantieriAssegnati && hse_cantieriAssegnati.length > 0) {
+        hse_cantieriAssegnati.forEach(cantiere => {
+            if (cantiere.stato === 'attivo') {
+                setTimeout(() => {
+                    hse_updateSkillsForCantiere(cantiere.id);
+                }, 1000);
+            }
+        });
+    }
+    
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.hse_accordion_header') || 
+            e.target.closest('.hse_persona_accordion_header') || 
+            e.target.closest('.hse_cantiere_accordion_header')) {
+            setTimeout(hse_saveAccordionStates, 400);
+        }
+    });
+    
+    document.addEventListener('change', function(e) {
+        if (e.target.name && e.target.name.includes('hse_personale_unilav_emissione')) {
+            const personaRow = e.target.closest('.hse_personale_row');
+            if (personaRow) {
+                const scadenzaInput = personaRow.querySelector('input[name*="unilav_scadenza"]');
+                if (scadenzaInput && scadenzaInput.value) {
+                    const emissione = new Date(e.target.value);
+                    const scadenza = new Date(scadenzaInput.value);
+                    
+                    if (scadenza <= emissione) {
+                        alert('⚠️ La data di scadenza UNILAV deve essere successiva alla data di emissione.');
+                        scadenzaInput.value = '';
+                        scadenzaInput.focus();
+                    }
+                }
+            }
+        }
+    });
+    
+    document.addEventListener('change', function(e) {
+        if (e.target.type === 'date' && (e.target.name.includes('scadenza') || e.target.name.includes('idoneita'))) {
+            const oggi = new Date();
+            const dataScadenza = new Date(e.target.value);
+            
+            if (dataScadenza < oggi) {
+                e.target.style.borderColor = '#dc3545';
+                e.target.style.background = '#f8d7da';
+                hse_showToast('⚠️ La data inserita è già scaduta!', 'warning');
+            } else {
+                const diffDays = Math.ceil((dataScadenza - oggi) / (1000 * 60 * 60 * 24));
+                if (diffDays <= 30) {
+                    e.target.style.borderColor = '#ffc107';
+                    e.target.style.background = '#fff3cd';
+                    hse_showToast(`⏰ La scadenza è tra ${diffDays} giorni.`, 'warning');
+                } else {
+                    e.target.style.borderColor = '#28a745';
+                    e.target.style.background = '#f8fff8';
+                }
+            }
+        }
+    });
+    
+    const dvrFileExists = document.querySelector('.hse_dvr_success');
+    const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
+    if (dvrFileExists && dvrDataInput && !dvrDataInput.value) {
+        setTimeout(() => {
+            hse_showToast('💡 Ricorda di inserire la data di emissione del DVR caricato.', 'info');
+        }, 2000);
+    }
+});
+
+// Esporta funzioni globali per debugging
+if (typeof window !== 'undefined') {
+    window.hse_showCantieriInfo = hse_showCantieriInfo;
+    window.hse_checkScadenzeCantieri = hse_checkScadenzeCantieri;
+    window.hse_updateSkillsForCantiere = hse_updateSkillsForCantiere;
+    window.hse_toggleAccordion = hse_toggleAccordion;
+    window.hse_togglePersonaAccordion = hse_togglePersonaAccordion;
+    window.hse_toggleCantiereAccordion = hse_toggleCantiereAccordion;
+    window.hse_deleteOperaio = hse_deleteOperaio;
+    window.hse_deleteFile = hse_deleteFile;
+    window.hse_deleteFormazioneFile = hse_deleteFormazioneFile;
+    window.hse_deleteDocumentoFile = hse_deleteDocumentoFile;
+    window.hse_addPersona = hse_addPersona;
+    window.hse_removePersonaFromDOM = hse_removePersonaFromDOM;
+    window.hse_validateScadenze = hse_validateScadenze;
+}
+</script>
+<style>
+/* ================== STILI CSS HSE CON ACCORDION + NUOVI CAMPI ================== */
+
+.hse_cantiere_form_container {
+    animation: hse_fadeInUp 0.6s ease-out;
+}
+
+@keyframes hse_fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Stili Accordion Headers */
+.hse_accordion_header:hover,
+.hse_persona_accordion_header:hover,
+.hse_cantiere_accordion_header:hover {
+    background: rgba(33, 150, 243, 0.15) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
+}
+
+.hse_persona_accordion_header:hover {
+    background: rgba(0, 102, 162, 0.1) !important;
+}
+
+.hse_cantiere_accordion_header:hover {
+    background: linear-gradient(135deg, #1976d2, #1565c0) !important;
+}
+
+/* Accordion Arrow Animations */
+.hse_accordion_arrow,
+.hse_persona_accordion_arrow,
+.hse_cantiere_accordion_arrow {
+    transition: transform 0.3s ease;
+}
+
+/* Cantieri assegnati accordion */
+.hse_cantieri_assegnati_accordion {
+    animation: hse_slideInLeft 0.8s ease-out;
+}
+
+@keyframes hse_slideInLeft {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.hse_cantiere_card {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.hse_cantiere_card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s;
+}
+
+.hse_cantiere_card:hover::before {
+    left: 100%;
+}
+
+/* Personale accordion con nuovi campi */
+.hse_personale_accordion {
+    transition: all 0.4s ease;
+    position: relative;
+}
+
+.hse_personale_accordion:hover {
+    box-shadow: 0 4px 16px rgba(0, 102, 162, 0.1);
+    transform: translateY(-1px);
+}
+
+/* Badge assegnazioni cantieri e scadenze */
+.hse_assignment_badge {
+    animation: hse_badgePulse 2s infinite;
+}
+
+.hse_warning_badge {
+    animation: hse_warningPulse 2s infinite;
+}
+
+@keyframes hse_badgePulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(255, 193, 7, 0.4); }
+    50% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.6); }
+}
+
+@keyframes hse_warningPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(220, 53, 69, 0.4); }
+    50% { box-shadow: 0 0 10px rgba(220, 53, 69, 0.6); }
+}
+
+/* Sezioni documenti personali (UNILAV + Idoneità) */
+.hse_documenti_personali_section {
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    position: relative;
+}
+
+.hse_documenti_personali_section::before {
+    content: '📋';
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    opacity: 0.3;
+    z-index: 1;
+}
+
+.hse_personale_row:hover .hse_documenti_personali_section {
+    background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+}
+
+.hse_documenti_personali_grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+/* Campi UNILAV e Idoneità con validazione colori */
+.hse_unilav_emissione_field input[type="date"],
+.hse_unilav_scadenza_field input[type="date"],
+.hse_idoneita_sanitaria_field input[type="date"] {
+    border: 2px solid #2196f3 !important;
+    background: rgba(33, 150, 243, 0.05);
+    transition: all 0.3s ease;
+}
+
+.hse_unilav_emissione_field input[type="date"]:focus,
+.hse_unilav_scadenza_field input[type="date"]:focus,
+.hse_idoneita_sanitaria_field input[type="date"]:focus {
+    border-color: #1976d2 !important;
+    background: rgba(33, 150, 243, 0.1);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+}
+
+/* Stati scadenze - Scaduto */
+input[type="date"][style*="border: 2px solid #dc3545"] {
+    animation: hse_scadutoShake 0.5s ease-in-out;
+}
+
+/* Stati scadenze - In scadenza */
+input[type="date"][style*="border: 2px solid #ffc107"] {
+    animation: hse_scadenzaWarning 2s infinite;
+}
+
+@keyframes hse_scadutoShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+}
+
+@keyframes hse_scadenzaWarning {
+    0%, 100% { box-shadow: 0 0 0 rgba(255, 193, 7, 0.4); }
+    50% { box-shadow: 0 0 5px rgba(255, 193, 7, 0.8); }
+}
+
+/* DVR Warning Box */
+.hse_dvr_warning_box {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.hse_dvr_warning_box::before {
+    content: '⚠️';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    font-size: 60px;
+    opacity: 0.1;
+    z-index: 1;
+}
+
+.hse_dvr_warning_box:hover {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+/* DVR Fields Grid */
+.hse_dvr_fields_grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 15px;
+    align-items: end;
+}
+
+.hse_dvr_data_field input[type="date"] {
+    border: 2px solid #0066a2 !important;
+    background: rgba(0, 102, 162, 0.05);
+}
+
+.hse_dvr_data_field input[type="date"]:focus {
+    border-color: #004785 !important;
+    background: rgba(0, 102, 162, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.2);
+}
+
+/* Operaio cantieri info e scadenze warning */
+.hse_operaio_cantieri_info {
+    animation: hse_slideInDown 0.5s ease-out;
+}
+
+.hse_operaio_scadenze_warning {
+    animation: hse_warningSlideIn 0.5s ease-out;
+}
+
+@keyframes hse_slideInDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hse_warningSlideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Cantieri accordion nella Parte B */
+.hse_cantiere_accordion {
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent !important;
+}
+
+.hse_cantiere_accordion:hover {
+    border-left-color: #2196f3 !important;
+    box-shadow: 0 6px 20px rgba(33, 150, 243, 0.15) !important;
+    transform: translateY(-2px);
+}
+
+.hse_cantiere_section_title {
+    animation: hse_slideInRight 0.6s ease-out;
+}
+
+@keyframes hse_slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Form migliorati con nuovi campi */
+.hse_cantiere_form input:focus,
+.hse_cantiere_form select:focus,
+.hse_cantiere_form textarea:focus {
+    outline: none;
+    border-color: #0066a2 !important;
+    box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.1);
+    transform: scale(1.02);
+    transition: all 0.3s ease;
+}
+
+.hse_cantiere_form button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 102, 162, 0.3);
+}
+
+.hse_submit_parte_b_btn:hover {
+    background: #1976d2 !important;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+}
+
+/* Pulsanti elimina */
+.hse_delete_file_btn:hover,
+.hse_delete_formazione_btn:hover,
+.hse_remove_persona_btn:hover {
+    background: #c82333 !important;
+    transform: scale(1.1);
+}
+
+.hse_delete_file_btn:active,
+.hse_delete_formazione_btn:active,
+.hse_remove_persona_btn:active {
+    transform: scale(0.95);
+}
+
+/* Skill summary animazioni per cantiere */
+.hse_skill_summary {
+    animation: hse_slideInUp 0.6s ease-out;
+}
+
+@keyframes hse_slideInUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hse_skill_card {
+    transition: all 0.3s ease;
+}
+
+.hse_skill_card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* File upload migliorati */
+.hse_cantiere_form input[type="file"] {
+    transition: all 0.3s ease;
+    position: relative;
+    background-image: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.hse_cantiere_form input[type="file"]:hover {
+    border-color: #0066a2;
+    box-shadow: 0 2px 8px rgba(0, 102, 162, 0.1);
+    transform: translateY(-1px);
+}
+
+.hse_cantiere_form input[type="file"]:focus {
+    border-color: #0066a2 !important;
+    box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.2);
+}
+
+/* File caricati con successo */
+.hse_file_uploaded {
+    animation: hse_fileSuccess 0.6s ease-out;
+    border-color: #28a745 !important;
+    background: linear-gradient(135deg, #f8fff8 0%, #e6ffed 100%) !important;
+}
+
+@keyframes hse_fileSuccess {
+    0% { 
+        opacity: 0; 
+        transform: scale(0.9) translateY(10px); 
+    }
+    50% { 
+        transform: scale(1.02) translateY(-2px); 
+    }
+    100% { 
+        opacity: 1; 
+        transform: scale(1) translateY(0); 
+    }
+}
+
+/* Messaggi di feedback */
+.hse_success_message {
+    animation: hse_slideInRight 0.5s ease-out;
+}
+
+.hse_error_messages {
+    animation: hse_shakeX 0.6s ease-out;
+}
+
+@keyframes hse_shakeX {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Sezioni dati personali */
+.hse_dati_personali {
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    position: relative;
+}
+
+.hse_dati_personali::before {
+    content: '👤';
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    opacity: 0.3;
+    z-index: 1;
+}
+
+.hse_personale_row:hover .hse_dati_personali {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+/* Formazioni nella Parte A - layout 3 colonne */
+.hse_formazione_section {
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+    position: relative;
+}
+
+.hse_formazione_section::before {
+    content: '🎓';
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    opacity: 0.3;
+    z-index: 1;
+}
+
+.hse_personale_row:hover .hse_formazione_section {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.hse_formazione_grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+}
+
+.hse_antincendio_field input[type="file"],
+.hse_primo_soccorso_field input[type="file"],
+.hse_preposti_field input[type="file"] {
+    border: 2px dashed #17a2b8 !important;
+    background: rgba(23, 162, 184, 0.05);
+}
+
+.hse_antincendio_field input[type="file"]:hover,
+.hse_primo_soccorso_field input[type="file"]:hover,
+.hse_preposti_field input[type="file"]:hover {
+    border-color: #138496 !important;
+    background: rgba(23, 162, 184, 0.1);
+}
+
+/* Operai selection con indicatori scadenze */
+.hse_operaio_input {
+    transform: scale(1.2);
+    margin-right: 10px;
+}
+
+.hse_operaio_checkbox input[type="checkbox"]:checked + .hse_operaio_name {
+    color: #155724;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(21, 87, 36, 0.2);
+}
+
+/* Operai con scadenze */
+.hse_operaio_checkbox[style*="color: #dc3545"] {
+    background: rgba(220, 53, 69, 0.1);
+    padding: 5px;
+    border-radius: 4px;
+    border-left: 3px solid #dc3545;
+}
+
+/* Operai completi */
+.hse_operaio_checkbox[style*="color: #155724"] {
+    background: rgba(21, 87, 36, 0.1);
+    padding: 5px;
+    border-radius: 4px;
+    border-left: 3px solid #155724;
+}
+
+/* Competenze personalizzate */
+.hse_skill_conforme {
+    animation: hse_successPulse 2s infinite;
+}
+
+@keyframes hse_successPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(40, 167, 69, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(40, 167, 69, 0.6); }
+}
+
+.hse_skill_non_conforme {
+    animation: hse_errorPulse 2s infinite;
+}
+
+@keyframes hse_errorPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(220, 53, 69, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(220, 53, 69, 0.6); }
+}
+
+/* Animazioni personalizzate */
+@keyframes hse_slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes hse_slideOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(20px); }
+}
+
+@keyframes hse_fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes hse_fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Toast notifications */
+.hse_toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: Arial, sans-serif;
+}
+
+/* Responsive design migliorato con nuovi campi */
+@media (max-width: 768px) {
+    .hse_cantiere_form_container {
+        margin: 10px !important;
+        padding: 15px !important;
+    }
+    
+    .hse_dati_personali_grid,
+    .hse_documenti_personali_grid,
+    .hse_formazione_grid,
+    .hse_dvr_fields_grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+    
+    .hse_cantieri_grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .hse_skill_grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+    
+    .hse_personale_count {
+        display: block;
+        margin-top: 5px;
+        margin-left: 0 !important;
+    }
+    
+    .hse_cantiere_form button {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .hse_cantiere_accordion,
+    .hse_personale_accordion {
+        margin-bottom: 10px !important;
+    }
+    
+    .hse_accordion_header,
+    .hse_persona_accordion_header,
+    .hse_cantiere_accordion_header {
+        padding: 12px 15px !important;
+    }
+    
+    /* Badge responsive */
+    .hse_assignment_badge,
+    .hse_warning_badge {
+        display: block;
+        margin: 5px 0 !important;
+        margin-left: 0 !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .hse_cantiere_card {
+        padding: 15px !important;
+    }
+    
+    .hse_persona_accordion_content,
+    .hse_cantiere_accordion_content {
+        padding: 15px !important;
+    }
+    
+    .hse_skill_summary {
+        padding: 15px !important;
+    }
+    
+    .hse_cantiere_section_title {
+        font-size: 14px !important;
+    }
+    
+    /* Documenti personali responsive */
+    .hse_documenti_personali_section,
+    .hse_dati_personali,
+    .hse_formazione_section {
+        padding: 12px !important;
+    }
+    
+    .hse_documenti_personali_title,
+    .hse_dati_personali_title,
+    .hse_formazione_title {
+        font-size: 13px !important;
+    }
+}
+
+/* Accessibilità */
+.hse_cantiere_form button:focus {
+    outline: 3px solid #0066a2;
+    outline-offset: 2px;
+}
+
+.hse_cantiere_form input:focus {
+    outline: 2px solid #0066a2;
+    outline-offset: 1px;
+}
+
+/* Loading states */
+.hse_cantiere_form button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.hse_cantiere_form button:disabled:hover {
+    background: #6c757d !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Focus visible */
+.hse_cantiere_form *:focus-visible {
+    outline: 2px solid #0066a2;
+    outline-offset: 2px;
+}
+
+/* Progress bar per cantieri */
+.hse_progress_bar {
+    animation: hse_progressFill 1s ease-out;
+}
+
+@keyframes hse_progressFill {
+    from { width: 0% !important; }
+    to { width: var(--hse-progress-width, 0%); }
+}
+
+/* Micro-animazioni */
+.hse_cantiere_form label {
+    transition: color 0.2s ease;
+}
+
+.hse_cantiere_form label:hover {
+    color: #0066a2;
+}
+
+.hse_cantiere_form small {
+    transition: opacity 0.2s ease;
+}
+
+.hse_cantiere_form input:focus + small {
+    opacity: 0.8;
+}
+
+/* Max height per content accordion */
+.hse_accordion_content,
+.hse_persona_accordion_content,
+.hse_cantiere_accordion_content {
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* Stati di caricamento per operai */
+.hse_personale_row[style*="opacity: 0.5"] {
+    pointer-events: none;
+    filter: grayscale(0.5);
+}
+
+.hse_personale_row[style*="opacity: 0.5"] .hse_persona_title::after {
+    content: " (Eliminazione in corso...)";
+    color: #dc3545;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+/* Hover effects per sezioni */
+.hse_dati_personali:hover,
+.hse_documenti_personali_section:hover,
+.hse_formazione_section:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 102, 162, 0.1);
+}
+
+/* Validazione visiva form */
+.hse_cantiere_form input.hse_field_valid {
+    border-color: #28a745 !important;
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.hse_cantiere_form input.hse_field_invalid {
+    border-color: #dc3545 !important;
+    background: rgba(220, 53, 69, 0.05);
+}
+
+.hse_cantiere_form input.hse_field_warning {
+    border-color: #ffc107 !important;
+    background: rgba(255, 193, 7, 0.05);
+}
+</style>
