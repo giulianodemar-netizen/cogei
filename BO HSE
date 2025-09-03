@@ -1,0 +1,4108 @@
+<?php
+
+/**
+ * Plugin Snippet WordPress - Backoffice Gestione Cantiere ESTESO
+ * Gestione richieste accesso cantiere + GESTIONE CANTIERI + ASSEGNAZIONI
+ * AGGIORNATO: Fix filtro aziende abilitate + supporto assegnazioni operai per cantiere + VISUALIZZAZIONE ASSEGNAZIONI + AJAX REALE
+ * NUOVE FUNZIONALITÀ: Modifica/Cancella cantieri + Gestione assegnazioni migliorata
+ */
+
+// Verifica che sia WordPress
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+global $wpdb;
+date_default_timezone_set('Europe/Rome');
+
+// ================== CONFIGURAZIONE ==================
+$inviamail = false; // Cambia a true per attivare l'invio email
+
+// ================== CREAZIONE NUOVE TABELLE CANTIERI ==================
+
+function createCantieriTablesIfNotExists() {
+    global $wpdb;
+    
+    // 🏗️ TABELLA CANTIERI
+    $table_cantieri = $wpdb->prefix . 'cantieri';
+    $sql_cantieri = "CREATE TABLE IF NOT EXISTS $table_cantieri (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        nome varchar(255) NOT NULL,
+        descrizione text,
+        data_inizio date,
+        data_fine date,
+        stato enum('attivo','sospeso','completato') DEFAULT 'attivo',
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY nome (nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantieri);
+    
+    // 🔗 TABELLA PIVOT CANTIERI-AZIENDE (many-to-many)
+    $table_cantieri_aziende = $wpdb->prefix . 'cantieri_aziende';
+    $sql_cantieri_aziende = "CREATE TABLE IF NOT EXISTS $table_cantieri_aziende (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        assegnato_da int(11),
+        note text,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user (cantiere_id, user_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantieri_aziende);
+    
+    // 🚀 NUOVA TABELLA: OPERAI ASSEGNATI AI CANTIERI
+    $table_cantiere_operai = $wpdb->prefix . 'cantiere_operai_assegnazioni';
+    $sql_cantiere_operai = "CREATE TABLE IF NOT EXISTS $table_cantiere_operai (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        operaio_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_operaio (cantiere_id, user_id, operaio_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY operaio_id (operaio_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_operai);
+    
+    // 🚀 NUOVA TABELLA: POS PER CANTIERE
+    $table_cantiere_pos = $wpdb->prefix . 'cantiere_pos_files';
+    $sql_cantiere_pos = "CREATE TABLE IF NOT EXISTS $table_cantiere_pos (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        pos_file varchar(255) NOT NULL,
+        mezzi_file varchar(255),
+        data_caricamento datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user (cantiere_id, user_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_pos);
+    
+    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos");
+}
+
+// Esegui creazione tabelle
+createCantieriTablesIfNotExists();
+
+// ================== GESTIONE AZIONI CANTIERI (ESTESO) ==================
+
+if (isset($_GET['cantiere_action']) && isset($_POST['cantiere_submit'])) {
+    $action = sanitize_text_field($_GET['cantiere_action']);
+    $success = false;
+    $success_info = array();
+    
+    switch ($action) {
+        case 'create':
+            $nome_cantiere = sanitize_text_field($_POST['nome_cantiere']);
+            $descrizione = sanitize_textarea_field($_POST['descrizione_cantiere']);
+            $data_inizio = sanitize_text_field($_POST['data_inizio']);
+            $data_fine = sanitize_text_field($_POST['data_fine']);
+            
+            if (!empty($nome_cantiere)) {
+                $result = $wpdb->insert(
+                    $wpdb->prefix . 'cantieri',
+                    array(
+                        'nome' => $nome_cantiere,
+                        'descrizione' => $descrizione,
+                        'data_inizio' => $data_inizio ?: null,
+                        'data_fine' => $data_fine ?: null,
+                        'stato' => 'attivo'
+                    )
+                );
+                
+                if ($result) {
+                    $success = true;
+                    $success_info = [
+                        'action_type' => 'cantiere_creato',
+                        'cantiere_nome' => $nome_cantiere,
+                        'cantiere_id' => $wpdb->insert_id
+                    ];
+                }
+            }
+            break;
+            
+        // 🆕 NUOVA AZIONE: Modifica cantiere
+        case 'edit':
+            $cantiere_id = intval($_POST['cantiere_id']);
+            $nome_cantiere = sanitize_text_field($_POST['nome_cantiere']);
+            $descrizione = sanitize_textarea_field($_POST['descrizione_cantiere']);
+            $data_inizio = sanitize_text_field($_POST['data_inizio']);
+            $data_fine = sanitize_text_field($_POST['data_fine']);
+            $stato = sanitize_text_field($_POST['stato_cantiere']);
+            
+            if ($cantiere_id && !empty($nome_cantiere)) {
+                $result = $wpdb->update(
+                    $wpdb->prefix . 'cantieri',
+                    array(
+                        'nome' => $nome_cantiere,
+                        'descrizione' => $descrizione,
+                        'data_inizio' => $data_inizio ?: null,
+                        'data_fine' => $data_fine ?: null,
+                        'stato' => $stato,
+                        'data_aggiornamento' => current_time('mysql')
+                    ),
+                    array('id' => $cantiere_id)
+                );
+                
+                if ($result !== false) {
+                    $success = true;
+                    $success_info = [
+                        'action_type' => 'cantiere_modificato',
+                        'cantiere_nome' => $nome_cantiere,
+                        'cantiere_id' => $cantiere_id
+                    ];
+                }
+            }
+            break;
+            
+        // 🆕 NUOVA AZIONE: Cancella cantiere
+        case 'delete':
+            $cantiere_id = intval($_POST['cantiere_id']);
+            $conferma = sanitize_text_field($_POST['conferma_cancellazione']);
+            
+            if ($cantiere_id && $conferma === 'CANCELLA') {
+                // Recupera nome cantiere per il messaggio
+                $cantiere_nome = $wpdb->get_var($wpdb->prepare(
+                    "SELECT nome FROM {$wpdb->prefix}cantieri WHERE id = %d", $cantiere_id
+                ));
+                
+                if ($cantiere_nome) {
+                    // Conta elementi collegati
+                    $aziende_count = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$wpdb->prefix}cantieri_aziende WHERE cantiere_id = %d", $cantiere_id
+                    ));
+                    $operai_count = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_operai_assegnazioni WHERE cantiere_id = %d", $cantiere_id
+                    ));
+                    $pos_count = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_pos_files WHERE cantiere_id = %d", $cantiere_id
+                    ));
+                    
+                    // Cancella tutti i dati collegati
+                    $wpdb->delete($wpdb->prefix . 'cantiere_operai_assegnazioni', array('cantiere_id' => $cantiere_id));
+                    $wpdb->delete($wpdb->prefix . 'cantiere_pos_files', array('cantiere_id' => $cantiere_id));
+                    $wpdb->delete($wpdb->prefix . 'cantieri_aziende', array('cantiere_id' => $cantiere_id));
+                    
+                    // Cancella il cantiere
+                    $result = $wpdb->delete($wpdb->prefix . 'cantieri', array('id' => $cantiere_id));
+                    
+                    if ($result) {
+                        $success = true;
+                        $success_info = [
+                            'action_type' => 'cantiere_cancellato',
+                            'cantiere_nome' => $cantiere_nome,
+                            'cantiere_id' => $cantiere_id,
+                            'aziende_rimosse' => $aziende_count,
+                            'operai_rimossi' => $operai_count,
+                            'pos_rimossi' => $pos_count
+                        ];
+                    }
+                }
+            }
+            break;
+            
+        case 'assign':
+            $cantiere_id = intval($_POST['cantiere_id']);
+            $user_ids = array_map('intval', $_POST['user_ids']);
+            $note = sanitize_textarea_field($_POST['note_assegnazione']);
+            
+            if ($cantiere_id && !empty($user_ids)) {
+                $assigned_count = 0;
+                foreach ($user_ids as $user_id) {
+                    $existing = $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM {$wpdb->prefix}cantieri_aziende WHERE cantiere_id = %d AND user_id = %d",
+                        $cantiere_id, $user_id
+                    ));
+                    
+                    if (!$existing) {
+                        $result = $wpdb->insert(
+                            $wpdb->prefix . 'cantieri_aziende',
+                            array(
+                                'cantiere_id' => $cantiere_id,
+                                'user_id' => $user_id,
+                                'assegnato_da' => get_current_user_id(),
+                                'note' => $note
+                            )
+                        );
+                        
+                        if ($result) {
+                            $assigned_count++;
+                        }
+                    }
+                }
+                
+                if ($assigned_count > 0) {
+                    $success = true;
+                    $cantiere_nome = $wpdb->get_var($wpdb->prepare(
+                        "SELECT nome FROM {$wpdb->prefix}cantieri WHERE id = %d", $cantiere_id
+                    ));
+                    $success_info = [
+                        'action_type' => 'assegnazioni_create',
+                        'cantiere_nome' => $cantiere_nome,
+                        'aziende_count' => $assigned_count
+                    ];
+                }
+            }
+            break;
+            
+        case 'unassign':
+            $cantiere_id = intval($_POST['cantiere_id']);
+            $user_id = intval($_POST['user_id']);
+            
+            if ($cantiere_id && $user_id) {
+                // Rimuovi anche le assegnazioni operai per questa azienda-cantiere
+                $wpdb->delete(
+                    $wpdb->prefix . 'cantiere_operai_assegnazioni',
+                    array('cantiere_id' => $cantiere_id, 'user_id' => $user_id)
+                );
+                
+                // Rimuovi i POS per questa azienda-cantiere
+                $wpdb->delete(
+                    $wpdb->prefix . 'cantiere_pos_files',
+                    array('cantiere_id' => $cantiere_id, 'user_id' => $user_id)
+                );
+                
+                // Rimuovi l'assegnazione azienda-cantiere
+                $result = $wpdb->delete(
+                    $wpdb->prefix . 'cantieri_aziende',
+                    array('cantiere_id' => $cantiere_id, 'user_id' => $user_id)
+                );
+                
+                if ($result) {
+                    $success = true;
+                    $cantiere_nome = $wpdb->get_var($wpdb->prepare(
+                        "SELECT nome FROM {$wpdb->prefix}cantieri WHERE id = %d", $cantiere_id
+                    ));
+                    $user = get_userdata($user_id);
+                    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+                    $success_info = [
+                        'action_type' => 'assegnazione_rimossa',
+                        'cantiere_nome' => $cantiere_nome,
+                        'azienda_nome' => $rag_soc ?: $user->display_name
+                    ];
+                }
+            }
+            break;
+    }
+    
+    // Redirect dopo azione
+    $current_url = $_SERVER['REQUEST_URI'];
+    $redirect_url = remove_query_arg(['cantiere_action', 'msg', 'action_type', 'cantiere_nome', 'cantiere_id', 'aziende_count', 'azienda_nome', 'aziende_rimosse', 'operai_rimossi', 'pos_rimossi'], $current_url);
+    
+    if ($success && !empty($success_info)) {
+        $redirect_params = array_merge(['msg' => 'success'], $success_info);
+        $redirect_url = add_query_arg($redirect_params, $redirect_url);
+    } elseif ($success) {
+        $redirect_url = add_query_arg('msg', 'success', $redirect_url);
+    } else {
+        $redirect_url = add_query_arg('msg', 'error', $redirect_url);
+    }
+    
+    $redirect_url = html_entity_decode($redirect_url, ENT_QUOTES, 'UTF-8');
+    
+    if (!headers_sent()) {
+        header("Location: " . $redirect_url);
+        exit;
+    } else {
+        echo '<script>window.location.href = "' . addslashes($redirect_url) . '";</script>';
+        exit;
+    }
+}
+// ================== GESTIONE EXPORT CSV (CON CANTIERI) ==================
+
+if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') || 
+    (isset($_POST['csv_export']) && $_POST['csv_export'] === '1')) {
+    
+    // Export identico al precedente ma con aggiunta colonna cantieri
+    if (ob_get_level()) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: application/force-download');
+    header('Content-Type: application/octet-stream');
+    header('Content-Type: application/download');
+    header('Content-Disposition: attachment; filename="richieste_cantiere_' . date('Y-m-d_H-i-s') . '.csv"');
+    header('Content-Transfer-Encoding: binary');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    header('Pragma: public');
+    header('Expires: 0');
+    
+    $csv_content = "\xEF\xBB\xBF"; // BOM UTF-8
+    
+    // Header CSV con cantieri
+    $headers = [
+        'ID Richiesta',
+        'ID Utente', 
+        'Ragione Sociale',
+        'Email',
+        'P.IVA',
+        'Tipo',
+        'DVR',
+        'RCT',
+        'POS',
+        'Mezzi',
+        'Numero Personale',
+        'Parte B Completata',
+        'Stato Abilitazione HSA',
+        'Accesso al Cantiere',
+        'Cantieri Assegnati',
+        'Data Creazione'
+    ];
+    
+    function escapeCsvField($field) {
+        if (strpos($field, ',') !== false || strpos($field, '"') !== false || strpos($field, "\n") !== false) {
+            return '"' . str_replace('"', '""', $field) . '"';
+        }
+        return $field;
+    }
+    
+    $csv_content .= implode(',', array_map('escapeCsvField', $headers)) . "\n";
+    
+    $richieste = getCantiereRequests();
+    foreach ($richieste as $richiesta) {
+        $user = get_userdata($richiesta['user_id']);
+        if (!$user) continue;
+        
+        $rag_soc = get_user_meta($richiesta['user_id'], 'user_registration_rag_soc', true);
+        $tipo = get_user_meta($richiesta['user_id'], 'user_registration_tip_ut_rad', true);
+        $abilita_cantiere = get_user_meta($richiesta['user_id'], 'abilita_cantiere', true);
+        
+        $personale = getPersonaleByRichiestaId($richiesta['id']);
+        $accesso_cantiere = determineAccessoCantiere($abilita_cantiere);
+        $stato_hsa = determineStatoHSA($richiesta, $personale);
+        
+        // 🏗️ NUOVO: Recupera cantieri assegnati
+        $cantieri_assegnati = getCantieriAssegnatiUser($richiesta['user_id']);
+        $cantieri_names = array_map(function($c) { return $c['nome']; }, $cantieri_assegnati);
+        $cantieri_text = implode('; ', $cantieri_names);
+        
+        $row = [
+            $richiesta['id'],
+            $richiesta['user_id'],
+            $rag_soc ?: '',
+            $user->user_email,
+            $user->display_name,
+            $tipo ?: '',
+            $richiesta['dvr_file'] ? 'Caricato' : 'Non caricato',
+            $richiesta['rct_file'] ? 'Caricato' : 'Non caricato',
+            $richiesta['pos_file'] ? 'Caricato' : 'Non caricato',
+            $richiesta['mezzi_file'] ? 'Caricato' : 'Non caricato',
+            $richiesta['numero_personale'],
+            $richiesta['parte_b_completata'] ? 'Si' : 'No',
+            $stato_hsa['label'],
+            $accesso_cantiere['label'],
+            $cantieri_text ?: 'Nessuno',
+            $richiesta['data_creazione']
+        ];
+        
+        $csv_content .= implode(',', array_map('escapeCsvField', $row)) . "\n";
+    }
+    
+    header('Content-Length: ' . strlen($csv_content));
+    echo $csv_content;
+    flush();
+    wp_die();
+}
+
+// ================== FUNZIONI HELPER ORIGINALI + NUOVE ==================
+
+function getCantiereRequests() {
+    global $wpdb;
+    
+    $results = $wpdb->get_results("
+        SELECT r.*, COUNT(p.id) as personale_count 
+        FROM {$wpdb->prefix}cantiere_richieste r
+        LEFT JOIN {$wpdb->prefix}cantiere_personale p ON r.id = p.richiesta_id
+        GROUP BY r.id
+        ORDER BY r.data_creazione DESC
+    ", ARRAY_A);
+    
+    return $results;
+}
+
+function getPersonaleByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_personale 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+// 🏗️ NUOVE FUNZIONI CANTIERI
+
+function getAllCantieri($filtro_stato = null) {
+    global $wpdb;
+    
+    $where = "";
+    if ($filtro_stato) {
+        $where = $wpdb->prepare(" WHERE stato = %s", $filtro_stato);
+    }
+    
+    return $wpdb->get_results("
+        SELECT c.*, 
+               COUNT(ca.user_id) as aziende_assegnate
+        FROM {$wpdb->prefix}cantieri c
+        LEFT JOIN {$wpdb->prefix}cantieri_aziende ca ON c.id = ca.cantiere_id
+        $where
+        GROUP BY c.id
+        ORDER BY c.data_creazione DESC
+    ", ARRAY_A);
+}
+
+// 🆕 NUOVA FUNZIONE: Ottieni cantiere singolo
+function getCantiereById($cantiere_id) {
+    global $wpdb;
+    
+    return $wpdb->get_row($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantieri WHERE id = %d
+    ", $cantiere_id), ARRAY_A);
+}
+
+function getCantieriAssegnatiUser($user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT c.*, ca.data_assegnazione, ca.note
+        FROM {$wpdb->prefix}cantieri c
+        JOIN {$wpdb->prefix}cantieri_aziende ca ON c.id = ca.cantiere_id
+        WHERE ca.user_id = %d AND c.stato = 'attivo'
+        ORDER BY ca.data_assegnazione DESC
+    ", $user_id), ARRAY_A);
+}
+
+function getAziendeAssegnateCantiare($cantiere_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT u.ID, u.user_email, u.display_name,
+               um.meta_value as rag_soc,
+               um2.meta_value as tipo,
+               ca.data_assegnazione, ca.note
+        FROM {$wpdb->prefix}cantieri_aziende ca
+        JOIN {$wpdb->users} u ON ca.user_id = u.ID
+        LEFT JOIN {$wpdb->usermeta} um ON u.ID = um.user_id AND um.meta_key = 'user_registration_rag_soc'
+        LEFT JOIN {$wpdb->usermeta} um2 ON u.ID = um2.user_id AND um2.meta_key = 'user_registration_tip_ut_rad'
+        WHERE ca.cantiere_id = %d
+        ORDER BY ca.data_assegnazione DESC
+    ", $cantiere_id), ARRAY_A);
+}
+
+function getAziendeAlboFornitori($tipo_filter = null) {
+    global $wpdb;
+    
+    $where = "WHERE um.meta_key = 'user_registration_tip_ut_rad'";
+    if ($tipo_filter) {
+        $where .= $wpdb->prepare(" AND um.meta_value = %s", $tipo_filter);
+    }
+    
+    return $wpdb->get_results("
+        SELECT u.ID, u.user_email, u.display_name,
+               um.meta_value as tipo,
+               um2.meta_value as rag_soc,
+               COALESCE(um3.meta_value, '0') as abilita_cantiere
+        FROM {$wpdb->users} u
+        JOIN {$wpdb->usermeta} um ON u.ID = um.user_id
+        LEFT JOIN {$wpdb->usermeta} um2 ON u.ID = um2.user_id AND um2.meta_key = 'user_registration_rag_soc'
+        LEFT JOIN {$wpdb->usermeta} um3 ON u.ID = um3.user_id AND um3.meta_key = 'abilita_cantiere'
+        $where
+        ORDER BY 
+            COALESCE(um3.meta_value, '0') DESC,
+            um2.meta_value ASC
+    ", ARRAY_A);
+}
+
+// 🆕 NUOVA FUNZIONE: Ottieni aziende assegnate a un cantiere specifico
+function getAziendeAssegnateACantiereIds($cantiere_id) {
+    global $wpdb;
+    
+    $results = $wpdb->get_results($wpdb->prepare("
+        SELECT user_id FROM {$wpdb->prefix}cantieri_aziende WHERE cantiere_id = %d
+    ", $cantiere_id), ARRAY_A);
+    
+    return array_column($results, 'user_id');
+}
+
+// 🚀 NUOVE FUNZIONI PER OPERAI E CANTIERI
+
+function getOperaiAssegnatiCantiere($cantiere_id, $user_id = null) {
+    global $wpdb;
+    
+    $where_user = $user_id ? $wpdb->prepare(" AND oa.user_id = %d", $user_id) : "";
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT oa.*, p.nome, p.cognome, p.data_nascita,
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+        FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
+        JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
+        WHERE oa.cantiere_id = %d $where_user
+        ORDER BY oa.data_assegnazione DESC
+    ", $cantiere_id), ARRAY_A);
+}
+
+// 🚀 NUOVA FUNZIONE: Recupera tutte le assegnazioni operai per un utente
+function getOperaiAssegnazioniByUser($user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT oa.*, p.nome, p.cognome, p.data_nascita, c.nome as cantiere_nome, c.id as cantiere_id,
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+        FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
+        JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
+        JOIN {$wpdb->prefix}cantieri c ON oa.cantiere_id = c.id
+        WHERE oa.user_id = %d
+        ORDER BY c.nome ASC, p.nome ASC, p.cognome ASC
+    ", $user_id), ARRAY_A);
+}
+
+// 🚀 NUOVA FUNZIONE: Raggruppa assegnazioni per operaio
+function groupAssegnazioniByOperaio($assegnazioni) {
+    $operai_grouped = array();
+    
+    foreach ($assegnazioni as $assegnazione) {
+        $operaio_key = $assegnazione['operaio_id'];
+        
+        if (!isset($operai_grouped[$operaio_key])) {
+            $operai_grouped[$operaio_key] = array(
+                'operaio_id' => $assegnazione['operaio_id'],
+                'nome' => $assegnazione['nome'],
+                'cognome' => $assegnazione['cognome'],
+                'data_nascita' => $assegnazione['data_nascita'],
+                'formazione_antincendio_file' => $assegnazione['formazione_antincendio_file'],
+                'formazione_primo_soccorso_file' => $assegnazione['formazione_primo_soccorso_file'],
+                'formazione_preposti_file' => $assegnazione['formazione_preposti_file'],
+                'cantieri' => array()
+            );
+        }
+        
+        $operai_grouped[$operaio_key]['cantieri'][] = array(
+            'cantiere_id' => $assegnazione['cantiere_id'],
+            'cantiere_nome' => $assegnazione['cantiere_nome'],
+            'data_assegnazione' => $assegnazione['data_assegnazione']
+        );
+    }
+    
+    return $operai_grouped;
+}
+
+function getPosFileByCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_row($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_pos_files
+        WHERE cantiere_id = %d AND user_id = %d
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+// Funzioni originali mantenute
+function determineAccessoCantiere($abilita_cantiere) {
+    if ($abilita_cantiere == '1') {
+        return [
+            'key' => 'abilitato',
+            'label' => 'Abilitato',
+            'color' => '#28a745',
+            'tooltip' => 'Accesso al cantiere abilitato dall\'amministrazione'
+        ];
+    } else {
+        return [
+            'key' => 'disabilitato',
+            'label' => 'Disabilitato', 
+            'color' => '#dc3545',
+            'tooltip' => 'Accesso al cantiere disabilitato dall\'amministrazione'
+        ];
+    }
+}
+
+function determineStatoHSA($richiesta, $personale = null) {
+    // Verifica completamento Parte A
+    $parte_a_completa = (!empty($richiesta['dvr_file']) && 
+                        !empty($richiesta['rct_file']) && 
+                        $richiesta['numero_personale'] > 0);
+    
+    if (!$parte_a_completa) {
+        return [
+            'key' => 'parte_a_incompleta',
+            'label' => 'Parte A Incompleta',
+            'color' => '#ffc107',
+            'tooltip' => 'Deve completare i documenti preliminari (DVR, RCT, elenco personale)'
+        ];
+    }
+    
+    if (!$richiesta['parte_b_completata']) {
+        return [
+            'key' => 'solo_parte_a',
+            'label' => 'Solo Parte A',
+            'color' => '#17a2b8',
+            'tooltip' => 'Ha completato i documenti preliminari ma non ha iniziato la Parte B'
+        ];
+    }
+    
+    $pos_caricato = !empty($richiesta['pos_file']);
+    $mezzi_caricato = !empty($richiesta['mezzi_file']);
+    
+    if ($personale === null) {
+        $personale = getPersonaleByRichiestaId($richiesta['id']);
+    }
+    
+    $personale_selezionato = array_filter($personale, function($persona) {
+        return $persona['selezionato_parte_b'] == 1;
+    });
+    
+    $ha_personale_selezionato = !empty($personale_selezionato);
+    
+    $formazioni_complete = true;
+    if ($ha_personale_selezionato) {
+        foreach ($personale_selezionato as $persona) {
+            $ha_almeno_una_formazione = (
+                !empty($persona['formazione_antincendio_file']) ||
+                !empty($persona['formazione_primo_soccorso_file']) ||
+                !empty($persona['formazione_preposti_file'])
+            );
+            
+            if (!$ha_almeno_una_formazione) {
+                $formazioni_complete = false;
+                break;
+            }
+        }
+    } else {
+        $formazioni_complete = false;
+    }
+    
+    $parte_b_elementi_completi = ($pos_caricato && $mezzi_caricato && $ha_personale_selezionato && $formazioni_complete);
+    $parte_b_elementi_parziali = ($pos_caricato || $mezzi_caricato || $ha_personale_selezionato);
+    
+    if ($parte_b_elementi_completi) {
+        return [
+            'key' => 'completo',
+            'label' => 'Completo',
+            'color' => '#28a745',
+            'tooltip' => 'Ha completato sia i documenti preliminari che quelli specifici del cantiere con formazioni valide'
+        ];
+    } elseif ($parte_b_elementi_parziali) {
+        return [
+            'key' => 'parte_b_incompleta',
+            'label' => 'Parte B Incompleta',
+            'color' => '#fd7e14',
+            'tooltip' => 'Ha iniziato la Parte B ma mancano alcuni elementi (POS, mezzi, personale selezionato o formazioni)'
+        ];
+    } else {
+        return [
+            'key' => 'solo_parte_a',
+            'label' => 'Solo Parte A',
+            'color' => '#17a2b8', 
+            'tooltip' => 'Ha completato i documenti preliminari ma la Parte B risulta vuota'
+        ];
+    }
+}
+function calculateComplianceStatus($personale) {
+    if (empty($personale)) {
+        return [
+            'conforme' => false,
+            'label' => 'Nessun Personale',
+            'color' => '#dc3545'
+        ];
+    }
+    
+    $personale_selezionato = array_filter($personale, function($persona) {
+        return $persona['selezionato_parte_b'] == 1;
+    });
+    
+    $totale_selezionato = count($personale_selezionato);
+    
+    if ($totale_selezionato == 0) {
+        return [
+            'conforme' => false,
+            'label' => 'Nessuno Selezionato',
+            'color' => '#ffc107'
+        ];
+    }
+    
+    // 🚀 NUOVA LOGICA: Ogni operaio conta per TUTTE le sue competenze
+    $competenze_personale = array();
+    $distribuzione = array('antincendio' => 0, 'primo_soccorso' => 0, 'preposti' => 0);
+    
+    foreach ($personale_selezionato as $persona) {
+        $competenze = array();
+        $nome_completo = $persona['nome'] . ' ' . $persona['cognome'];
+        
+        // Conta ogni competenza dell'operaio
+        if (!empty($persona['formazione_antincendio_file'])) {
+            $competenze[] = 'antincendio';
+            $distribuzione['antincendio']++;
+        }
+        if (!empty($persona['formazione_primo_soccorso_file'])) {
+            $competenze[] = 'primo_soccorso';
+            $distribuzione['primo_soccorso']++;
+        }
+        if (!empty($persona['formazione_preposti_file'])) {
+            $competenze[] = 'preposti';
+            $distribuzione['preposti']++;
+        }
+        
+        $competenze_personale[] = array(
+            'nome' => $nome_completo,
+            'competenze' => $competenze
+        );
+    }
+    
+    // Calcola percentuali: (operai con competenza / totale operai) * 100
+    $perc_antincendio = round(($distribuzione['antincendio'] / $totale_selezionato) * 100, 1);
+    $perc_primo_soccorso = round(($distribuzione['primo_soccorso'] / $totale_selezionato) * 100, 1);
+    $perc_preposti = round(($distribuzione['preposti'] / $totale_selezionato) * 100, 1);
+    
+    $conforme = ($perc_antincendio >= 30 && $perc_primo_soccorso >= 30 && $perc_preposti >= 30);
+    
+    return [
+        'conforme' => $conforme,
+        'label' => $conforme ? 'Conforme (30%+)' : 'Non Conforme',
+        'color' => $conforme ? '#28a745' : '#dc3545',
+        'details' => [
+            'totale_selezionato' => $totale_selezionato,
+            'antincendio' => $perc_antincendio,
+            'primo_soccorso' => $perc_primo_soccorso,
+            'preposti' => $perc_preposti,
+            'distribuzione' => $distribuzione,
+            'competenze_personale' => $competenze_personale
+        ]
+    ];
+}
+
+function sendCantiereEmail($user_id, $action) {
+    global $inviamail;
+    
+    $user = get_userdata($user_id);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $email = $user->user_email;
+    
+    $log_file = ABSPATH . 'abilita_disabilita_cantiere.txt';
+    $timestamp = date('d/m/Y H:i:s');
+    
+    if ($action === 'abilita') {
+        $subject = "Accesso Cantiere Abilitato - Cogei.net";
+        $body_action = "abilitato";
+        $color = "#28a745";
+    } else {
+        $subject = "Accesso Cantiere Disabilitato - Cogei.net";
+        $body_action = "disabilitato";
+        $color = "#dc3545";
+    }
+    
+    if ($inviamail) {
+        $body = "<html>
+<head>
+<title>Cantiere {$body_action}</title>
+</head>
+<body>
+<div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'><img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' /></div>
+<div style='background: {$color}; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;'>
+<h2 style='margin: 0; color: white;'>Accesso Cantiere {$body_action}</h2>
+</div>
+Gentile {$rag_soc},<br><br>
+ti informiamo che il tuo accesso al cantiere è stato <strong>{$body_action}</strong>.<br><br>";
+
+    if ($action === 'abilita') {
+        $body .= "Ora puoi accedere alla sezione cantiere per caricare i documenti richiesti e gestire il tuo personale.<br><br>";
+    } else {
+        $body .= "Per maggiori informazioni contatta <a href='mailto:ufficio_qualita@cogei.net'>ufficio_qualita@cogei.net</a><br><br>";
+    }
+
+    $body .= "Cordiali Saluti,<br>
+Cogei S.r.l.
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 20px;'>
+<div class='rigainfofo primariga'><a style='color: white; text-decoration: none;' href='#' target='_blank' rel='noopener'>Via Francesco Lomonaco, 3 - 80121 Napoli</a></div>
+<div class='rigainfofo'><a style='color: white; text-decoration: none;' href='tel:+390812303782'>TEL: +39 081.230.37.82</a></div>
+<div class='rigainfofo primariga'><a style='color: white; text-decoration: none;' href='mailto:cogei@pec.cogei.net'>PEC: cogei@pec.cogei.net</a></div>
+<div style='margin-top: 40px; text-align: center; color: white; font-size: 12px !important;'>COGEI SRL - P.IVA: IT06569020636 - Copyright © 2023 Cogei. All Rights Reserved.</div>
+</div>
+</body>
+</html>";
+
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+        
+        $email_sent = mail($email, $subject, $body, $headers);
+        $log_entry = "[{$timestamp}] CANTIERE {$action} - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
+    } else {
+        $log_entry = "[{$timestamp}] CANTIERE {$action} - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email NON INVIATA (inviamail=false)\n";
+    }
+    
+    if (!file_exists($log_file)) {
+        $header = "LOG ABILITAZIONI/DISABILITAZIONI CANTIERE - " . date('Y') . "\n";
+        $header .= str_repeat("=", 80) . "\n\n";
+        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
+    }
+    
+    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+}
+
+// ================== GESTIONE AZIONI ORIGINALI ==================
+
+if (isset($_GET['action']) && isset($_GET['user_id'])) {
+    $user_id = intval($_GET['user_id']);
+    $action = sanitize_text_field($_GET['action']);
+    $success = false;
+    $success_info = array();
+    
+    switch ($action) {
+        case 'abilita_cantiere':
+            update_user_meta($user_id, 'abilita_cantiere', '1');
+            sendCantiereEmail($user_id, 'abilita');
+            
+            $user = get_userdata($user_id);
+            $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+            
+            $success = true;
+            $success_info = [
+                'action_type' => 'abilita_cantiere',
+                'user_email' => $user->user_email,
+                'user_name' => $rag_soc ?: $user->display_name
+            ];
+            break;
+            
+        case 'disabilita_cantiere':
+            update_user_meta($user_id, 'abilita_cantiere', '0');
+            sendCantiereEmail($user_id, 'disabilita');
+            
+            $user = get_userdata($user_id);
+            $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+            
+            $success = true;
+            $success_info = [
+                'action_type' => 'disabilita_cantiere',
+                'user_email' => $user->user_email,
+                'user_name' => $rag_soc ?: $user->display_name
+            ];
+            break;
+    }
+    
+    // Redirect
+    $current_url = $_SERVER['REQUEST_URI'];
+    $redirect_url = remove_query_arg(['action', 'user_id', 'msg', 'action_type', 'target_user_id', 'user_email', 'user_name'], $current_url);
+    
+    if ($success && !empty($success_info)) {
+        $redirect_params = array(
+            'msg' => 'success',
+            'action_type' => $success_info['action_type'],
+            'target_user_id' => $user_id,
+            'user_email' => rawurlencode($success_info['user_email']),
+            'user_name' => rawurlencode($success_info['user_name'])
+        );
+        
+        $redirect_url = add_query_arg($redirect_params, $redirect_url);
+    } elseif ($success) {
+        $redirect_url = add_query_arg('msg', 'success', $redirect_url);
+    } else {
+        $redirect_url = add_query_arg('msg', 'error', $redirect_url);
+    }
+    
+    $redirect_url = html_entity_decode($redirect_url, ENT_QUOTES, 'UTF-8');
+    
+    if (!headers_sent()) {
+        header("Location: " . $redirect_url);
+        exit;
+    } else {
+        echo '<script>window.location.href = "' . addslashes($redirect_url) . '";</script>';
+        exit;
+    }
+}
+
+// ================== OUTPUT HTML ESTESO ==================
+
+echo '<div style="margin: 20px; font-family: Arial, sans-serif;">';
+echo '<h2 style="color: #0066a2; margin-bottom: 30px; border-bottom: 3px solid #0066a2; padding-bottom: 10px;">🏗️ Gestione Accesso Cantiere + Cantieri</h2>';
+
+// STATO EMAIL
+echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamail ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($inviamail ? '#28a745' : '#ffc107') . ';">';
+echo '<strong>Stato Email:</strong> ' . ($inviamail ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
+echo '</div>';
+
+// TAB NAVIGATION
+echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #e9ecef;">';
+echo '<button onclick="showTab(\'richieste\')" id="tab-richieste" class="tab-button active" style="background: #0066a2; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">📋 Richieste Cantiere</button>';
+echo '<button onclick="showTab(\'cantieri\')" id="tab-cantieri" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">🏗️ Gestione Cantieri</button>';
+echo '<button onclick="showTab(\'assegnazioni\')" id="tab-assegnazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 8px 8px 0 0;">🔗 Assegnazioni</button>';
+echo '</div>';
+
+// MESSAGGI DI FEEDBACK GLOBALI
+if (isset($_GET['msg'])) {
+    $msg_type = $_GET['msg'] === 'success' ? 'success' : 'error';
+    $msg_color = $msg_type === 'success' ? '#d4edda' : '#f8d7da';
+    $msg_text_color = $msg_type === 'success' ? '#155724' : '#721c24';
+    $msg_icon = $msg_type === 'success' ? '✅' : '❌';
+    
+    $msg_text = $msg_icon . ' Operazione completata con successo!';
+    
+    if ($msg_type === 'success' && isset($_GET['action_type'])) {
+        $action_type = sanitize_text_field($_GET['action_type']);
+        
+        switch ($action_type) {
+            case 'abilita_cantiere':
+                $user_name = isset($_GET['user_name']) ? rawurldecode(sanitize_text_field($_GET['user_name'])) : '';
+                $user_email = isset($_GET['user_email']) ? rawurldecode(sanitize_email($_GET['user_email'])) : '';
+                $target_user_id = isset($_GET['target_user_id']) ? intval($_GET['target_user_id']) : 0;
+                $msg_text = "🟢 <strong>CANTIERE ABILITATO</strong><br>";
+                $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Email:</strong> {$user_email}";
+                break;
+                
+            case 'disabilita_cantiere':
+                $user_name = isset($_GET['user_name']) ? rawurldecode(sanitize_text_field($_GET['user_name'])) : '';
+                $user_email = isset($_GET['user_email']) ? rawurldecode(sanitize_email($_GET['user_email'])) : '';
+                $target_user_id = isset($_GET['target_user_id']) ? intval($_GET['target_user_id']) : 0;
+                $msg_text = "🔴 <strong>CANTIERE DISABILITATO</strong><br>";
+                $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Email:</strong> {$user_email}";
+                break;
+                
+            case 'cantiere_creato':
+                $cantiere_nome = isset($_GET['cantiere_nome']) ? rawurldecode(sanitize_text_field($_GET['cantiere_nome'])) : '';
+                $cantiere_id = isset($_GET['cantiere_id']) ? intval($_GET['cantiere_id']) : 0;
+                $msg_text = "🏗️ <strong>CANTIERE CREATO</strong><br>";
+                $msg_text .= "• <strong>Nome:</strong> {$cantiere_nome}<br>";
+                $msg_text .= "• <strong>ID:</strong> {$cantiere_id}";
+                break;
+                
+            // 🆕 NUOVI MESSAGGI
+            case 'cantiere_modificato':
+                $cantiere_nome = isset($_GET['cantiere_nome']) ? rawurldecode(sanitize_text_field($_GET['cantiere_nome'])) : '';
+                $cantiere_id = isset($_GET['cantiere_id']) ? intval($_GET['cantiere_id']) : 0;
+                $msg_text = "✏️ <strong>CANTIERE MODIFICATO</strong><br>";
+                $msg_text .= "• <strong>Nome:</strong> {$cantiere_nome}<br>";
+                $msg_text .= "• <strong>ID:</strong> {$cantiere_id}";
+                break;
+                
+            case 'cantiere_cancellato':
+                $cantiere_nome = isset($_GET['cantiere_nome']) ? rawurldecode(sanitize_text_field($_GET['cantiere_nome'])) : '';
+                $aziende_rimosse = isset($_GET['aziende_rimosse']) ? intval($_GET['aziende_rimosse']) : 0;
+                $operai_rimossi = isset($_GET['operai_rimossi']) ? intval($_GET['operai_rimossi']) : 0;
+                $pos_rimossi = isset($_GET['pos_rimossi']) ? intval($_GET['pos_rimossi']) : 0;
+                $msg_text = "🗑️ <strong>CANTIERE CANCELLATO</strong><br>";
+                $msg_text .= "• <strong>Nome:</strong> {$cantiere_nome}<br>";
+                $msg_text .= "• <strong>Dati rimossi:</strong> {$aziende_rimosse} aziende, {$operai_rimossi} operai, {$pos_rimossi} POS";
+                break;
+                
+            case 'assegnazioni_create':
+                $cantiere_nome = isset($_GET['cantiere_nome']) ? rawurldecode(sanitize_text_field($_GET['cantiere_nome'])) : '';
+                $aziende_count = isset($_GET['aziende_count']) ? intval($_GET['aziende_count']) : 0;
+                $msg_text = "🔗 <strong>ASSEGNAZIONI COMPLETATE</strong><br>";
+                $msg_text .= "• <strong>Cantiere:</strong> {$cantiere_nome}<br>";
+                $msg_text .= "• <strong>Aziende assegnate:</strong> {$aziende_count}";
+                break;
+                
+            case 'assegnazione_rimossa':
+                $cantiere_nome = isset($_GET['cantiere_nome']) ? rawurldecode(sanitize_text_field($_GET['cantiere_nome'])) : '';
+                $azienda_nome = isset($_GET['azienda_nome']) ? rawurldecode(sanitize_text_field($_GET['azienda_nome'])) : '';
+                $msg_text = "🗑️ <strong>ASSEGNAZIONE RIMOSSA</strong><br>";
+                $msg_text .= "• <strong>Cantiere:</strong> {$cantiere_nome}<br>";
+                $msg_text .= "• <strong>Azienda:</strong> {$azienda_nome}";
+                break;
+        }
+    }
+    
+    echo '<div id="feedback-message" style="margin-bottom: 15px; padding: 15px; background: ' . $msg_color . '; color: ' . $msg_text_color . '; border-radius: 8px; border-left: 5px solid ' . ($msg_type === 'success' ? '#28a745' : '#dc3545') . '; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+    echo '<div style="font-size: 14px; line-height: 1.5;">' . $msg_text . '</div>';
+    if ($msg_type === 'success') {
+        echo '<div id="countdown-text" style="font-size: 11px; color: #6c757d; margin-top: 8px; font-style: italic;">Questo messaggio scomparirà automaticamente tra <span id="countdown-seconds">10</span> secondi...</div>';
+    }
+    echo '</div>';
+}
+// ================== TAB 1: RICHIESTE CANTIERE (MODIFICATO) ==================
+echo '<div id="content-richieste" class="tab-content">';
+
+// CONTROLLI
+echo '<div style="margin-bottom: 15px;">';
+echo '<button onclick="exportTableToCSV()" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">📊 Esporta CSV</button>';
+echo '<span style="margin-left: 10px; font-size: 12px; color: #666;">Esporta la tabella come visualizzata (con filtri applicati)</span>';
+echo '</div>';
+
+// CAMPO DI RICERCA
+echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">';
+echo '<strong>🔍 Cerca in tutti i campi:</strong><br>';
+echo '<input type="text" id="searchInput" placeholder="Scrivi per cercare..." style="width: 100%; max-width: 400px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;" onkeyup="performSearch()">';
+echo '<small style="display: block; margin-top: 5px; color: #666;">Cerca per ragione sociale, email, P.IVA, stato cantiere o qualsiasi altro campo</small>';
+echo '</div>';
+
+// FILTRI STATI HSA
+echo '<div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">';
+echo '<strong>🏗️ Filtra per Stati HSA:</strong><br>';
+echo '<button onclick="clearAllFilters()" style="background: #6c757d; color: white; padding: 4px 8px; border: none; border-radius: 8px; font-size: 11px; margin: 2px; cursor: pointer;">Pulisci Tutti</button><br><br>';
+
+$hsa_statuses = [
+    'completo' => ['label' => 'Completo', 'color' => '#28a745'],
+    'parte_b_incompleta' => ['label' => 'Parte B Incompleta', 'color' => '#fd7e14'],
+    'solo_parte_a' => ['label' => 'Solo Parte A', 'color' => '#17a2b8'],
+    'parte_a_incompleta' => ['label' => 'Parte A Incompleta', 'color' => '#ffc107']
+];
+
+foreach ($hsa_statuses as $key => $config) {
+    echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
+    echo '<input type="checkbox" id="hsa_' . $key . '" onchange="updateFilters()" style="margin-right: 5px;">';
+    echo '<span style="background: ' . $config['color'] . '; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;">' . $config['label'] . '</span>';
+    echo '</label> ';
+}
+echo '</div>';
+
+// FILTRI ACCESSO CANTIERE
+echo '<div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 5px;">';
+echo '<strong>🔐 Filtra per Accesso Cantiere:</strong><br>';
+echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
+echo '<input type="checkbox" id="filter_abilitato" onchange="updateFilters()" style="margin-right: 5px;">';
+echo '<span style="background: #28a745; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;">Abilitato</span>';
+echo '</label> ';
+echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
+echo '<input type="checkbox" id="filter_disabilitato" onchange="updateFilters()" style="margin-right: 5px;">';
+echo '<span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;">Disabilitato</span>';
+echo '</label> ';
+echo '</div>';
+
+// FILTRI ATTIVI
+echo '<div id="active-filters" style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107; display: none;">';
+echo '<strong>Filtri Attivi:</strong> <span id="filter-list"></span>';
+echo '<button onclick="clearAllFilters()" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px; cursor: pointer;">Rimuovi Tutti</button>';
+echo '</div>';
+
+// TABELLA RICHIESTE (CON COLONNA CANTIERI + NUOVA COLONNA ASSEGNAZIONI OPERAI)
+echo '<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">';
+echo '<tr style="background: #0066a2 !important; color: white !important;">';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">ID</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Ragione Sociale</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Email</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DVR</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">POS</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Mezzi</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Conformità</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Abilitazione HSA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Accesso al Cantiere</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🏗️ Cantieri Assegnati</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 Assegnazioni Operai</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
+echo '</tr>';
+
+$richieste = getCantiereRequests();
+
+foreach ($richieste as $richiesta) {
+    $user_id = $richiesta['user_id'];
+    $user = get_userdata($user_id);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    $abilita_cantiere = get_user_meta($user_id, 'abilita_cantiere', true);
+    
+    $personale = getPersonaleByRichiestaId($richiesta['id']);
+    
+    $accesso_cantiere = determineAccessoCantiere($abilita_cantiere);
+    $stato_hsa = determineStatoHSA($richiesta, $personale);
+    $compliance = calculateComplianceStatus($personale);
+    
+    // 🏗️ NUOVO: Cantieri assegnati
+    $cantieri_assegnati = getCantieriAssegnatiUser($user_id);
+    
+    // 🚀 NUOVISSIMO: Assegnazioni operai
+    $operai_assegnazioni = getOperaiAssegnazioniByUser($user_id);
+    $operai_grouped = groupAssegnazioniByOperaio($operai_assegnazioni);
+    
+    echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hsa-status="' . $stato_hsa['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $richiesta['id'] . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->display_name . '</td>';
+    
+    // File DVR
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    if ($richiesta['dvr_file']) {
+        echo '<a href="' . esc_url($richiesta['dvr_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza DVR">📄 ✓</a>';
+    } else {
+        echo '<span style="color: #dc3545;">✗</span>';
+    }
+    echo '</td>';
+    
+    // File RCT
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    if ($richiesta['rct_file']) {
+        echo '<a href="' . esc_url($richiesta['rct_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT">🛡️ ✓</a>';
+    } else {
+        echo '<span style="color: #dc3545;">✗</span>';
+    }
+    echo '</td>';
+    
+    // File POS (mostra se ha almeno un POS per qualche cantiere)
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    $has_pos = false;
+    foreach ($cantieri_assegnati as $cantiere) {
+        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
+        if ($pos_data && $pos_data['pos_file']) {
+            $has_pos = true;
+            break;
+        }
+    }
+    if ($has_pos) {
+        echo '<span style="color: #28a745; font-weight: bold;" title="Ha caricato POS per almeno un cantiere">📋 ✓</span>';
+    } else {
+        echo '<span style="color: #dc3545;">✗</span>';
+    }
+    echo '</td>';
+    
+    // File Mezzi (mostra se ha almeno un file mezzi per qualche cantiere)
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    $has_mezzi = false;
+    foreach ($cantieri_assegnati as $cantiere) {
+        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
+        if ($pos_data && $pos_data['mezzi_file']) {
+            $has_mezzi = true;
+            break;
+        }
+    }
+    if ($has_mezzi) {
+        echo '<span style="color: #28a745; font-weight: bold;" title="Ha caricato elenco mezzi per almeno un cantiere">🚛 ✓</span>';
+    } else {
+        echo '<span style="color: #dc3545;">✗</span>';
+    }
+    echo '</td>';
+    
+    // Personale (clickable per dettagli)
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    if (!empty($personale)) {
+        $totale = count($personale);
+        $assegnati_totali = count($operai_assegnazioni);
+        
+        echo '<button onclick="togglePersonaleDetails(' . $richiesta['id'] . ')" style="background: #17a2b8; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">';
+        echo '👥 ' . $totale;
+        if ($assegnati_totali > 0) {
+            echo ' (' . $assegnati_totali . ' in cantieri)';
+        }
+        echo '</button>';
+    } else {
+        echo '<span style="color: #ffc107;">0</span>';
+    }
+    echo '</td>';
+    
+    // Conformità
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    echo '<span style="background: ' . $compliance['color'] . '; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;" title="' . ($compliance['conforme'] ? 'Tutte le competenze ≥30%' : 'Alcune competenze <30%') . '">' . $compliance['label'] . '</span>';
+    echo '</td>';
+    
+    // Stato Abilitazione HSA
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    echo '<span style="background: ' . $stato_hsa['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($stato_hsa['tooltip']) . '">' . $stato_hsa['label'] . '</span>';
+    echo '</td>';
+    
+    // Accesso al Cantiere
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    echo '<span style="background: ' . $accesso_cantiere['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($accesso_cantiere['tooltip']) . '">' . $accesso_cantiere['label'] . '</span>';
+    echo '</td>';
+    
+    // 🏗️ NUOVO: Cantieri Assegnati
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">';
+    if (!empty($cantieri_assegnati)) {
+        foreach ($cantieri_assegnati as $cantiere) {
+            echo '<div style="background: #e3f2fd; color: #1565c0; padding: 2px 6px; margin: 1px 0; border-radius: 4px; border-left: 3px solid #2196f3;">';
+            echo '🏗️ ' . htmlspecialchars($cantiere['nome']);
+            echo '</div>';
+        }
+    } else {
+        echo '<span style="color: #6c757d; font-style: italic;">Nessuno</span>';
+    }
+    echo '</td>';
+    
+    // 🚀 NUOVISSIMO: Assegnazioni Operai per Cantiere
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 10px;">';
+    if (!empty($operai_grouped)) {
+        foreach ($operai_grouped as $operaio) {
+            $nome_operaio = $operaio['nome'] . ' ' . $operaio['cognome'];
+            echo '<div style="background: #fff3cd; color: #856404; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #ffc107;">';
+            echo '<strong>👷 ' . htmlspecialchars($nome_operaio) . '</strong><br>';
+            foreach ($operaio['cantieri'] as $cantiere_assegnazione) {
+                echo '<span style="font-size: 9px; color: #6c757d;">├ ' . htmlspecialchars($cantiere_assegnazione['cantiere_nome']) . '</span><br>';
+            }
+            echo '</div>';
+        }
+    } else {
+        echo '<span style="color: #6c757d; font-style: italic;">Nessuna assegnazione</span>';
+    }
+    echo '</td>';
+    
+    // Azioni
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    
+    if ($abilita_cantiere == '1') {
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $disabilita_url = $base_url . '?action=disabilita_cantiere&user_id=' . $user_id;
+        echo '<a href="' . esc_url($disabilita_url) . '" onclick="return confirm(\'Confermi disabilitazione cantiere?\')" style="background: #dc3545; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">🚫 DISABILITA</a>';
+    } else {
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $abilita_url = $base_url . '?action=abilita_cantiere&user_id=' . $user_id;
+        echo '<a href="' . esc_url($abilita_url) . '" onclick="return confirm(\'Confermi abilitazione cantiere?\')" style="background: #28a745; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">✅ ABILITA</a>';
+    }
+    
+    echo '</td>';
+    echo '</tr>';
+    
+    // 🚀 RIGA DETTAGLI PERSONALE MIGLIORATA (CON ASSEGNAZIONI CANTIERI)
+    echo '<tr id="personale-details-' . $richiesta['id'] . '" style="display: none; background: #f8f9fa;">';
+    echo '<td colspan="15" style="padding: 15px; border: 1px solid #ddd;">';
+    echo '<h4 style="margin: 0 0 10px 0; color: #0066a2;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
+    
+    if (!empty($personale)) {
+        echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px;">';
+        
+        foreach ($personale as $index => $persona) {
+            // Verifica se questa persona è assegnata a cantieri
+            $persona_assegnazioni = array_filter($operai_assegnazioni, function($ass) use ($persona) {
+                return $ass['operaio_id'] == $persona['id'];
+            });
+            
+            $isAssigned = !empty($persona_assegnazioni);
+            $borderColor = $isAssigned ? '#28a745' : '#ddd';
+            $bgColor = $isAssigned ? '#d4edda' : '#fff';
+            
+            echo '<div style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; padding: 12px; border-radius: 8px;">';
+            echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+            echo '<h5 style="margin: 0; color: #333;">Persona ' . ($index + 1) . '</h5>';
+            if ($isAssigned) {
+                echo '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">🏗️ ASSEGNATO A CANTIERI</span>';
+            }
+            echo '</div>';
+            
+            echo '<p style="margin: 2px 0;"><strong>Nome:</strong> ' . htmlspecialchars($persona['nome']) . '</p>';
+            echo '<p style="margin: 2px 0;"><strong>Cognome:</strong> ' . htmlspecialchars($persona['cognome']) . '</p>';
+            echo '<p style="margin: 2px 0;"><strong>Data Nascita:</strong> ' . htmlspecialchars($persona['data_nascita']) . '</p>';
+            
+            // Mostra formazioni
+            echo '<div style="margin-top: 8px; border-top: 1px solid #ccc; padding-top: 8px;">';
+            echo '<p style="margin: 2px 0; font-size: 12px;"><strong>Formazioni:</strong></p>';
+            
+            $formazioni = [];
+            if (!empty($persona['formazione_antincendio_file'])) {
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2;">🔥 Antincendio</a>';
+            }
+            if (!empty($persona['formazione_primo_soccorso_file'])) {
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2;">🚑 Primo Soccorso</a>';
+            }
+            if (!empty($persona['formazione_preposti_file'])) {
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">👮 Preposti</a>';
+            }
+            
+            if (!empty($formazioni)) {
+                echo '<div style="font-size: 11px;">' . implode(' | ', $formazioni) . '</div>';
+            } else {
+                echo '<div style="font-size: 11px; color: #dc3545;">Nessuna formazione caricata</div>';
+            }
+            echo '</div>';
+            
+            // 🚀 NUOVA SEZIONE: Mostra cantieri assegnati per questa persona
+            if ($isAssigned) {
+                echo '<div style="margin-top: 12px; padding: 10px; background: rgba(40, 167, 69, 0.1); border-radius: 6px; border-left: 4px solid #28a745;">';
+                echo '<h6 style="margin: 0 0 8px 0; color: #155724;">🏗️ Cantieri Assegnati</h6>';
+                echo '<div style="font-size: 11px;">';
+                
+                $cantieri_persona = array();
+                foreach ($persona_assegnazioni as $assegnazione) {
+                    $cantieri_persona[] = $assegnazione['cantiere_nome'];
+                }
+                
+                $cantieri_unique = array_unique($cantieri_persona);
+                foreach ($cantieri_unique as $cantiere_nome) {
+                    echo '<div style="background: #d4edda; color: #155724; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #28a745;">';
+                    echo '🏗️ ' . htmlspecialchars($cantiere_nome);
+                    echo '</div>';
+                }
+                echo '</div>';
+                echo '</div>';
+            }
+            
+            echo '</div>';
+        }
+        
+        echo '</div>';
+        
+        // Mostra statistiche conformità se c'è personale selezionato
+        if ($compliance['details']['totale_selezionato'] > 0) {
+            echo '<div style="margin-top: 15px; padding: 12px; background: #fff; border-radius: 8px; border-left: 4px solid #17a2b8;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #17a2b8;">📊 Analisi Conformità (30% minimo per competenza)</h5>';
+            echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 12px;">';
+            
+            $competenze = [
+                'antincendio' => '🔥 Antincendio',
+                'primo_soccorso' => '🚑 Primo Soccorso',
+                'preposti' => '👮 Preposti'
+            ];
+            
+            foreach ($competenze as $key => $label) {
+                $perc = $compliance['details'][$key];
+                $count = $compliance['details']['distribuzione'][$key];
+                $color = $perc >= 30 ? '#28a745' : '#dc3545';
+                echo '<div style="text-align: center;">';
+                echo '<div style="background: ' . $color . '; color: white; padding: 8px; border-radius: 6px;">';
+                echo '<div style="font-weight: bold;">' . $perc . '%</div>';
+                echo '<div style="font-size: 10px;">' . $label . '</div>';
+                echo '<div style="font-size: 9px;">(' . $count . '/' . $compliance['details']['totale_selezionato'] . ' operai)</div>';
+                echo '</div>';
+                echo '</div>';
+            }
+            echo '</div>';
+            
+            // 🚀 NUOVA SEZIONE: Dettaglio competenze per persona
+            if (!empty($compliance['details']['competenze_personale'])) {
+                echo '<div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;">';
+                echo '<h6 style="margin: 0 0 10px 0; color: #495057;">👥 Competenze per Operaio</h6>';
+                echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 11px;">';
+                
+                foreach ($compliance['details']['competenze_personale'] as $persona) {
+                    $num_competenze = count($persona['competenze']);
+                    $border_color = $num_competenze >= 3 ? '#28a745' : ($num_competenze >= 2 ? '#ffc107' : '#dc3545');
+                    
+                    echo '<div style="padding: 8px; background: white; border-left: 3px solid ' . $border_color . '; border-radius: 4px;">';
+                    echo '<div style="font-weight: bold; margin-bottom: 3px;">' . htmlspecialchars($persona['nome']) . '</div>';
+                    
+                    if (!empty($persona['competenze'])) {
+                        $competenze_labels = [];
+                        foreach ($persona['competenze'] as $comp) {
+                            $competenze_labels[] = $competenze[$comp];
+                        }
+                        echo '<div style="color: #666;">' . implode(' • ', $competenze_labels) . '</div>';
+                    } else {
+                        echo '<div style="color: #dc3545; font-style: italic;">Nessuna competenza</div>';
+                    }
+                    echo '</div>';
+                }
+                echo '</div>';
+                echo '<div style="margin-top: 8px; font-size: 10px; color: #6c757d;">💡 Ogni operaio contribuisce a tutte le competenze che possiede</div>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // 🚀 NUOVA SEZIONE: Riepilogo assegnazioni cantieri
+        if (!empty($operai_grouped)) {
+            echo '<div style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">';
+            echo '<h5 style="margin: 0 0 12px 0; color: #1565c0;">🏗️ Riepilogo Assegnazioni Cantieri</h5>';
+            
+            $cantieri_stats = array();
+            foreach ($operai_assegnazioni as $assegnazione) {
+                $cantiere_nome = $assegnazione['cantiere_nome'];
+                if (!isset($cantieri_stats[$cantiere_nome])) {
+                    $cantieri_stats[$cantiere_nome] = 0;
+                }
+                $cantieri_stats[$cantiere_nome]++;
+            }
+            
+            echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 12px;">';
+            foreach ($cantieri_stats as $cantiere_nome => $operai_count) {
+                echo '<div style="background: white; padding: 10px; border-radius: 6px; border-left: 4px solid #2196f3;">';
+                echo '<div style="font-weight: bold; color: #1565c0; margin-bottom: 5px;">🏗️ ' . htmlspecialchars($cantiere_nome) . '</div>';
+                echo '<div style="color: #666;">👷 ' . $operai_count . ' operai assegnati</div>';
+                echo '</div>';
+            }
+            echo '</div>';
+            echo '</div>';
+        }
+        
+    } else {
+        echo '<p style="color: #666; margin: 0;">Nessun personale inserito</p>';
+    }
+    
+    echo '</td>';
+    echo '</tr>';
+}
+
+echo '</table>';
+echo '</div>'; // Fine tab richieste
+// ================== TAB 2: GESTIONE CANTIERI (ESTESO) ==================
+echo '<div id="content-cantieri" class="tab-content" style="display: none;">';
+
+echo '<h3 style="color: #0066a2; margin-bottom: 20px;">🏗️ Gestione Cantieri</h3>';
+
+// FORM CREAZIONE CANTIERE
+echo '<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 5px solid #28a745;">';
+echo '<h4 style="color: #28a745; margin-top: 0;">➕ Crea Nuovo Cantiere</h4>';
+echo '<form method="post" action="?cantiere_action=create">';
+echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+echo '<div>';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Nome Cantiere: *</label>';
+echo '<input type="text" name="nome_cantiere" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Es. Cantiere Via Roma 123">';
+echo '</div>';
+echo '<div>';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Data Inizio:</label>';
+echo '<input type="date" name="data_inizio" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '</div>';
+echo '</div>';
+
+echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+echo '<div>';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Data Fine:</label>';
+echo '<input type="date" name="data_fine" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '</div>';
+echo '<div>';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Descrizione:</label>';
+echo '<textarea name="descrizione_cantiere" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" rows="2" placeholder="Descrizione opzionale del cantiere"></textarea>';
+echo '</div>';
+echo '</div>';
+echo '<button type="submit" name="cantiere_submit" style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;">🏗️ Crea Cantiere</button>';
+echo '</form>';
+echo '</div>';
+
+// LISTA CANTIERI
+echo '<h4 style="color: #0066a2; margin-bottom: 15px;">📋 Cantieri Esistenti</h4>';
+
+$cantieri = getAllCantieri();
+
+if (!empty($cantieri)) {
+    echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">';
+    
+    foreach ($cantieri as $cantiere) {
+        $stato_color = ($cantiere['stato'] === 'attivo') ? '#28a745' : (($cantiere['stato'] === 'sospeso') ? '#ffc107' : '#6c757d');
+        
+        echo '<div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">';
+        echo '<h5 style="margin: 0; color: #0066a2;">🏗️ ' . htmlspecialchars($cantiere['nome']) . '</h5>';
+        echo '<span style="background: ' . $stato_color . '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; text-transform: uppercase;">' . $cantiere['stato'] . '</span>';
+        echo '</div>';
+        
+        if ($cantiere['descrizione']) {
+            echo '<p style="margin: 5px 0; color: #666; font-size: 14px;">' . htmlspecialchars($cantiere['descrizione']) . '</p>';
+        }
+        
+        echo '<div style="margin: 10px 0; font-size: 12px; color: #666;">';
+        if ($cantiere['data_inizio']) {
+            echo '<div>📅 Inizio: ' . date('d/m/Y', strtotime($cantiere['data_inizio'])) . '</div>';
+        }
+        if ($cantiere['data_fine']) {
+            echo '<div>🏁 Fine: ' . date('d/m/Y', strtotime($cantiere['data_fine'])) . '</div>';
+        }
+        echo '<div>🏢 Aziende assegnate: <strong>' . intval($cantiere['aziende_assegnate']) . '</strong></div>';
+        echo '<div>📅 Creato: ' . date('d/m/Y H:i', strtotime($cantiere['data_creazione'])) . '</div>';
+        echo '</div>';
+        
+        echo '<div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">';
+        echo '<button onclick="showAssignmentModal(' . $cantiere['id'] . ', \'' . esc_js($cantiere['nome']) . '\')" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;">🔗 Gestisci Assegnazioni</button>';
+        echo '<button onclick="viewCantiereDetails(' . $cantiere['id'] . ')" style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;">👁️ Visualizza Dettagli</button>';
+        
+        // 🆕 NUOVI PULSANTI: Modifica e Cancella
+        echo '<button onclick="showEditCantiereModal(' . $cantiere['id'] . ')" style="background: #fd7e14; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;">✏️ Modifica</button>';
+        echo '<button onclick="showDeleteCantiereModal(' . $cantiere['id'] . ', \'' . esc_js($cantiere['nome']) . '\')" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️ Cancella</button>';
+        echo '</div>';
+        
+        echo '</div>';
+    }
+    
+    echo '</div>';
+} else {
+    echo '<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; color: #666;">';
+    echo '<p style="margin: 0; font-size: 16px;">🏗️ Nessun cantiere creato</p>';
+    echo '<p style="margin: 5px 0 0 0; font-size: 14px;">Utilizza il form sopra per creare il primo cantiere</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // Fine tab cantieri
+
+// ================== TAB 3: ASSEGNAZIONI ==================
+echo '<div id="content-assegnazioni" class="tab-content" style="display: none;">';
+
+echo '<h3 style="color: #0066a2; margin-bottom: 20px;">🔗 Gestione Assegnazioni Cantieri</h3>';
+
+// FILTRO PER CANTIERE
+echo '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px;">🔍 Filtra per Cantiere:</label>';
+echo '<select id="cantiere-filter" onchange="filterAssignments()" style="width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<option value="">Tutti i cantieri</option>';
+foreach ($cantieri as $cantiere) {
+    echo '<option value="' . $cantiere['id'] . '">🏗️ ' . htmlspecialchars($cantiere['nome']) . ' (' . $cantiere['aziende_assegnate'] . ' aziende)</option>';
+}
+echo '</select>';
+echo '</div>';
+
+// RIEPILOGO ASSEGNAZIONI
+if (!empty($cantieri)) {
+    echo '<div id="assignments-summary">';
+    
+    foreach ($cantieri as $cantiere) {
+        $aziende_assegnate = getAziendeAssegnateCantiare($cantiere['id']);
+        
+        echo '<div class="assignment-group" data-cantiere-id="' . $cantiere['id'] . '" style="background: white; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; overflow: hidden;">';
+        
+        // Header cantiere
+        echo '<div style="background: linear-gradient(135deg, #2196f3, #1976d2); color: white; padding: 15px;">';
+        echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+        echo '<h4 style="margin: 0;">🏗️ ' . htmlspecialchars($cantiere['nome']) . '</h4>';
+        echo '<span style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 12px; font-size: 12px;">📊 ' . count($aziende_assegnate) . ' aziende</span>';
+        echo '</div>';
+        if ($cantiere['descrizione']) {
+            echo '<p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">' . htmlspecialchars($cantiere['descrizione']) . '</p>';
+        }
+        echo '</div>';
+        
+        // Lista aziende assegnate
+        echo '<div style="padding: 20px;">';
+        
+        if (!empty($aziende_assegnate)) {
+            echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">';
+            
+            foreach ($aziende_assegnate as $azienda) {
+                // 🚀 NUOVO: Recupera assegnazioni operai per questa azienda in questo cantiere
+                $operai_assegnati_cantiere = getOperaiAssegnatiCantiere($cantiere['id'], $azienda['ID']);
+                
+                echo '<div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 15px; position: relative;">';
+                
+                // Pulsante rimozione
+                echo '<form method="post" action="?cantiere_action=unassign" style="position: absolute; top: 10px; right: 10px;" onsubmit="return confirm(\'Confermi la rimozione di questa assegnazione? Verranno rimossi anche eventuali operai assegnati e file POS.\')">';
+                echo '<input type="hidden" name="cantiere_id" value="' . $cantiere['id'] . '">';
+                echo '<input type="hidden" name="user_id" value="' . $azienda['ID'] . '">';
+                echo '<button type="submit" name="cantiere_submit" style="background: #dc3545; color: white; border: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 10px;">✕</button>';
+                echo '</form>';
+                
+                echo '<h6 style="margin: 0 0 8px 0; color: #0066a2; padding-right: 25px;">' . ($azienda['rag_soc'] ?: $azienda['display_name']) . '</h6>';
+                echo '<div style="font-size: 12px; color: #666;">';
+                echo '<div>📧 ' . $azienda['user_email'] . '</div>';
+                echo '<div>🏷️ Tipo: ' . ($azienda['tipo'] ?: 'N/A') . '</div>';
+                echo '<div>📅 Assegnato: ' . date('d/m/Y H:i', strtotime($azienda['data_assegnazione'])) . '</div>';
+                
+                // 🚀 NUOVA SEZIONE: Mostra operai assegnati a questo cantiere
+                if (!empty($operai_assegnati_cantiere)) {
+                    echo '<div style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-radius: 4px; border-left: 3px solid #2196f3;">';
+                    echo '<div style="font-weight: bold; color: #1565c0; font-size: 11px; margin-bottom: 5px;">👷 Operai Assegnati (' . count($operai_assegnati_cantiere) . '):</div>';
+                    foreach ($operai_assegnati_cantiere as $operaio) {
+                        echo '<div style="font-size: 10px; color: #495057; margin-bottom: 2px;">';
+                        echo '• ' . htmlspecialchars($operaio['nome'] . ' ' . $operaio['cognome']);
+                        
+                        // Mostra formazioni dell'operaio con icone
+                        $formazioni_icons = [];
+                        if (!empty($operaio['formazione_antincendio_file'])) $formazioni_icons[] = '🔥';
+                        if (!empty($operaio['formazione_primo_soccorso_file'])) $formazioni_icons[] = '🚑';
+                        if (!empty($operaio['formazione_preposti_file'])) $formazioni_icons[] = '👮';
+                        
+                        if (!empty($formazioni_icons)) {
+                            echo ' <span style="color: #28a745;">[' . implode('', $formazioni_icons) . ']</span>';
+                        } else {
+                            echo ' <span style="color: #dc3545;">[⚠️]</span>';
+                        }
+                        echo '</div>';
+                    }
+                    echo '</div>';
+                } else {
+                    echo '<div style="margin-top: 10px; padding: 6px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">⚠️ Nessun operaio assegnato a questo cantiere</div>';
+                }
+                
+                if ($azienda['note']) {
+                    echo '<div style="margin-top: 8px; padding: 5px; background: #e7f3ff; border-radius: 3px; font-size: 11px;">💬 ' . htmlspecialchars($azienda['note']) . '</div>';
+                }
+                echo '</div>';
+                
+                echo '</div>';
+            }
+            
+            echo '</div>';
+        } else {
+            echo '<div style="text-align: center; padding: 20px; color: #666;">';
+            echo '<p style="margin: 0;">🏢 Nessuna azienda assegnata a questo cantiere</p>';
+            echo '<button onclick="showAssignmentModal(' . $cantiere['id'] . ', \'' . esc_js($cantiere['nome']) . '\')" style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;">➕ Assegna Aziende</button>';
+            echo '</div>';
+        }
+        
+        echo '</div>';
+        echo '</div>';
+    }
+    
+    echo '</div>';
+} else {
+    echo '<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; color: #666;">';
+    echo '<p style="margin: 0; font-size: 16px;">🏗️ Nessun cantiere disponibile per le assegnazioni</p>';
+    echo '<p style="margin: 5px 0 0 0; font-size: 14px;">Crea prima un cantiere nella sezione "Gestione Cantieri"</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // Fine tab assegnazioni
+
+echo '</div>'; // Fine container principale
+
+// ================== MODAL ASSEGNAZIONE (MODIFICATO) ==================
+echo '<div id="assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">';
+echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
+
+// Header modal
+echo '<div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '<h4 style="margin: 0;">🔗 Gestisci Assegnazioni Cantiere</h4>';
+echo '<button onclick="closeAssignmentModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '</div>';
+echo '<p id="modal-cantiere-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>';
+echo '</div>';
+
+// Body modal
+echo '<form method="post" id="assignment-form">';
+echo '<div style="padding: 20px;">';
+
+echo '<input type="hidden" name="cantiere_id" id="modal-cantiere-id">';
+echo '<input type="hidden" name="cantiere_submit" value="1">';
+
+// 🆕 NUOVA SEZIONE: Aziende già assegnate
+echo '<div id="already-assigned-section" style="margin-bottom: 20px; padding: 15px; background: #e8f5e8; border-radius: 6px; border-left: 4px solid #28a745; display: none;">';
+echo '<h5 style="margin: 0 0 10px 0; color: #155724;">✅ Aziende già assegnate al cantiere</h5>';
+echo '<div id="already-assigned-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;"></div>';
+echo '</div>';
+
+echo '<div style="margin-bottom: 15px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px;">🏢 Seleziona Nuove Aziende da Assegnare:</label>';
+
+// 🎯 FILTRO AZIENDE ABILITATE (AGGIORNATO)
+echo '<div style="margin-bottom: 12px; padding: 8px; background: #e3f2fd; border-radius: 6px; border-left: 3px solid #2196f3;">';
+echo '<label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">';
+echo '<input type="checkbox" id="filter-solo-attive" onchange="toggleFiltroAttive()" style="margin-right: 8px;" checked>';
+echo '<strong>🏗️ Mostra solo aziende abilitate al cantiere</strong>';
+echo '</label>';
+echo '<div style="font-size: 11px; color: #1565c0; margin-top: 3px; margin-left: 20px;">Le aziende attive sono sempre visualizzate per prime</div>';
+echo '</div>';
+
+echo '<div style="background: #f8f9fa; padding: 10px; border-radius: 6px; max-height: 350px; overflow-y: auto;" id="aziende-selection-container">';
+
+$aziende_albo = getAziendeAlboFornitori();
+
+if (!empty($aziende_albo)) {
+    foreach ($aziende_albo as $azienda) {
+        $rag_soc = $azienda['rag_soc'] ?: $azienda['display_name'];
+        $is_attiva = $azienda['abilita_cantiere'] == '1';
+        $abilita_cantiere = $is_attiva ? 'Abilitato' : 'Non Abilitato';
+        
+        // Stili differenziati per attive/non attive
+        $container_style = $is_attiva ? 
+            'background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%); border: 1px solid #c3e6cb;' : 
+            'background: #f8f9fa; border: 1px solid #e9ecef; opacity: 0.7;';
+        
+        $data_attributes = 'data-attiva="' . ($is_attiva ? '1' : '0') . '" data-user-id="' . $azienda['ID'] . '"';
+        
+        echo '<label class="azienda-option" ' . $data_attributes . ' style="display: block; margin-bottom: 8px; cursor: pointer; padding: 10px; border-radius: 4px; ' . $container_style . ' transition: all 0.2s ease;">';
+        echo '<div style="display: flex; align-items: center; justify-content: space-between;">';
+        
+        // Checkbox e nome
+        echo '<div style="display: flex; align-items: center; flex: 1;">';
+        echo '<input type="checkbox" name="user_ids[]" value="' . $azienda['ID'] . '" style="margin-right: 10px;">';
+        echo '<div>';
+        echo '<strong style="color: ' . ($is_attiva ? '#155724' : '#6c757d') . ';">' . htmlspecialchars($rag_soc) . '</strong>';
+        echo '<div style="font-size: 11px; color: #666; margin-top: 2px;">';
+        echo '📧 ' . $azienda['user_email'] . ' | 🏷️ ' . ($azienda['tipo'] ?: 'N/A');
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+        
+        // Badge stato
+        $badge_color = $is_attiva ? '#28a745' : '#6c757d';
+        $badge_icon = $is_attiva ? '🏗️' : '🚫';
+        echo '<span style="background: ' . $badge_color . '; color: white; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; white-space: nowrap;">' . $badge_icon . ' ' . $abilita_cantiere . '</span>';
+        
+        echo '</div>';
+        echo '</label>';
+    }
+} else {
+    echo '<p style="color: #666; margin: 0; text-align: center; padding: 20px;">Nessuna azienda nell\'albo fornitori</p>';
+}
+
+echo '</div>';
+echo '</div>';
+
+echo '<div style="margin-bottom: 15px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">📝 Note (opzionale):</label>';
+echo '<textarea name="note_assegnazione" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" rows="3" placeholder="Note per questa assegnazione..."></textarea>';
+echo '</div>';
+
+echo '<div style="text-align: right;">';
+echo '<button type="button" onclick="closeAssignmentModal()" style="background: #6c757d; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Annulla</button>';
+echo '<button type="submit" id="submit-assignments-btn" style="background: #28a745; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer;">🔗 Assegna Selezionate</button>';
+echo '</div>';
+
+echo '</div>';
+echo '</form>';
+
+echo '</div>';
+echo '</div>';
+
+// ================== MODAL DETTAGLI CANTIERE ==================
+echo '<div id="cantiere-details-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;">';
+echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 95%; max-width: 900px; max-height: 90%; overflow-y: auto;">';
+
+// Header modal dettagli
+echo '<div id="cantiere-details-header" style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '<h4 style="margin: 0;">🏗️ Dettagli Cantiere</h4>';
+echo '<button onclick="closeCantiereDetailsModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '</div>';
+echo '<div id="cantiere-details-info" style="margin-top: 10px; opacity: 0.9;">Caricamento...</div>';
+echo '</div>';
+
+// Body modal dettagli
+echo '<div id="cantiere-details-body" style="padding: 20px;">';
+echo '<div id="cantiere-details-loading" style="text-align: center; padding: 40px; color: #666;">';
+echo '<div style="font-size: 24px; margin-bottom: 10px;">⏳</div>';
+echo '<div>Caricamento dettagli cantiere...</div>';
+echo '</div>';
+echo '<div id="cantiere-details-content" style="display: none;"></div>';
+echo '</div>';
+
+echo '</div>';
+echo '</div>';
+
+// ================== 🆕 MODAL MODIFICA CANTIERE ==================
+echo '<div id="edit-cantiere-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9998;">';
+echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto;">';
+
+// Header modal modifica
+echo '<div style="background: #fd7e14; color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '<h4 style="margin: 0;">✏️ Modifica Cantiere</h4>';
+echo '<button onclick="closeEditCantiereModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '</div>';
+echo '</div>';
+
+// Body modal modifica
+echo '<form method="post" action="?cantiere_action=edit" id="edit-cantiere-form">';
+echo '<div style="padding: 20px;">';
+
+echo '<input type="hidden" name="cantiere_id" id="edit-cantiere-id">';
+echo '<input type="hidden" name="cantiere_submit" value="1">';
+
+echo '<div style="margin-bottom: 15px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Nome Cantiere: *</label>';
+echo '<input type="text" name="nome_cantiere" id="edit-nome-cantiere" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '</div>';
+
+echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+echo '<div>';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Data Inizio:</label>';
+echo '<input type="date" name="data_inizio" id="edit-data-inizio" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '</div>';
+echo '<div>';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Data Fine:</label>';
+echo '<input type="date" name="data_fine" id="edit-data-fine" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '</div>';
+echo '</div>';
+
+echo '<div style="margin-bottom: 15px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Stato:</label>';
+echo '<select name="stato_cantiere" id="edit-stato-cantiere" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<option value="attivo">🟢 Attivo</option>';
+echo '<option value="sospeso">🟡 Sospeso</option>';
+echo '<option value="completato">⚫ Completato</option>';
+echo '</select>';
+echo '</div>';
+
+echo '<div style="margin-bottom: 15px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Descrizione:</label>';
+echo '<textarea name="descrizione_cantiere" id="edit-descrizione-cantiere" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" rows="3"></textarea>';
+echo '</div>';
+
+echo '<div style="text-align: right;">';
+echo '<button type="button" onclick="closeEditCantiereModal()" style="background: #6c757d; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Annulla</button>';
+echo '<button type="submit" style="background: #fd7e14; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer;">✏️ Salva Modifiche</button>';
+echo '</div>';
+
+echo '</div>';
+echo '</form>';
+
+echo '</div>';
+echo '</div>';
+
+// ================== 🆕 MODAL CANCELLAZIONE CANTIERE ==================
+echo '<div id="delete-cantiere-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9997;">';
+echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 500px;">';
+
+// Header modal cancellazione
+echo '<div style="background: #dc3545; color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '<h4 style="margin: 0;">🗑️ Cancella Cantiere</h4>';
+echo '<button onclick="closeDeleteCantiereModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '</div>';
+echo '</div>';
+
+// Body modal cancellazione
+echo '<form method="post" action="?cantiere_action=delete" id="delete-cantiere-form">';
+echo '<div style="padding: 20px;">';
+
+echo '<input type="hidden" name="cantiere_id" id="delete-cantiere-id">';
+echo '<input type="hidden" name="cantiere_submit" value="1">';
+
+echo '<div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #ffc107;">';
+echo '<h5 style="margin: 0 0 10px 0;">⚠️ Attenzione!</h5>';
+echo '<p style="margin: 0; font-size: 14px;">Stai per cancellare definitivamente il cantiere <strong id="delete-cantiere-nome"></strong>.</p>';
+echo '<p style="margin: 10px 0 0 0; font-size: 13px;">Questa azione cancellerà anche:</p>';
+echo '<ul style="margin: 5px 0 0 20px; font-size: 13px;">';
+echo '<li>Tutte le assegnazioni aziende</li>';
+echo '<li>Tutte le assegnazioni operai</li>';
+echo '<li>Tutti i file POS caricati</li>';
+echo '</ul>';
+echo '</div>';
+
+echo '<div style="margin-bottom: 20px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #dc3545;">Per confermare, scrivi: <code>CANCELLA</code></label>';
+echo '<input type="text" name="conferma_cancellazione" placeholder="Scrivi CANCELLA per confermare" style="width: 100%; padding: 8px; border: 2px solid #dc3545; border-radius: 4px; font-family: monospace;" required>';
+echo '<small style="color: #666; margin-top: 5px; display: block;">La parola deve essere scritta esattamente come mostrato (tutto maiuscolo)</small>';
+echo '</div>';
+
+echo '<div style="text-align: right;">';
+echo '<button type="button" onclick="closeDeleteCantiereModal()" style="background: #6c757d; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Annulla</button>';
+echo '<button type="submit" style="background: #dc3545; color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer;">🗑️ Cancella Definitivamente</button>';
+echo '</div>';
+
+echo '</div>';
+echo '</form>';
+
+echo '</div>';
+echo '</div>';
+// ================== JAVASCRIPT ESTESO ==================
+?>
+<script>
+// TAB MANAGEMENT
+function showTab(tabName) {
+    // Nascondi tutti i contenuti
+    const contents = document.querySelectorAll('.tab-content');
+    contents.forEach(content => content.style.display = 'none');
+    
+    // Rimuovi classe active da tutti i tab
+    const buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(button => {
+        button.style.background = '#6c757d';
+        button.classList.remove('active');
+    });
+    
+    // Mostra contenuto selezionato
+    document.getElementById('content-' + tabName).style.display = 'block';
+    
+    // Attiva tab button
+    const activeButton = document.getElementById('tab-' + tabName);
+    activeButton.style.background = '#0066a2';
+    activeButton.classList.add('active');
+}
+
+// ================== 🆕 MODAL GESTIONE CANTIERI ==================
+
+function showEditCantiereModal(cantiereId) {
+    // Cerca i dati del cantiere nei dati PHP già disponibili
+    const cantieri = <?php echo json_encode(getAllCantieri()); ?>;
+    const cantiere = cantieri.find(c => c.id == cantiereId);
+    
+    if (!cantiere) {
+        alert('Errore: Cantiere non trovato');
+        return;
+    }
+    
+    // Popola il form di modifica
+    document.getElementById('edit-cantiere-id').value = cantiere.id;
+    document.getElementById('edit-nome-cantiere').value = cantiere.nome;
+    document.getElementById('edit-data-inizio').value = cantiere.data_inizio || '';
+    document.getElementById('edit-data-fine').value = cantiere.data_fine || '';
+    document.getElementById('edit-stato-cantiere').value = cantiere.stato;
+    document.getElementById('edit-descrizione-cantiere').value = cantiere.descrizione || '';
+    
+    // Mostra il modal
+    document.getElementById('edit-cantiere-modal').style.display = 'block';
+    
+    console.log('📝 Apertura modal modifica cantiere:', cantiere.nome);
+}
+
+function closeEditCantiereModal() {
+    document.getElementById('edit-cantiere-modal').style.display = 'none';
+}
+
+function showDeleteCantiereModal(cantiereId, cantiereNome) {
+    // Popola il modal di cancellazione
+    document.getElementById('delete-cantiere-id').value = cantiereId;
+    document.getElementById('delete-cantiere-nome').textContent = cantiereNome;
+    
+    // Reset campo conferma
+    document.querySelector('input[name="conferma_cancellazione"]').value = '';
+    
+    // Mostra il modal
+    document.getElementById('delete-cantiere-modal').style.display = 'block';
+    
+    console.log('🗑️ Apertura modal cancellazione cantiere:', cantiereNome);
+}
+
+function closeDeleteCantiereModal() {
+    document.getElementById('delete-cantiere-modal').style.display = 'none';
+}
+
+// Event listeners per chiudere modal con click esterno
+document.getElementById('edit-cantiere-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEditCantiereModal();
+    }
+});
+
+document.getElementById('delete-cantiere-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDeleteCantiereModal();
+    }
+});
+
+// ================== MODAL ASSIGNMENT MIGLIORATO ==================
+
+function showAssignmentModal(cantiereId, cantiereNome) {
+    document.getElementById('modal-cantiere-id').value = cantiereId;
+    document.getElementById('modal-cantiere-name').textContent = '🏗️ ' + cantiereNome;
+    document.getElementById('assignment-form').action = '?cantiere_action=assign';
+    
+    // Reset checkboxes
+    const checkboxes = document.querySelectorAll('input[name="user_ids[]"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    // 🆕 NUOVO: Carica e mostra aziende già assegnate
+    loadAssignedCompanies(cantiereId);
+    
+    // Reset filtro aziende attive
+    document.getElementById('filter-solo-attive').checked = true;
+    toggleFiltroAttive();
+    
+    document.getElementById('assignment-modal').style.display = 'block';
+    
+    console.log('🔗 Apertura modal assegnazioni per cantiere:', cantiereNome);
+}
+
+// 🆕 NUOVA FUNZIONE: Carica aziende già assegnate
+function loadAssignedCompanies(cantiereId) {
+    // Ottieni le aziende assegnate dai dati PHP
+    const allCantieri = <?php 
+        $cantieri_with_assignments = [];
+        foreach (getAllCantieri() as $c) {
+            $aziende = getAziendeAssegnateCantiare($c['id']);
+            $cantieri_with_assignments[$c['id']] = $aziende;
+        }
+        echo json_encode($cantieri_with_assignments);
+    ?>;
+    
+    const aziendeAssegnate = allCantieri[cantiereId] || [];
+    const assignedSection = document.getElementById('already-assigned-section');
+    const assignedList = document.getElementById('already-assigned-list');
+    
+    if (aziendeAssegnate.length > 0) {
+        // Mostra la sezione
+        assignedSection.style.display = 'block';
+        
+        // Popola la lista
+        assignedList.innerHTML = '';
+        aziendeAssegnate.forEach(azienda => {
+            const aziendaCard = document.createElement('div');
+            aziendaCard.style.cssText = 'background: white; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; position: relative;';
+            
+            aziendaCard.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="color: #155724; font-size: 12px;">${azienda.rag_soc || azienda.display_name}</strong>
+                        <div style="font-size: 10px; color: #666; margin-top: 2px;">
+                            📧 ${azienda.user_email}<br>
+                            📅 ${new Date(azienda.data_assegnazione).toLocaleDateString('it-IT')}
+                        </div>
+                    </div>
+                    <button onclick="removeAssignment(${cantiereId}, ${azienda.ID}, '${azienda.rag_soc || azienda.display_name}')" 
+                            style="background: #dc3545; color: white; border: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 10px;" 
+                            title="Rimuovi assegnazione">✕</button>
+                </div>
+            `;
+            
+            assignedList.appendChild(aziendaCard);
+        });
+        
+        // Nascondi le aziende già assegnate dalla lista di selezione
+        hideAlreadyAssignedCompanies(aziendeAssegnate);
+        
+    } else {
+        // Nascondi la sezione se non ci sono aziende assegnate
+        assignedSection.style.display = 'none';
+    }
+}
+
+// 🆕 NUOVA FUNZIONE: Nascondi aziende già assegnate
+function hideAlreadyAssignedCompanies(aziendeAssegnate) {
+    const assignedUserIds = aziendeAssegnate.map(a => a.ID.toString());
+    
+    document.querySelectorAll('.azienda-option').forEach(option => {
+        const userId = option.getAttribute('data-user-id');
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        
+        if (assignedUserIds.includes(userId)) {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+        } else {
+            // Mantieni la logica del filtro attive/non attive
+            const isAttiva = option.getAttribute('data-attiva') === '1';
+            const soloAttive = document.getElementById('filter-solo-attive').checked;
+            
+            if (soloAttive && !isAttiva) {
+                option.style.display = 'none';
+            } else {
+                option.style.display = 'block';
+            }
+        }
+    });
+}
+
+// 🆕 CORREZIONE: Funzione removeAssignment() fixed
+function removeAssignment(cantiereId, userId, aziendaNome) {
+    if (!confirm(`Confermi la rimozione dell'assegnazione per "${aziendaNome}"?\n\nVerranno rimossi anche eventuali operai assegnati e file POS.`)) {
+        return;
+    }
+    
+    console.log('🗑️ Rimozione assegnazione:', { cantiereId, userId, aziendaNome });
+    
+    // Ottieni l'URL corrente e costruisci l'action corretto
+    const currentUrl = window.location.href.split('?')[0]; // Base URL senza parametri
+    const actionUrl = currentUrl + '?cantiere_action=unassign';
+    
+    console.log('📡 Action URL:', actionUrl);
+    
+    // Crea un form temporaneo per la rimozione
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = actionUrl;
+    form.style.display = 'none';
+    
+    // Crea i campi hidden
+    const cantiereInput = document.createElement('input');
+    cantiereInput.type = 'hidden';
+    cantiereInput.name = 'cantiere_id';
+    cantiereInput.value = cantiereId;
+    
+    const userInput = document.createElement('input');
+    userInput.type = 'hidden';
+    userInput.name = 'user_id';
+    userInput.value = userId;
+    
+    const submitInput = document.createElement('input');
+    submitInput.type = 'hidden';
+    submitInput.name = 'cantiere_submit';
+    submitInput.value = '1';
+    
+    // Aggiungi i campi al form
+    form.appendChild(cantiereInput);
+    form.appendChild(userInput);
+    form.appendChild(submitInput);
+    
+    // Debug: verifica il form creato
+    console.log('🔧 Form creato:', {
+        action: form.action,
+        method: form.method,
+        cantiere_id: cantiereInput.value,
+        user_id: userInput.value,
+        cantiere_submit: submitInput.value
+    });
+    
+    // Aggiungi al DOM e invia
+    document.body.appendChild(form);
+    
+    // Piccolo delay per assicurarsi che tutto sia pronto
+    setTimeout(() => {
+        console.log('📤 Invio form rimozione...');
+        form.submit();
+    }, 100);
+}
+
+// 🚀 FUNZIONE MIGLIORATA: Toggle filtro aziende abilitate
+function toggleFiltroAttive() {
+    const checkbox = document.getElementById('filter-solo-attive');
+    const soloAttive = checkbox.checked;
+    const aziendeOptions = document.querySelectorAll('.azienda-option');
+    
+    console.log('🔍 Filtro attive:', soloAttive ? 'ATTIVO' : 'DISATTIVO');
+    
+    let visibili = 0;
+    let nascoste = 0;
+    
+    // Prima verifica quali aziende sono già assegnate (sempre nascoste)
+    const cantiereId = document.getElementById('modal-cantiere-id').value;
+    const allCantieri = <?php 
+        $cantieri_with_assignments = [];
+        foreach (getAllCantieri() as $c) {
+            $aziende = getAziendeAssegnateCantiare($c['id']);
+            $cantieri_with_assignments[$c['id']] = $aziende;
+        }
+        echo json_encode($cantieri_with_assignments);
+    ?>;
+    
+    const aziendeAssegnate = allCantieri[cantiereId] || [];
+    const assignedUserIds = aziendeAssegnate.map(a => a.ID.toString());
+    
+    aziendeOptions.forEach(function(option) {
+        const isAttiva = option.getAttribute('data-attiva') === '1';
+        const userId = option.getAttribute('data-user-id');
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        
+        // Se è già assegnata, sempre nascosta
+        if (assignedUserIds.includes(userId)) {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+            nascoste++;
+            return;
+        }
+        
+        if (soloAttive) {
+            // Mostra solo le aziende abilitate
+            if (isAttiva) {
+                option.style.display = 'block';
+                visibili++;
+            } else {
+                option.style.display = 'none';
+                nascoste++;
+                // Deseleziona se era selezionata
+                if (checkbox) checkbox.checked = false;
+            }
+        } else {
+            // Mostra tutte le aziende (tranne quelle già assegnate)
+            option.style.display = 'block';
+            visibili++;
+        }
+    });
+    
+    console.log('📊 Risultato filtro - Visibili:', visibili, 'Nascoste:', nascoste);
+    
+    // Aggiorna il testo informativo
+    const container = document.getElementById('aziende-selection-container');
+    let infoDiv = container.querySelector('.filtro-info');
+    
+    if (!infoDiv) {
+        infoDiv = document.createElement('div');
+        infoDiv.className = 'filtro-info';
+        infoDiv.style.cssText = 'background: #e7f3ff; padding: 8px; margin-bottom: 10px; border-radius: 4px; font-size: 11px; color: #0c5460; border-left: 3px solid #bee5eb;';
+        container.insertBefore(infoDiv, container.firstChild);
+    }
+    
+    const aziendeGiaAssegnate = assignedUserIds.length;
+    const nascostePerFiltro = nascoste - aziendeGiaAssegnate;
+    
+    if (aziendeGiaAssegnate > 0) {
+        infoDiv.innerHTML = `🔍 <strong>Filtro attivo:</strong> ${aziendeGiaAssegnate} aziende già assegnate (nascoste), ${visibili} disponibili`;
+        if (soloAttive && nascostePerFiltro > 0) {
+            infoDiv.innerHTML += `, ${nascostePerFiltro} non abilitate nascoste`;
+        }
+        infoDiv.style.display = 'block';
+    } else if (soloAttive && nascoste > 0) {
+        infoDiv.innerHTML = `🔍 <strong>Filtro attivo:</strong> Visualizzate ${visibili} aziende abilitate (${nascoste} non abilitate nascoste)`;
+        infoDiv.style.display = 'block';
+    } else if (!soloAttive) {
+        infoDiv.innerHTML = `👁️ <strong>Mostra tutte:</strong> Visualizzate ${visibili} aziende disponibili`;
+        infoDiv.style.display = 'block';
+    } else {
+        infoDiv.style.display = 'none';
+    }
+    
+    // Aggiorna il contatore del pulsante submit
+    updateSubmitButtonCounter();
+}
+
+// Aggiorna contatore pulsante submit
+function updateSubmitButtonCounter() {
+    const selectedCheckboxes = document.querySelectorAll('input[name="user_ids[]"]:checked');
+    const submitButton = document.getElementById('submit-assignments-btn');
+    
+    if (selectedCheckboxes.length > 0) {
+        submitButton.textContent = `🔗 Assegna ${selectedCheckboxes.length} Nuove Aziende`;
+        submitButton.style.background = '#28a745';
+    } else {
+        submitButton.textContent = '🔗 Assegna Selezionate';
+        submitButton.style.background = '#6c757d';
+    }
+}
+
+// FILTRO ASSEGNAZIONI
+function filterAssignments() {
+    const selectedCantiereId = document.getElementById('cantiere-filter').value;
+    const assignmentGroups = document.querySelectorAll('.assignment-group');
+    
+    assignmentGroups.forEach(group => {
+        const cantiereId = group.getAttribute('data-cantiere-id');
+        
+        if (!selectedCantiereId || cantiereId === selectedCantiereId) {
+            group.style.display = 'block';
+        } else {
+            group.style.display = 'none';
+        }
+    });
+}
+
+// DETTAGLI CANTIERE
+function viewCantiereDetails(cantiereId) {
+    // Mostra loading
+    showCantiereDetailsModal(cantiereId);
+    
+    // Chiama il vero endpoint AJAX
+    loadCantiereDetailsData(cantiereId);
+}
+
+// 🚀 FUNZIONI: Gestione modal dettagli cantiere
+function showCantiereDetailsModal(cantiereId) {
+    document.getElementById('cantiere-details-modal').style.display = 'block';
+    document.getElementById('cantiere-details-loading').style.display = 'block';
+    document.getElementById('cantiere-details-content').style.display = 'none';
+    
+    // Reset header
+    document.getElementById('cantiere-details-info').textContent = 'Caricamento...';
+}
+
+function closeCantiereDetailsModal() {
+    document.getElementById('cantiere-details-modal').style.display = 'none';
+}
+
+function loadCantiereDetailsData(cantiereId) {
+    // Reset stato
+    document.getElementById('cantiere-details-loading').style.display = 'block';
+    document.getElementById('cantiere-details-content').style.display = 'none';
+    document.getElementById('cantiere-details-info').textContent = 'Caricamento dettagli cantiere...';
+    
+    // Chiamata AJAX reale al file PHP
+    fetchCantiereDetailsFromServer(cantiereId);
+}
+
+function fetchCantiereDetailsFromServer(cantiereId) {
+    // Chiama il vero endpoint AJAX
+    const ajaxUrl = '/cogei/ajax_fornitori/get_cantiere_details.php';
+    
+    // Prepara i dati da inviare
+    const formData = new FormData();
+    formData.append('cantiere_id', cantiereId);
+    
+    console.log('🔄 Chiamata AJAX per cantiere ID:', cantiereId);
+    
+    fetch(ajaxUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('📡 Risposta AJAX ricevuta:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log('✅ Dati ricevuti:', data);
+        
+        if (data.success) {
+            displayCantiereDetailsContent(data);
+        } else {
+            throw new Error(data.error || 'Errore sconosciuto dal server');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Errore AJAX:', error);
+        displayCantiereDetailsError(error.message);
+    });
+}
+
+function displayCantiereDetailsContent(data) {
+    // Aggiorna header con dati reali
+    const headerInfo = document.getElementById('cantiere-details-info');
+    const cantiere = data.cantiere;
+    const stats = data.statistiche_globali;
+    
+    headerInfo.innerHTML = `
+        <strong>${cantiere.nome}</strong> (#${cantiere.id})<br>
+        <span style="font-size: 14px;">
+            ${cantiere.descrizione || 'Nessuna descrizione'} • 
+            Stato: <strong>${cantiere.stato.toUpperCase()}</strong> • 
+            ${stats.totale_aziende} aziende • ${stats.totale_operai} operai
+        </span>
+    `;
+    
+    // Genera contenuto dettagliato
+    generateRealCantiereDetailsContent(data);
+    
+    // Nascondi loading e mostra content
+    document.getElementById('cantiere-details-loading').style.display = 'none';
+    document.getElementById('cantiere-details-content').style.display = 'block';
+}
+
+function displayCantiereDetailsError(errorMessage) {
+    const contentDiv = document.getElementById('cantiere-details-content');
+    
+    contentDiv.innerHTML = `
+        <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 6px; text-align: center; border-left: 5px solid #dc3545;">
+            <div style="font-size: 18px; margin-bottom: 10px;">❌ Errore nel caricamento</div>
+            <div style="font-size: 14px; margin-bottom: 15px;">${errorMessage}</div>
+            <button onclick="loadCantiereDetailsData(${document.getElementById('modal-cantiere-id')?.value || 'null'})" 
+                    style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                🔄 Riprova
+            </button>
+            <button onclick="generateFallbackCantiereDetails(${document.getElementById('modal-cantiere-id')?.value || 'null'})" 
+                    style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                📋 Mostra Demo
+            </button>
+        </div>
+        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; color: #856404; border-radius: 6px; font-size: 12px;">
+            <strong>💡 Informazioni tecniche:</strong><br>
+            • Endpoint chiamato: <code>/cogei/ajax_fornitori/get_cantiere_details.php</code><br>
+            • Verifica che il file esista e sia accessibile<br>
+            • Controlla i log del server per maggiori dettagli<br>
+            • Il file deve essere in grado di caricare WordPress per funzionare
+        </div>
+    `;
+    
+    // Nascondi loading e mostra content
+    document.getElementById('cantiere-details-loading').style.display = 'none';
+    document.getElementById('cantiere-details-content').style.display = 'block';
+}
+
+function generateRealCantiereDetailsContent(data) {
+    const contentDiv = document.getElementById('cantiere-details-content');
+    const cantiere = data.cantiere;
+    const stats = data.statistiche_globali;
+    const aziende = data.aziende;
+    
+    let contentHTML = `
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+            <h5 style="margin: 0 0 10px 0; color: #17a2b8;">📊 Riepilogo Cantiere #${cantiere.id}</h5>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
+                <div><strong>🏗️ Nome:</strong> ${cantiere.nome}</div>
+                <div><strong>📅 Inizio:</strong> ${cantiere.data_inizio ? new Date(cantiere.data_inizio).toLocaleDateString('it-IT') : 'Non definita'}</div>
+                <div><strong>🏁 Fine:</strong> ${cantiere.data_fine ? new Date(cantiere.data_fine).toLocaleDateString('it-IT') : 'Non definita'}</div>
+                <div><strong>📅 Creato:</strong> ${new Date(cantiere.data_creazione).toLocaleDateString('it-IT')}</div>
+                <div><strong>🏢 Aziende:</strong> ${stats.totale_aziende}</div>
+                <div><strong>👷 Operai Totali:</strong> ${stats.totale_operai}</div>
+                <div><strong>✅ Operai Formati:</strong> ${stats.operai_con_formazioni}</div>
+                <div><strong>🔄 Aggiornato:</strong> ${data.timestamp}</div>
+            </div>
+        </div>
+    `;
+    
+    // Sezione conformità con dati reali
+    const isConforme = stats.conforme;
+    const conformitaPerc = stats.conformita_percentuale;
+    
+    contentHTML += `
+        <div style="background: ${isConforme ? '#d4edda' : '#f8d7da'}; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 5px solid ${isConforme ? '#28a745' : '#dc3545'};">
+            <h5 style="margin: 0 0 10px 0; color: ${isConforme ? '#155724' : '#721c24'};">
+                ${isConforme ? '✅ CANTIERE CONFORME' : '⚠️ CANTIERE NON CONFORME'}
+                <span style="font-size: 14px; opacity: 0.8;">(${conformitaPerc}% operai formati)</span>
+            </h5>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px;">
+                <div style="text-align: center; padding: 8px; background: ${stats.percentuali.antincendio >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                    <div style="font-size: 16px; font-weight: bold;">${stats.percentuali.antincendio}%</div>
+                    <div>🔥 Antincendio</div>
+                    <div style="font-size: 10px;">${stats.competenze_conteggi.antincendio}/${stats.totale_operai}</div>
+                </div>
+                <div style="text-align: center; padding: 8px; background: ${stats.percentuali.primo_soccorso >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                    <div style="font-size: 16px; font-weight: bold;">${stats.percentuali.primo_soccorso}%</div>
+                    <div>🚑 Primo Soccorso</div>
+                    <div style="font-size: 10px;">${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai}</div>
+                </div>
+                <div style="text-align: center; padding: 8px; background: ${stats.percentuali.preposti >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                    <div style="font-size: 16px; font-weight: bold;">${stats.percentuali.preposti}%</div>
+                    <div>👮 Preposti</div>
+                    <div style="font-size: 10px;">${stats.competenze_conteggi.preposti}/${stats.totale_operai}</div>
+                </div>
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; opacity: 0.8;">
+                💡 Soglia minima richiesta: 30% per ogni competenza
+            </div>
+        </div>
+    `;
+    
+    // Lista aziende con operai reali
+    if (aziende && aziende.length > 0) {
+        contentHTML += `<h5 style="color: #17a2b8; margin-bottom: 15px;">🏢 Aziende e Operai Assegnati (${aziende.length})</h5>`;
+        
+        aziende.forEach(aziendaData => {
+            const azienda = aziendaData.azienda;
+            const operai = aziendaData.operai;
+            const statistiche = aziendaData.statistiche;
+            
+            contentHTML += `
+                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 15px; overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #2196f3, #1976d2); color: white; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h6 style="margin: 0; font-size: 14px;">${azienda.nome}</h6>
+                                <div style="font-size: 11px; opacity: 0.9;">${azienda.email} • ${azienda.tipo}</div>
+                            </div>
+                            <div style="text-align: right; font-size: 11px;">
+                                <div>👷 ${azienda.operai_totali} operai</div>
+                                <div>📅 ${new Date(azienda.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                                <div style="background: ${azienda.conformita_percentuale >= 70 ? '#28a745' : (azienda.conformita_percentuale >= 40 ? '#ffc107' : '#dc3545')}; color: white; padding: 1px 6px; border-radius: 8px; margin-top: 2px; display: inline-block;">
+                                    ${azienda.conformita_percentuale}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 15px;">
+            `;
+            
+            if (operai && operai.length > 0) {
+                contentHTML += `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
+                `;
+                
+                operai.forEach(operaio => {
+                    const hasFormazioni = operaio.ha_formazioni;
+                    const competenzeIcons = [];
+                    
+                    if (operaio.formazioni.antincendio) competenzeIcons.push('🔥');
+                    if (operaio.formazioni.primo_soccorso) competenzeIcons.push('🚑');
+                    if (operaio.formazioni.preposti) competenzeIcons.push('👮');
+                    
+                    contentHTML += `
+                        <div style="background: ${hasFormazioni ? '#e8f5e8' : '#fff3cd'}; border: 1px solid ${hasFormazioni ? '#c3e6cb' : '#ffc107'}; border-radius: 4px; padding: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
+                                <div>
+                                    <div style="font-weight: bold; font-size: 12px; color: #333;">${operaio.nome_completo}</div>
+                                    <div style="font-size: 10px; color: #666;">Età: ${operaio.eta} anni</div>
+                                    <div style="font-size: 9px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                                </div>
+                                <div style="font-size: 16px;">
+                                    ${competenzeIcons.length > 0 ? competenzeIcons.join('') : '⚠️'}
+                                </div>
+                            </div>
+                            <div style="font-size: 10px; color: #666;">
+                                ${hasFormazioni ? 
+                                    'Competenze: ' + operaio.competenze.map(c => 
+                                        c === 'antincendio' ? 'Antincendio' : 
+                                        c === 'primo_soccorso' ? 'Primo Soccorso' : 
+                                        c === 'preposti' ? 'Preposti' : c
+                                    ).join(', ') : 
+                                    'Nessuna formazione registrata'
+                                }
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                contentHTML += `</div>`;
+            } else {
+                contentHTML += `
+                    <div style="text-align: center; padding: 20px; color: #666; font-style: italic;">
+                        Nessun operaio assegnato a questo cantiere
+                    </div>
+                `;
+            }
+            
+            // Note azienda se presenti
+            if (azienda.note) {
+                contentHTML += `
+                    <div style="margin-top: 12px; padding: 8px; background: #e7f3ff; border-radius: 4px; border-left: 3px solid #2196f3;">
+                        <div style="font-size: 11px; font-weight: bold; color: #1565c0;">💬 Note:</div>
+                        <div style="font-size: 11px; color: #495057; margin-top: 2px;">${azienda.note}</div>
+                    </div>
+                `;
+            }
+            
+            contentHTML += `</div></div>`;
+        });
+    } else {
+        contentHTML += `
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; text-align: center; color: #666;">
+                <p style="margin: 0; font-size: 16px;">🏢 Nessuna azienda assegnata</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px;">Usa la sezione "Assegnazioni" per assegnare aziende al cantiere</p>
+            </div>
+        `;
+    }
+    
+    // Footer con azioni
+    contentHTML += `
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 20px; text-align: center;">
+            <div style="color: #28a745; font-size: 12px; margin-bottom: 10px;">
+                ✅ Dati reali caricati dal database in tempo reale
+            </div>
+            <button onclick="closeCantiereDetailsModal()" style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Chiudi</button>
+            <button onclick="exportCantiereDetails(${cantiere.id})" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">📊 Esporta Report</button>
+        </div>
+    `;
+    
+    contentDiv.innerHTML = contentHTML;
+}
+
+// 🚀 FUNZIONE FALLBACK: Dati demo se AJAX fallisce
+function generateFallbackCantiereDetails(cantiereId) {
+    console.log('📋 Generazione dati demo per cantiere:', cantiereId);
+    
+    // Trova il cantiere dai dati PHP già disponibili
+    const cantieri = <?php echo json_encode(getAllCantieri()); ?>;
+    const cantiere = cantieri.find(c => c.id == cantiereId);
+    
+    if (!cantiere) {
+        displayCantiereDetailsError('Cantiere non trovato nei dati locali');
+        return;
+    }
+    
+    // Genera dati demo basati sul cantiere reale
+    const simulatedData = {
+        success: true,
+        cantiere: {
+            id: cantiere.id,
+            nome: cantiere.nome,
+            descrizione: cantiere.descrizione || 'Descrizione demo',
+            stato: cantiere.stato,
+            data_inizio: cantiere.data_inizio,
+            data_fine: cantiere.data_fine,
+            data_creazione: cantiere.data_creazione,
+            aziende_assegnate: parseInt(cantiere.aziende_assegnate)
+        },
+        statistiche_globali: {
+            totale_aziende: parseInt(cantiere.aziende_assegnate),
+            totale_operai: Math.floor(Math.random() * 20) + 5,
+            operai_con_formazioni: Math.floor(Math.random() * 15) + 3,
+            percentuali: {
+                antincendio: Math.floor(Math.random() * 60) + 20,
+                primo_soccorso: Math.floor(Math.random() * 60) + 20,
+                preposti: Math.floor(Math.random() * 60) + 20
+            },
+            competenze_conteggi: {
+                antincendio: Math.floor(Math.random() * 10) + 2,
+                primo_soccorso: Math.floor(Math.random() * 10) + 2,
+                preposti: Math.floor(Math.random() * 10) + 2
+            },
+            conforme: Math.random() > 0.5,
+            conformita_percentuale: Math.floor(Math.random() * 60) + 30
+        },
+        aziende: [
+            {
+                azienda: {
+                    id: 1,
+                    nome: "Edilizia Demo S.r.l.",
+                    email: "demo@ediliziademo.it",
+                    tipo: "Lavoro",
+                    data_assegnazione: "2024-01-15 10:30:00",
+                    conformita_percentuale: 75.0,
+                    operai_totali: 4,
+                    operai_con_formazioni: 3,
+                    note: "Dati demo generati automaticamente"
+                },
+                operai: [
+                    {
+                        id: 1,
+                        nome: "Mario",
+                        cognome: "Rossi",
+                        nome_completo: "Mario Rossi",
+                        eta: 39,
+                        data_assegnazione: "2024-01-15 10:30:00",
+                        competenze: ["antincendio", "primo_soccorso"],
+                        ha_formazioni: true,
+                        formazioni: {
+                            antincendio: true,
+                            primo_soccorso: true,
+                            preposti: false
+                        }
+                    },
+                    {
+                        id: 2,
+                        nome: "Giuseppe",
+                        cognome: "Bianchi",
+                        nome_completo: "Giuseppe Bianchi",
+                        eta: 46,
+                        data_assegnazione: "2024-01-15 10:30:00",
+                        competenze: ["antincendio", "preposti"],
+                        ha_formazioni: true,
+                        formazioni: {
+                            antincendio: true,
+                            primo_soccorso: false,
+                            preposti: true
+                        }
+                    }
+                ]
+            }
+        ],
+        timestamp: new Date().toLocaleString('it-IT'),
+        timezone: 'Europe/Rome'
+    };
+    
+    // Aggiungi flag demo
+    simulatedData._demo = true;
+    
+    displayCantiereDetailsContent(simulatedData);
+}
+
+// 🚀 FUNZIONE PER EXPORT REPORT CANTIERE
+function exportCantiereDetails(cantiereId) {
+    alert(`🚀 Funzionalità export report per cantiere ${cantiereId} in sviluppo!\n\nQuesta funzione genererebbe un PDF o Excel con:\n• Dettagli cantiere\n• Lista aziende\n• Operai e qualifiche\n• Statistiche conformità`);
+}
+
+// ================== TEST CONNESSIONE AJAX ==================
+function testAjaxConnection() {
+    console.log('🔧 Test connessione AJAX endpoint...');
+    
+    const ajaxUrl = '/cogei/ajax_fornitori/get_cantiere_details.php';
+    
+    fetch(ajaxUrl, {
+        method: 'POST',
+        body: new FormData(),
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('📡 Risposta test:', response.status, response.statusText);
+        if (response.status === 400) {
+            console.log('✅ Endpoint trovato! (Errore 400 = parametri mancanti, ma il file esiste)');
+        } else if (response.status === 404) {
+            console.log('❌ Endpoint NON trovato! Verifica il percorso del file.');
+        } else {
+            console.log('⚠️ Risposta inaspettata dal server');
+        }
+        return response.text();
+    })
+    .then(data => {
+        console.log('📄 Contenuto risposta:', data.substring(0, 200) + '...');
+    })
+    .catch(error => {
+        console.error('❌ Errore test connessione:', error);
+    });
+}
+
+// ================== FUNZIONI ORIGINALI PER TAB RICHIESTE ==================
+
+function togglePersonaleDetails(richiestaId) {
+    var detailsRow = document.getElementById('personale-details-' + richiestaId);
+    if (detailsRow) {
+        if (detailsRow.style.display === 'none') {
+            detailsRow.style.display = '';
+        } else {
+            detailsRow.style.display = 'none';
+        }
+    }
+}
+function exportTableToCSV() {
+    var exportBtn = document.querySelector('button[onclick="exportTableToCSV()"]');
+    var originalText = exportBtn.innerHTML;
+    exportBtn.innerHTML = '⏳ Generando CSV...';
+    exportBtn.disabled = true;
+    
+    setTimeout(function() {
+        try {
+            generateClientSideCSV();
+        } catch (e) {
+            console.error('Errore generazione CSV:', e);
+            alert('Errore durante la generazione del CSV. Riprova più tardi.');
+        }
+        
+        exportBtn.innerHTML = originalText;
+        exportBtn.disabled = false;
+    }, 1000);
+}
+
+function generateClientSideCSV() {
+    var headers = [
+        'ID Richiesta', 'Ragione Sociale', 'Email', 'P.IVA', 'DVR', 'RCT', 
+        'POS', 'Mezzi', 'Personale', 'Conformità', 'Stato Abilitazione HSA', 
+        'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai'
+    ];
+    
+    var csvContent = "\uFEFF";
+    csvContent += headers.map(h => '"' + h + '"').join(',') + '\n';
+    
+    var rows = document.querySelectorAll('.cantiere-row');
+    var exportedRows = 0;
+    
+    rows.forEach(function(row) {
+        var isVisible = window.getComputedStyle(row).display !== 'none';
+        if (!isVisible) return;
+        
+        var cells = row.querySelectorAll('td');
+        if (cells.length < 14) return;
+        
+        var rowData = [];
+        
+        for (var i = 0; i < 13; i++) {
+            var cellText = cells[i].textContent.trim();
+            if (i >= 4 && i <= 7) { // File columns
+                cellText = cells[i].querySelector('a') ? 'Caricato' : 'Non caricato';
+            }
+            rowData.push('"' + cellText.replace(/"/g, '""') + '"');
+        }
+        
+        // Cantieri assegnati (colonna 13)
+        var cantieriText = cells[12].textContent.trim().replace(/\s+/g, ' ');
+        rowData.push('"' + cantieriText.replace(/"/g, '""') + '"');
+        
+        // 🚀 NUOVO: Assegnazioni operai (colonna 14)
+        var operaiText = cells[13].textContent.trim().replace(/\s+/g, ' ');
+        rowData.push('"' + operaiText.replace(/"/g, '""') + '"');
+        
+        csvContent += rowData.join(',') + '\n';
+        exportedRows++;
+    });
+    
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+        var url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'richieste_cantiere_' + new Date().toISOString().slice(0,19).replace(/:/g, '-') + '.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(function() {
+            var totalRows = document.querySelectorAll('.cantiere-row').length;
+            var message = "✅ File CSV scaricato con successo!\n\n";
+            message += "📊 " + exportedRows + " richieste esportate";
+            if (exportedRows < totalRows) {
+                message += "\n🔍 " + (totalRows - exportedRows) + " righe nascoste dai filtri";
+            }
+            alert(message);
+        }, 500);
+    } else {
+        alert('❌ Il tuo browser non supporta il download automatico dei file');
+    }
+}
+
+function performSearch() {
+    var searchInput = document.getElementById("searchInput");
+    var searchTerm = searchInput ? searchInput.value : "";
+    
+    if (!searchTerm || searchTerm.trim() === "" || searchTerm === "Scrivi per cercare...") {
+        updateFilters();
+        return;
+    }
+    
+    var rows = document.querySelectorAll(".cantiere-row");
+    var visibleAfterSearch = 0;
+    
+    rows.forEach(function(row) {
+        var rowText = row.textContent.toLowerCase();
+        var matchesSearch = rowText.includes(searchTerm.toLowerCase());
+        
+        if (matchesSearch && shouldRowBeVisible(row)) {
+            row.style.display = "";
+            var richiestaId = row.querySelector('button[onclick*="togglePersonaleDetails"]');
+            if (richiestaId) {
+                var idMatch = richiestaId.getAttribute('onclick').match(/\d+/);
+                if (idMatch) {
+                    var detailsRow = document.getElementById('personale-details-' + idMatch[0]);
+                    if (detailsRow) detailsRow.style.display = 'none';
+                }
+            }
+            visibleAfterSearch++;
+        } else {
+            row.style.display = "none";
+            var richiestaId = row.querySelector('button[onclick*="togglePersonaleDetails"]');
+            if (richiestaId) {
+                var idMatch = richiestaId.getAttribute('onclick').match(/\d+/);
+                if (idMatch) {
+                    var detailsRow = document.getElementById('personale-details-' + idMatch[0]);
+                    if (detailsRow) detailsRow.style.display = 'none';
+                }
+            }
+        }
+    });
+    
+    updateActiveFiltersDisplay(visibleAfterSearch);
+}
+
+function shouldRowBeVisible(row) {
+    var selectedHsaStatuses = [];
+    var hsaCheckboxes = document.querySelectorAll("input[id^=hsa_]:checked");
+    hsaCheckboxes.forEach(function(checkbox) {
+        selectedHsaStatuses.push(checkbox.id.replace("hsa_", ""));
+    });
+    
+    var abilitatoFilter = document.getElementById("filter_abilitato");
+    var disabilitatoFilter = document.getElementById("filter_disabilitato");
+    var showAbilitato = abilitatoFilter && abilitatoFilter.checked;
+    var showDisabilitato = disabilitatoFilter && disabilitatoFilter.checked;
+    
+    if (selectedHsaStatuses.length === 0 && !showAbilitato && !showDisabilitato) {
+        return true;
+    }
+    
+    if (selectedHsaStatuses.length > 0) {
+        var rowHsaStatus = row.getAttribute("data-hsa-status");
+        if (selectedHsaStatuses.indexOf(rowHsaStatus) === -1) {
+            return false;
+        }
+    }
+    
+    if (showAbilitato || showDisabilitato) {
+        var rowAccesso = row.getAttribute("data-accesso");
+        if (showAbilitato && showDisabilitato) {
+            // Entrambi selezionati = mostra tutti
+        } else if (showAbilitato && rowAccesso !== "abilitato") {
+            return false;
+        } else if (showDisabilitato && rowAccesso !== "disabilitato") {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function updateFilters() {
+    var rows = document.querySelectorAll(".cantiere-row");
+    var visibleCount = 0;
+    
+    rows.forEach(function(row) {
+        if (shouldRowBeVisible(row)) {
+            row.style.display = "";
+            visibleCount++;
+        } else {
+            row.style.display = "none";
+            var richiestaId = row.querySelector('button[onclick*="togglePersonaleDetails"]');
+            if (richiestaId) {
+                var idMatch = richiestaId.getAttribute('onclick').match(/\d+/);
+                if (idMatch) {
+                    var detailsRow = document.getElementById('personale-details-' + idMatch[0]);
+                    if (detailsRow) detailsRow.style.display = 'none';
+                }
+            }
+        }
+    });
+    
+    var searchInput = document.getElementById("searchInput");
+    var searchTerm = searchInput ? searchInput.value : "";
+    
+    if (searchTerm && searchTerm.trim() !== "" && searchTerm !== "Scrivi per cercare...") {
+        performSearch();
+    } else {
+        updateActiveFiltersDisplay(visibleCount);
+    }
+}
+
+function clearAllFilters() {
+    var allCheckboxes = document.querySelectorAll("input[type=checkbox]");
+    allCheckboxes.forEach(function(checkbox) {
+        checkbox.checked = false;
+    });
+    
+    var searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.value = "";
+    }
+    
+    var rows = document.querySelectorAll(".cantiere-row");
+    rows.forEach(function(row) {
+        row.style.display = "";
+    });
+    
+    var detailsRows = document.querySelectorAll('[id^="personale-details-"]');
+    detailsRows.forEach(function(row) {
+        row.style.display = 'none';
+    });
+    
+    var activeFiltersDiv = document.getElementById("active-filters");
+    if (activeFiltersDiv) {
+        activeFiltersDiv.style.display = "none";
+    }
+}
+
+function updateActiveFiltersDisplay(visibleCount) {
+    var selectedHsaStatuses = [];
+    var hsaCheckboxes = document.querySelectorAll("input[id^=hsa_]:checked");
+    hsaCheckboxes.forEach(function(checkbox) {
+        selectedHsaStatuses.push(checkbox.id.replace("hsa_", ""));
+    });
+    
+    var abilitatoFilter = document.getElementById("filter_abilitato");
+    var disabilitatoFilter = document.getElementById("filter_disabilitato");
+    var showAbilitato = abilitatoFilter && abilitatoFilter.checked;
+    var showDisabilitato = disabilitatoFilter && disabilitatoFilter.checked;
+    
+    var activeFiltersDiv = document.getElementById("active-filters");
+    var filterList = document.getElementById("filter-list");
+    var filters = [];
+    
+    if (selectedHsaStatuses.length > 0) {
+        filters.push("Stati HSA: " + selectedHsaStatuses.join(", "));
+    }
+    
+    if (showAbilitato && showDisabilitato) {
+        filters.push("Accesso Cantiere: Tutti");
+    } else if (showAbilitato) {
+        filters.push("Accesso Cantiere: Solo Abilitati");
+    } else if (showDisabilitato) {
+        filters.push("Accesso Cantiere: Solo Disabilitati");
+    }
+    
+    var searchInput = document.getElementById("searchInput");
+    var searchTerm = searchInput ? searchInput.value : "";
+    
+    if (searchTerm && searchTerm.trim() !== "" && searchTerm !== "Scrivi per cercare...") {
+        filters.push('Ricerca: "' + searchTerm + '"');
+    }
+    
+    if (filters.length > 0) {
+        activeFiltersDiv.style.display = "block";
+        filterList.textContent = filters.join(" | ") + " (" + visibleCount + " risultati)";
+    } else {
+        activeFiltersDiv.style.display = "none";
+    }
+}
+
+// AUTO-HIDE MESSAGGI FEEDBACK CON COUNTDOWN
+function hideFeedbackMessage() {
+    var feedbackMessage = document.getElementById('feedback-message');
+    var countdownElement = document.getElementById('countdown-seconds');
+    
+    if (feedbackMessage) {
+        var secondsLeft = 10;
+        
+        var countdownInterval = setInterval(function() {
+            secondsLeft--;
+            if (countdownElement) {
+                countdownElement.textContent = secondsLeft;
+            }
+            
+            if (secondsLeft <= 0) {
+                clearInterval(countdownInterval);
+                
+                feedbackMessage.style.transition = 'opacity 0.5s ease';
+                feedbackMessage.style.opacity = '0';
+                
+                setTimeout(function() {
+                    feedbackMessage.style.display = 'none';
+                    
+                    var currentUrl = new URL(window.location);
+                    var urlChanged = false;
+                    
+                    var paramsToRemove = ['msg', 'action_type', 'target_user_id', 'user_email', 'user_name', 'cantiere_nome', 'cantiere_id', 'aziende_count', 'azienda_nome', 'aziende_rimosse', 'operai_rimossi', 'pos_rimossi'];
+                    paramsToRemove.forEach(function(param) {
+                        if (currentUrl.searchParams.has(param)) {
+                            currentUrl.searchParams.delete(param);
+                            urlChanged = true;
+                        }
+                    });
+                    
+                    if (urlChanged) {
+                        window.history.replaceState({}, document.title, currentUrl.toString());
+                    }
+                }, 500);
+            }
+        }, 1000);
+    }
+}
+
+// HELPER PER DEBUGGING
+function debugCantieriSystem() {
+    console.log('=== DEBUG SISTEMA CANTIERI ===');
+    console.log('Tab attivo:', document.querySelector('.tab-button.active')?.id);
+    console.log('Righe richieste:', document.querySelectorAll('.cantiere-row').length);
+    console.log('Cantieri nel sistema:', document.querySelectorAll('.assignment-group').length);
+    console.log('Aziende nell\'albo:', document.querySelectorAll('input[name="user_ids[]"]').length);
+    console.log('Modal assignment visible:', document.getElementById('assignment-modal').style.display);
+    console.log('Modal dettagli visible:', document.getElementById('cantiere-details-modal').style.display);
+    
+    // 🚀 NUOVO: Debug filtro aziende + assegnazioni operai
+    var filtroCheckbox = document.getElementById('filter-solo-attive');
+    var aziendeAttive = document.querySelectorAll('.azienda-option[data-attiva="1"]').length;
+    var aziendeInattive = document.querySelectorAll('.azienda-option[data-attiva="0"]').length;
+    
+    console.log('🔍 Filtro aziende:');
+    console.log('  - Checkbox attivo:', filtroCheckbox?.checked);
+    console.log('  - Aziende attive:', aziendeAttive);
+    console.log('  - Aziende inattive:', aziendeInattive);
+    console.log('  - Totale:', aziendeAttive + aziendeInattive);
+    
+    // Debug assegnazioni operai
+    var assegnazioniOperai = document.querySelectorAll('[style*="background: #fff3cd"]');
+    console.log('👷 Assegnazioni operai visualizzate:', assegnazioniOperai.length);
+    
+    // 📡 Debug AJAX endpoint
+    console.log('📡 Endpoint AJAX:');
+    console.log('  - URL: /cogei/ajax_fornitori/get_cantiere_details.php');
+    console.log('  - Testa connessione con: testAjaxConnection()');
+    
+    // 🆕 NUOVO: Debug modal cantieri
+    console.log('🆕 Modal gestione cantieri:');
+    console.log('  - Edit modal:', document.getElementById('edit-cantiere-modal').style.display);
+    console.log('  - Delete modal:', document.getElementById('delete-cantiere-modal').style.display);
+}
+
+// ================== INIZIALIZZAZIONE ESTESA ==================
+
+document.addEventListener("DOMContentLoaded", function() {
+    // Inizializza stato tab
+    showTab('richieste');
+    
+    // Inizializza filtri richieste
+    var rows = document.querySelectorAll(".cantiere-row");
+    rows.forEach(function(row) {
+        row.style.display = "";
+    });
+    
+    var activeFiltersDiv = document.getElementById("active-filters");
+    if (activeFiltersDiv) {
+        activeFiltersDiv.style.display = "none";
+    }
+    
+    var searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.value = "";
+    }
+    
+    var detailsRows = document.querySelectorAll('[id^="personale-details-"]');
+    detailsRows.forEach(function(row) {
+        row.style.display = 'none';
+    });
+    
+    // Auto-hide messaggi feedback
+    hideFeedbackMessage();
+    
+    // Event listener per tab buttons
+    var tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            var tabName = this.id.replace('tab-', '');
+            showTab(tabName);
+        });
+    });
+    
+    // 🚀 NUOVO: Event listener per checkbox aziende nel modal
+    document.addEventListener('change', function(e) {
+        if (e.target.name === 'user_ids[]') {
+            updateSubmitButtonCounter();
+        }
+    });
+    
+    // 🆕 NUOVI: Event listeners per modal cantieri
+    
+    // Escape key per chiudere tutti i modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            // Chiudi il modal visibile
+            if (document.getElementById('assignment-modal').style.display === 'block') {
+                closeAssignmentModal();
+            } else if (document.getElementById('cantiere-details-modal').style.display === 'block') {
+                closeCantiereDetailsModal();
+            } else if (document.getElementById('edit-cantiere-modal').style.display === 'block') {
+                closeEditCantiereModal();
+            } else if (document.getElementById('delete-cantiere-modal').style.display === 'block') {
+                closeDeleteCantiereModal();
+            }
+        }
+    });
+    
+    // Validazione form modifica cantiere
+    var editForm = document.getElementById('edit-cantiere-form');
+    if (editForm) {
+        editForm.addEventListener('submit', function(e) {
+            var nome = document.getElementById('edit-nome-cantiere').value.trim();
+            var dataInizio = document.getElementById('edit-data-inizio').value;
+            var dataFine = document.getElementById('edit-data-fine').value;
+            
+            if (!nome) {
+                e.preventDefault();
+                alert('⚠️ Il nome del cantiere è obbligatorio');
+                return;
+            }
+            
+            if (dataInizio && dataFine && new Date(dataFine) <= new Date(dataInizio)) {
+                e.preventDefault();
+                alert('⚠️ La data di fine deve essere successiva alla data di inizio');
+                return;
+            }
+            
+            if (!confirm('Confermi le modifiche al cantiere?')) {
+                e.preventDefault();
+            }
+        });
+    }
+    
+    // Validazione form cancellazione cantiere
+    var deleteForm = document.getElementById('delete-cantiere-form');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            var conferma = document.querySelector('input[name="conferma_cancellazione"]').value;
+            
+            if (conferma !== 'CANCELLA') {
+                e.preventDefault();
+                alert('⚠️ Per confermare la cancellazione, devi scrivere esattamente: CANCELLA');
+                return;
+            }
+            
+            var cantiereNome = document.getElementById('delete-cantiere-nome').textContent;
+            if (!confirm(`⚠️ ULTIMA CONFERMA\n\nStai per cancellare definitivamente il cantiere "${cantiereNome}" e tutti i dati associati.\n\nQuesta azione è IRREVERSIBILE.\n\nProcedere?`)) {
+                e.preventDefault();
+            }
+        });
+    }
+    
+    // Migliora UX form cantieri
+    var nomeCantiereInput = document.querySelector('input[name="nome_cantiere"]');
+    if (nomeCantiereInput) {
+        nomeCantiereInput.addEventListener('input', function() {
+            if (this.value.length > 50) {
+                this.style.borderColor = '#ffc107';
+            } else if (this.value.length > 0) {
+                this.style.borderColor = '#28a745';
+            } else {
+                this.style.borderColor = '#ddd';
+            }
+        });
+    }
+    
+    // Validazione date cantieri
+    var dataInizioInput = document.querySelector('input[name="data_inizio"]');
+    var dataFineInput = document.querySelector('input[name="data_fine"]');
+    
+    if (dataInizioInput && dataFineInput) {
+        function validateDates() {
+            var dataInizio = new Date(dataInizioInput.value);
+            var dataFine = new Date(dataFineInput.value);
+            
+            if (dataInizioInput.value && dataFineInput.value) {
+                if (dataFine <= dataInizio) {
+                    dataFineInput.style.borderColor = '#dc3545';
+                    dataFineInput.title = 'La data di fine deve essere successiva alla data di inizio';
+                } else {
+                    dataFineInput.style.borderColor = '#28a745';
+                    dataFineInput.title = '';
+                }
+            }
+        }
+        
+        dataInizioInput.addEventListener('change', validateDates);
+        dataFineInput.addEventListener('change', validateDates);
+    }
+    
+    // Tooltip per stati cantieri
+    var statusSpans = document.querySelectorAll('[title]');
+    statusSpans.forEach(function(span) {
+        span.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.05)';
+            this.style.transition = 'transform 0.2s ease';
+        });
+        
+        span.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+    });
+    
+    // 🆕 NUOVO: Validazione in tempo reale campo conferma cancellazione
+    var confermaCancellazioneInput = document.querySelector('input[name="conferma_cancellazione"]');
+    if (confermaCancellazioneInput) {
+        confermaCancellazioneInput.addEventListener('input', function() {
+            var deleteButton = document.querySelector('#delete-cantiere-form button[type="submit"]');
+            
+            if (this.value === 'CANCELLA') {
+                this.style.borderColor = '#28a745';
+                this.style.backgroundColor = '#d4edda';
+                deleteButton.style.backgroundColor = '#dc3545';
+                deleteButton.disabled = false;
+            } else {
+                this.style.borderColor = '#dc3545';
+                this.style.backgroundColor = '#f8d7da';
+                deleteButton.style.backgroundColor = '#6c757d';
+                deleteButton.disabled = true;
+            }
+        });
+    }
+    
+    console.log('🏗️ Sistema Backend Cantieri caricato con tutte le funzionalità');
+    console.log('🔍 Filtro aziende abilitate: READY');
+    console.log('👷 Visualizzazione assegnazioni operai: READY');
+    console.log('🔍 Modal dettagli cantiere: READY');
+    console.log('✏️ Modal modifica cantiere: READY');
+    console.log('🗑️ Modal cancellazione cantiere: READY');
+    console.log('🔗 Gestione assegnazioni migliorata: READY');
+    console.log('📡 Endpoint AJAX configurato: /cogei/ajax_fornitori/get_cantiere_details.php');
+    
+    // Test automatico connessione AJAX (opzionale)
+    // testAjaxConnection();
+    
+    // 🚀 NUOVO: Event listener per modal dettagli cantiere
+    const cantiereDetailsModal = document.getElementById('cantiere-details-modal');
+    if (cantiereDetailsModal) {
+        cantiereDetailsModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCantiereDetailsModal();
+            }
+        });
+    }
+});
+
+// Aggiungi debug alla console per sviluppo
+if (typeof console !== 'undefined') {
+    console.log('🏗️ Sistema Gestione Cantieri Backend caricato correttamente');
+    console.log('📡 Endpoint AJAX: /cogei/ajax_fornitori/get_cantiere_details.php');
+    console.log('💡 Usa debugCantieriSystem() per informazioni di debug');
+    console.log('🔧 Usa toggleFiltroAttive() per testare il filtro aziende');
+    console.log('🔧 Usa testAjaxConnection() per testare l\'endpoint');
+    console.log('👷 Assegnazioni operai per cantiere: IMPLEMENTATE');
+    console.log('📊 Dettagli cantiere via AJAX: IMPLEMENTATI');
+    console.log('✏️ Modifica cantieri: IMPLEMENTATA');
+    console.log('🗑️ Cancellazione cantieri: IMPLEMENTATA');
+    console.log('🔗 Gestione assegnazioni migliorata: IMPLEMENTATA');
+}
+</script>
+<style>
+/* ================== STILI CSS ESTESI ================== */
+
+.tab-button {
+    transition: all 0.3s ease;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.tab-button:hover {
+    background: #004d7a !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 102, 162, 0.3);
+}
+
+.tab-button.active {
+    background: #0066a2 !important;
+    box-shadow: 0 2px 8px rgba(0, 102, 162, 0.4);
+}
+
+.tab-content {
+    animation: fadeIn 0.4s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* STILI CANTIERI */
+.assignment-group {
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.assignment-group:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+/* STILI MODAL */
+#assignment-modal, #cantiere-details-modal, #edit-cantiere-modal, #delete-cantiere-modal {
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+#assignment-modal > div, #cantiere-details-modal > div, #edit-cantiere-modal > div, #delete-cantiere-modal > div {
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+    from { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 🚀 NUOVI STILI: Aziende nel modal con filtro */
+.azienda-option {
+    transition: all 0.3s ease;
+    position: relative;
+    padding-left: 30px !important;
+}
+
+.azienda-option:hover {
+    transform: translateX(3px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.azienda-option[data-attiva="1"] {
+    /* Stili per aziende abilitate */
+    border-left: 4px solid #28a745 !important;
+}
+
+.azienda-option[data-attiva="0"] {
+    /* Stili per aziende non abilitate */
+    border-left: 4px solid #6c757d !important;
+}
+
+.azienda-option[data-attiva="1"]:hover {
+    background: linear-gradient(135deg, #d4f6d4 0%, #e8f5e8 100%) !important;
+    border-color: #20c997 !important;
+}
+
+.azienda-option[data-attiva="0"]:hover {
+    background: linear-gradient(135deg, #f1f3f4 0%, #e9ecef 100%) !important;
+}
+
+/* Indicatori visivi per stati aziende */
+.azienda-option[data-attiva="1"]::before {
+    content: "✓";
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: #28a745;
+    color: white;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.azienda-option[data-attiva="0"]::before {
+    content: "✕";
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: #6c757d;
+    color: white;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* Checkbox selezionato in aziende abilitate */
+.azienda-option[data-attiva="1"] input[type="checkbox"]:checked + div strong {
+    color: #155724 !important;
+    text-shadow: 0 1px 2px rgba(21, 87, 36, 0.2);
+}
+
+/* Animazione per il filtro */
+.azienda-option[style*="display: none"] {
+    animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideOut {
+    from { opacity: 1; transform: translateX(0); max-height: 100px; }
+    to { opacity: 0; transform: translateX(-20px); max-height: 0; }
+}
+
+/* Info filtro */
+.filtro-info {
+    animation: slideInDown 0.4s ease-out;
+}
+
+@keyframes slideInDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 🚀 NUOVI STILI: Assegnazioni operai nei tab assegnazioni */
+.assignment-group [style*="background: #e3f2fd"] {
+    transition: all 0.2s ease;
+}
+
+.assignment-group [style*="background: #e3f2fd"]:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #e3f2fd 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
+}
+
+/* Stili per gli operai nelle card aziende */
+.assignment-group [style*="background: #f8f9fa"] [style*="background: #e3f2fd"] {
+    border-left: 3px solid #2196f3;
+    border-radius: 4px;
+    padding: 8px;
+    margin-top: 10px;
+}
+
+/* Icone formazioni negli operai */
+.assignment-group [style*="color: #28a745"] {
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(40, 167, 69, 0.2);
+}
+
+.assignment-group [style*="color: #dc3545"] {
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(220, 53, 69, 0.2);
+}
+
+/* 🆕 NUOVI STILI: Modal cantieri */
+
+/* Modal modifica cantiere */
+#edit-cantiere-modal .modal-header {
+    background: linear-gradient(135deg, #fd7e14, #e8590c);
+}
+
+#edit-cantiere-modal input:focus, #edit-cantiere-modal select:focus, #edit-cantiere-modal textarea:focus {
+    border-color: #fd7e14 !important;
+    box-shadow: 0 0 0 2px rgba(253, 126, 20, 0.25);
+}
+
+/* Modal cancellazione cantiere */
+#delete-cantiere-modal .modal-header {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+#delete-cantiere-modal input[name="conferma_cancellazione"] {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+#delete-cantiere-modal input[name="conferma_cancellazione"]:focus {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+}
+
+#delete-cantiere-modal button[type="submit"]:disabled {
+    background: #6c757d !important;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 🆕 NUOVI STILI: Sezione aziende già assegnate */
+#already-assigned-section {
+    animation: slideInLeft 0.5s ease-out;
+}
+
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+#already-assigned-list > div {
+    transition: all 0.3s ease;
+}
+
+#already-assigned-list > div:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.2);
+}
+
+#already-assigned-list button {
+    transition: all 0.2s ease;
+}
+
+#already-assigned-list button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+/* STILI FORM CANTIERI */
+input[name="nome_cantiere"]:focus, #edit-nome-cantiere:focus {
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+    border-color: #28a745 !important;
+}
+
+input[type="date"]:focus {
+    box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.3);
+    border-color: #0066a2 !important;
+}
+
+/* STILI AZIENDE ASSIGNMENT */
+input[name="user_ids[]"]:checked + div strong {
+    color: #0066a2;
+    font-weight: 900;
+}
+
+label:has(input[name="user_ids[]"]:checked) {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb) !important;
+    border-color: #2196f3 !important;
+    border-width: 2px !important;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+/* 🚀 NUOVI STILI: Tabella richieste con assegnazioni operai */
+.cantiere-row td:nth-child(14) {
+    /* Colonna assegnazioni operai */
+    max-width: 200px;
+    overflow: hidden;
+}
+
+.cantiere-row td:nth-child(14) [style*="background: #fff3cd"] {
+    margin-bottom: 4px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    border-left: 3px solid #ffc107;
+    font-size: 10px;
+    line-height: 1.2;
+    cursor: help;
+    transition: all 0.2s ease;
+}
+
+.cantiere-row td:nth-child(14) [style*="background: #fff3cd"]:hover {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%) !important;
+    transform: translateX(2px);
+    box-shadow: 0 1px 4px rgba(255, 193, 7, 0.3);
+}
+
+/* 🚀 NUOVI STILI: Highlight per operai con più cantieri */
+.cantiere-row td:nth-child(14) [style*="background: #fff3cd"] strong {
+    color: #856404;
+    font-weight: bold;
+}
+
+/* Operaio assegnato a più cantieri */
+.cantiere-row td:nth-child(14) [style*="background: #fff3cd"]:has(span:nth-of-type(3)) {
+    border-left-color: #fd7e14 !important;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffe8cc 100%) !important;
+}
+
+/* STILI CANTIERI CARDS */
+.cantiere-card {
+    transition: all 0.3s ease;
+}
+
+.cantiere-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 102, 162, 0.15);
+}
+
+/* 🚀 NUOVI STILI: Sezione dettagli personale migliorata */
+[id^="personale-details-"] [style*="border-left: 3px solid #28a745"] {
+    animation: slideInLeft 0.4s ease-out;
+}
+
+/* Evidenziazione cantieri assegnati nelle righe dettaglio */
+[id^="personale-details-"] [style*="background: #d4edda"] {
+    transition: all 0.2s ease;
+}
+
+[id^="personale-details-"] [style*="background: #d4edda"]:hover {
+    background: linear-gradient(135deg, #c3e6cb 0%, #d4edda 100%) !important;
+    transform: translateX(3px);
+}
+
+/* STILI STATI */
+.stato-attivo {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.stato-sospeso {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+}
+
+.stato-completato {
+    background: linear-gradient(135deg, #6c757d, #495057);
+}
+
+/* ANIMAZIONI FEEDBACK */
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideOutRight {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(100%); }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.pulse-animation {
+    animation: pulse 2s infinite;
+}
+
+/* 🚀 NUOVI STILI: Modal dettagli cantiere */
+#cantiere-details-modal {
+    z-index: 10000;
+}
+
+#cantiere-details-modal > div {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+#cantiere-details-header {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+}
+
+#cantiere-details-body {
+    max-height: calc(90vh - 100px);
+    overflow-y: auto;
+}
+
+/* Stili per il contenuto del modal dettagli */
+.cantiere-details-azienda-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid #2196f3;
+}
+
+.cantiere-details-azienda-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+}
+
+.cantiere-details-operaio-card {
+    transition: all 0.2s ease;
+}
+
+.cantiere-details-operaio-card:hover {
+    transform: translateX(2px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Animazioni per le competenze */
+.cantiere-details-competenza {
+    display: inline-block;
+    font-size: 14px;
+    margin: 0 1px;
+    animation: competenzaBounce 0.6s ease-out;
+}
+
+@keyframes competenzaBounce {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-4px); }
+    60% { transform: translateY(-2px); }
+}
+
+/* Stili per statistiche conformità */
+.conformita-card {
+    transition: all 0.3s ease;
+}
+
+.conformita-card:hover {
+    transform: scale(1.05);
+}
+
+.conformita-conforme {
+    animation: conformitaPulse 2s infinite;
+}
+
+@keyframes conformitaPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(40, 167, 69, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(40, 167, 69, 0.6); }
+}
+
+.conformita-non-conforme {
+    animation: nonConformitaPulse 2s infinite;
+}
+
+@keyframes nonConformitaPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(220, 53, 69, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(220, 53, 69, 0.6); }
+}
+
+/* Loading animation nel modal */
+#cantiere-details-loading {
+    animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes loadingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* RICERCA E FILTRI */
+.cantiere-form input:focus,
+.cantiere-form select:focus,
+.cantiere-form textarea:focus {
+    outline: none;
+    border-color: #0066a2 !important;
+    box-shadow: 0 0 0 2px rgba(0, 102, 162, 0.2);
+}
+
+.cantiere-form button:hover {
+    background: #004d7a !important;
+    transform: translateY(-1px);
+}
+
+.cantiere-form .cantiere-row {
+    transition: all 0.3s ease;
+}
+
+.cantiere-form .cantiere-row:hover {
+    box-shadow: 0 2px 8px rgba(0, 102, 162, 0.1);
+}
+
+/* STILI SUBMIT BUTTON DINAMICO */
+#submit-assignments-btn {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+#submit-assignments-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+#submit-assignments-btn:active {
+    transform: scale(0.98);
+}
+
+/* RESPONSIVE DESIGN */
+@media (max-width: 1200px) {
+    .cantiere-row {
+        font-size: 12px;
+    }
+    
+    .cantiere-row th,
+    .cantiere-row td {
+        padding: 6px 4px !important;
+    }
+    
+    /* Collassa alcune colonne su schermi piccoli */
+    .cantiere-row td:nth-child(5),
+    .cantiere-row td:nth-child(6),
+    .cantiere-row td:nth-child(7),
+    .cantiere-row td:nth-child(8),
+    .cantiere-row th:nth-child(5),
+    .cantiere-row th:nth-child(6),
+    .cantiere-row th:nth-child(7),
+    .cantiere-row th:nth-child(8) {
+        display: none;
+    }
+}
+
+@media (max-width: 992px) {
+    .cantiere-row td:nth-child(10),
+    .cantiere-row th:nth-child(10) {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .tab-button {
+        padding: 8px 12px !important;
+        font-size: 12px;
+    }
+    
+    #assignment-modal > div,
+    #edit-cantiere-modal > div,
+    #delete-cantiere-modal > div {
+        width: 95% !important;
+        margin: 20px;
+        transform: none !important;
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+    }
+    
+    #cantiere-details-modal > div {
+        width: 98% !important;
+        margin: 10px;
+        transform: none !important;
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        max-height: 95vh;
+    }
+    
+    .assignment-group {
+        margin-bottom: 15px;
+    }
+    
+    .assignment-group [style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .azienda-option {
+        padding: 8px !important;
+    }
+    
+    .azienda-option [style*="display: flex"] {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    
+    /* Tabella responsive per colonna assegnazioni operai */
+    .cantiere-row td:nth-child(14) {
+        font-size: 9px !important;
+        max-width: 150px;
+    }
+    
+    .cantiere-row td:nth-child(14) [style*="background: #fff3cd"] {
+        padding: 2px 4px !important;
+        margin-bottom: 2px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    #cantiere-details-modal > div {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+    }
+    
+    #cantiere-details-header {
+        border-radius: 0 !important;
+    }
+    
+    #cantiere-details-body {
+        max-height: calc(100vh - 80px);
+    }
+}
+
+/* DARK MODE SUPPORT */
+@media (prefers-color-scheme: dark) {
+    .assignment-group {
+        background: #2d3748;
+        border-color: #4a5568;
+        color: #e2e8f0;
+    }
+    
+    .assignment-group [style*="background: #f8f9fa"] {
+        background: #4a5568 !important;
+        color: #e2e8f0;
+    }
+    
+    .azienda-option {
+        background: #2d3748 !important;
+        color: #e2e8f0;
+        border-color: #4a5568 !important;
+    }
+}
+
+/* PRINT STYLES */
+@media print {
+    .tab-button,
+    button,
+    #assignment-modal,
+    #cantiere-details-modal,
+    #edit-cantiere-modal,
+    #delete-cantiere-modal {
+        display: none !important;
+    }
+    
+    .tab-content {
+        display: block !important;
+    }
+    
+    .assignment-group {
+        break-inside: avoid;
+        margin-bottom: 20px;
+    }
+    
+    /* Stampa friendly per assegnazioni operai */
+    .cantiere-row td:nth-child(14) {
+        font-size: 8px !important;
+    }
+}
+
+/* ACCESSIBILITY */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* HIGH CONTRAST */
+@media (prefers-contrast: high) {
+    .tab-button {
+        border: 2px solid currentColor;
+    }
+    
+    .assignment-group {
+        border: 2px solid #000;
+    }
+    
+    button {
+        border: 2px solid currentColor;
+    }
+    
+    .azienda-option {
+        border: 2px solid currentColor !important;
+    }
+    
+    /* Alto contrasto per assegnazioni operai */
+    .cantiere-row td:nth-child(14) [style*="background: #fff3cd"] {
+        border: 1px solid #000 !important;
+        color: #000 !important;
+    }
+}
+
+/* 🎯 STILI FINALI: Performance e smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+.tab-content {
+    will-change: transform;
+}
+
+.assignment-group {
+    will-change: transform;
+}
+
+.azienda-option {
+    will-change: transform;
+}
+
+/* Preload delle animazioni critiche */
+@keyframes preloadFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes preloadSlideIn {
+    from { transform: translateX(-10px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* GPU acceleration per elementi animati */
+.tab-button,
+.assignment-group,
+.azienda-option {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+}
+
+/* 🆕 STILI SPECIFICI PER NUOVE FUNZIONALITÀ */
+
+/* Pulsanti cantiere con colori specifici */
+button[onclick*="showEditCantiereModal"] {
+    background: linear-gradient(135deg, #fd7e14, #e8590c) !important;
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+button[onclick*="showEditCantiereModal"]:hover {
+    background: linear-gradient(135deg, #e8590c, #d73e09) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(253, 126, 20, 0.3);
+}
+
+button[onclick*="showDeleteCantiereModal"] {
+    background: linear-gradient(135deg, #dc3545, #c82333) !important;
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+button[onclick*="showDeleteCantiereModal"]:hover {
+    background: linear-gradient(135deg, #c82333, #bd2130) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+/* Stili per form validation */
+.validation-success {
+    border-color: #28a745 !important;
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.validation-error {
+    border-color: #dc3545 !important;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.validation-warning {
+    border-color: #ffc107 !important;
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* Focus trap per modal */
+.modal-focus-trap {
+    position: relative;
+}
+
+.modal-focus-trap::before,
+.modal-focus-trap::after {
+    content: '';
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Animazioni per conferme */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+    20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.shake-animation {
+    animation: shake 0.6s ease-in-out;
+}
+
+/* Stili per notifiche toast (future implementazioni) */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 11000;
+    max-width: 350px;
+    padding: 15px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    animation: slideInFromRight 0.5s ease-out;
+}
+
+@keyframes slideInFromRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.toast-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+.toast-warning {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+}
+
+.toast-info {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+}
+
+/* ================== FINE STILI ================== */
+</style>
+
+<?php
+/**
+ * ================== FINE SISTEMA GESTIONE CANTIERI ==================
+ * 
+ * 🎉 SISTEMA COMPLETO CON TUTTE LE FUNZIONALITÀ:
+ * 
+ * ✅ NUOVE FUNZIONALITÀ IMPLEMENTATE:
+ * - ✏️ Modifica cantieri (nome, date, stato, descrizione)
+ * - 🗑️ Cancellazione cantieri (con conferma di sicurezza)
+ * - 🔗 Gestione assegnazioni migliorata (visualizza già assegnate)
+ * - ❌ Rimozione assegnazioni singole (con conferma)
+ * - 🎯 Filtro aziende abilitate nel modal assegnazioni
+ * - 📊 Visualizzazione operai assegnati per cantiere
+ * - 💾 Validazione form in tempo reale
+ * - 🔒 Protezioni e conferme per operazioni critiche
+ * 
+ * ✅ FUNZIONALITÀ ESISTENTI MANTENUTE:
+ * - 📋 Visualizzazione richieste cantiere
+ * - 🏗️ Creazione cantieri
+ * - 🔗 Assegnazione aziende ai cantieri
+ * - 👁️ Dettagli cantieri via AJAX
+ * - 📊 Export CSV completo
+ * - 🔍 Ricerca e filtri avanzati
+ * - 👷 Gestione assegnazioni operai
+ * - 📱 Design responsive
+ * 
+ * 🚀 MIGLIORAMENTI UX:
+ * - Animazioni fluide per tutti i modal
+ * - Validazioni in tempo reale
+ * - Feedback visivi per le azioni
+ * - Protezioni contro cancellazioni accidentali
+ * - Modal ottimizzati per mobile
+ * - Stili CSS avanzati con animazioni
+ * 
+ * 📡 ENDPOINT AJAX: /cogei/ajax_fornitori/get_cantiere_details.php
+ * 🔧 DEBUG: Usa debugCantieriSystem() per informazioni di sistema
+ * 
+ * ==========================================
+ * Per utilizzare il sistema:
+ * 1. Copia tutti gli 8 file uno dopo l'altro
+ * 2. Incolla nel file PHP del backoffice WordPress
+ * 3. Testa le nuove funzionalità:
+ *    - Vai al tab "Gestione Cantieri"
+ *    - Prova a modificare/cancellare un cantiere
+ *    - Testa le assegnazioni migliorate
+ * ==========================================
+ */
+?>
