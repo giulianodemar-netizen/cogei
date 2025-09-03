@@ -139,7 +139,7 @@ try {
         
     }
     // ELIMINAZIONE FILE FORMAZIONE PERSONALE
-    elseif (in_array($file_type, ['formazione_antincendio', 'formazione_primo_soccorso', 'formazione_preposti']) && $persona_index !== null) {
+    elseif (in_array($file_type, ['formazione_antincendio', 'formazione_primo_soccorso', 'formazione_preposti', 'formazione_lavori_quota', 'formazione_dpi_terza_categoria', 'formazione_ambienti_confinati']) && $persona_index !== null) {
         
         $field_name = $file_type . '_file';
         

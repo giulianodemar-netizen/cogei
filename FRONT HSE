@@ -53,6 +53,9 @@ function hse_createCantiereTablesIfNotExists() {
         formazione_antincendio_file varchar(255),
         formazione_primo_soccorso_file varchar(255),
         formazione_preposti_file varchar(255),
+        formazione_lavori_quota_file varchar(255),
+        formazione_dpi_terza_categoria_file varchar(255),
+        formazione_ambienti_confinati_file varchar(255),
         PRIMARY KEY (id),
         KEY richiesta_id (richiesta_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
@@ -216,6 +219,22 @@ function hse_migrateCantiereDatabase() {
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'idoneita_sanitaria_file'");
     if (empty($columns)) {
         $wpdb->query("ALTER TABLE $table_personale ADD COLUMN idoneita_sanitaria_file varchar(255) AFTER idoneita_sanitaria_scadenza");
+    }
+    
+    // 🚀 NUOVE COLONNE: Ulteriori documenti di formazione
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_lavori_quota_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_lavori_quota_file varchar(255) AFTER formazione_preposti_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_dpi_terza_categoria_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_dpi_terza_categoria_file varchar(255) AFTER formazione_lavori_quota_file");
+    }
+    
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_file varchar(255) AFTER formazione_dpi_terza_categoria_file");
     }
     
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'pos_file'");
@@ -892,6 +911,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             }
                         } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_preposti_file'])) {
                             $hse_persona_data['formazione_preposti_file'] = $hse_existing_personale[$i]['formazione_preposti_file'];
+                        }
+                        
+                        // 🚀 NUOVI: Upload ulteriori documenti formazione
+                        if (!empty($_FILES['hse_formazione_lavori_quota_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_lavori_quota_' . $i], $hse_current_user_id, 'formazione_lavori_quota_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_lavori_quota_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_lavori_quota_file'])) {
+                            $hse_persona_data['formazione_lavori_quota_file'] = $hse_existing_personale[$i]['formazione_lavori_quota_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_formazione_dpi_terza_categoria_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_dpi_terza_categoria_' . $i], $hse_current_user_id, 'formazione_dpi_terza_categoria_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_dpi_terza_categoria_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_dpi_terza_categoria_file'])) {
+                            $hse_persona_data['formazione_dpi_terza_categoria_file'] = $hse_existing_personale[$i]['formazione_dpi_terza_categoria_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_formazione_ambienti_confinati_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_ambienti_confinati_' . $i], $hse_current_user_id, 'formazione_ambienti_confinati_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['formazione_ambienti_confinati_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_ambienti_confinati_file'])) {
+                            $hse_persona_data['formazione_ambienti_confinati_file'] = $hse_existing_personale[$i]['formazione_ambienti_confinati_file'];
                         }
                         
                         // Upload file UNILAV
@@ -1722,6 +1769,75 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
         echo '</div>'; // Fine hse_formazione_section
         
+        // 🚀 NUOVA SEZIONE: Ulteriori documenti di formazione - layout 3 colonne orizzontali con pulsanti elimina
+        echo '<div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">';
+        echo '<h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>';
+        echo '<div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
+        
+        // Formazione Lavori in Quota
+        echo '<div class="hse_lavori_quota_field">';
+        echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
+        if (!empty($hse_persona['formazione_lavori_quota_file'])) {
+            echo '<div class="hse_lavori_quota_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🏗️ File Lavori in Quota Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_lavori_quota_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_lavori_quota\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_formazione_lavori_quota_' . $index . '" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        
+        // Formazione DPI 3° Categoria
+        echo '<div class="hse_dpi_terza_categoria_field">';
+        echo '<label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>';
+        if (!empty($hse_persona['formazione_dpi_terza_categoria_file'])) {
+            echo '<div class="hse_dpi_terza_categoria_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🦺 File DPI 3° Cat. Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_dpi_terza_categoria\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_formazione_dpi_terza_categoria_' . $index . '" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        
+        // Formazione Ambienti Confinati
+        echo '<div class="hse_ambienti_confinati_field">';
+        echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
+        if (!empty($hse_persona['formazione_ambienti_confinati_file'])) {
+            echo '<div class="hse_ambienti_confinati_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_file_success_info" style="flex: 1;">';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🕳️ File Amb. Confinati Caricato</div>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_ambienti_confinati_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_ambienti_confinati\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_formazione_ambienti_confinati_' . $index . '" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_ulteriori_formazione_grid
+        echo '<small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>';
+        echo '</div>'; // Fine hse_ulteriori_formazione_section
+        
         echo '</div>'; // Fine hse_persona_accordion_content
         echo '</div>'; // Fine hse_personale_row accordion
     }
@@ -1828,6 +1944,30 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '</div>'; // Fine hse_formazione_grid
     echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
     echo '</div>'; // Fine hse_formazione_section
+    
+    // 🚀 NUOVA SEZIONE: Ulteriori documenti di formazione default - layout 3 colonne orizzontali
+    echo '<div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">';
+    echo '<h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>';
+    echo '<div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
+    
+    echo '<div class="hse_lavori_quota_field">';
+    echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
+    echo '<input type="file" name="hse_formazione_lavori_quota_0" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_dpi_terza_categoria_field">';
+    echo '<label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>';
+    echo '<input type="file" name="hse_formazione_dpi_terza_categoria_0" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_ambienti_confinati_field">';
+    echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
+    echo '<input type="file" name="hse_formazione_ambienti_confinati_0" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '</div>'; // Fine hse_ulteriori_formazione_grid
+    echo '<small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>';
+    echo '</div>'; // Fine hse_ulteriori_formazione_section
     
     echo '</div>'; // Fine hse_persona_accordion_content
     echo '</div>'; // Fine hse_personale_row accordion
@@ -3744,6 +3884,25 @@ function hse_addPersona() {
                     </div>
                 </div>
                 <small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l'assegnazione ai cantieri</small>
+            </div>
+            
+            <div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">
+                <h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>
+                <div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="hse_lavori_quota_field">
+                        <label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>
+                        <input type="file" name="hse_formazione_lavori_quota_${hse_newIndex}" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_dpi_terza_categoria_field">
+                        <label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>
+                        <input type="file" name="hse_formazione_dpi_terza_categoria_${hse_newIndex}" accept=".pdf" class="hse_dpi_terza_categoria_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_ambienti_confinati_field">
+                        <label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>
+                        <input type="file" name="hse_formazione_ambienti_confinati_${hse_newIndex}" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+                <small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>
             </div>
         </div>
     `;
