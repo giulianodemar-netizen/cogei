@@ -58,6 +58,40 @@ function hse_createCantiereTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_personale);
     
+    // 🚛 NUOVA TABELLA: AUTOMEZZI
+    $table_cantiere_automezzi = $wpdb->prefix . 'cantiere_automezzi';
+    $sql_cantiere_automezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        descrizione_automezzo varchar(255) NOT NULL,
+        targa varchar(8) NOT NULL,
+        user_id int(11) NOT NULL,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id),
+        KEY user_id (user_id),
+        KEY targa (targa)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_automezzi);
+    
+    // 🔧 NUOVA TABELLA: ATTREZZI
+    $table_cantiere_attrezzi = $wpdb->prefix . 'cantiere_attrezzi';
+    $sql_cantiere_attrezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_attrezzi (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        descrizione_attrezzo varchar(255) NOT NULL,
+        data_revisione date,
+        user_id int(11) NOT NULL,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id),
+        KEY user_id (user_id),
+        KEY data_revisione (data_revisione)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_attrezzi);
+    
     $table_cantieri = $wpdb->prefix . 'cantieri';
     $sql_cantieri = "CREATE TABLE IF NOT EXISTS $table_cantieri (
         id int(11) NOT NULL AUTO_INCREMENT,
@@ -102,6 +136,38 @@ function hse_createCantiereTablesIfNotExists() {
         KEY operaio_id (operaio_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_operai);
+    
+    // 🚛 NUOVA TABELLA: ASSEGNAZIONI AUTOMEZZI AI CANTIERI
+    $table_cantiere_automezzi_assegnazioni = $wpdb->prefix . 'cantiere_automezzi_assegnazioni';
+    $sql_cantiere_automezzi_assegnazioni = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi_assegnazioni (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        automezzo_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_automezzo (cantiere_id, user_id, automezzo_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY automezzo_id (automezzo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_automezzi_assegnazioni);
+    
+    // 🔧 NUOVA TABELLA: ASSEGNAZIONI ATTREZZI AI CANTIERI
+    $table_cantiere_attrezzi_assegnazioni = $wpdb->prefix . 'cantiere_attrezzi_assegnazioni';
+    $sql_cantiere_attrezzi_assegnazioni = "CREATE TABLE IF NOT EXISTS $table_cantiere_attrezzi_assegnazioni (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        attrezzo_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_attrezzo (cantiere_id, user_id, attrezzo_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY attrezzo_id (attrezzo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_attrezzi_assegnazioni);
     
     $table_cantiere_pos = $wpdb->prefix . 'cantiere_pos_files';
     $sql_cantiere_pos = "CREATE TABLE IF NOT EXISTS $table_cantiere_pos (
@@ -261,6 +327,103 @@ function hse_getOperaiAssegnatiCantiere($cantiere_id, $user_id) {
     ", $cantiere_id, $user_id), ARRAY_A);
 }
 
+// 🚛 NUOVE FUNZIONI PER AUTOMEZZI
+
+function hse_getAutomezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_automezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_automezzo, a.targa
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
+        WHERE aa.cantiere_id = %d AND aa.user_id = %d
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getAutomezzoCantieriAssegnazioni($automezzo_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantieri c ON aa.cantiere_id = c.id
+        WHERE aa.automezzo_id = %d AND aa.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $automezzo_id, $user_id), ARRAY_A);
+}
+
+function hse_validateTargaItaliana($targa) {
+    // Formato italiano: 2 lettere + 3 numeri + 2 lettere (AA123BB)
+    $pattern = '/^[A-Z]{2}[0-9]{3}[A-Z]{2}$/';
+    return preg_match($pattern, strtoupper($targa));
+}
+
+// 🔧 NUOVE FUNZIONI PER ATTREZZI
+
+function hse_getAttrezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_attrezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAttrezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, a.descrizione_attrezzo, a.data_revisione
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantiere_attrezzi a ON at.attrezzo_id = a.id
+        WHERE at.cantiere_id = %d AND at.user_id = %d
+        ORDER BY at.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getAttrezzoCantieriAssegnazioni($attrezzo_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantieri c ON at.cantiere_id = c.id
+        WHERE at.attrezzo_id = %d AND at.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $attrezzo_id, $user_id), ARRAY_A);
+}
+
+function hse_checkAttrezzoScadenze($attrezzo) {
+    $warnings = array();
+    $oggi = new DateTime();
+    
+    if (!empty($attrezzo['data_revisione'])) {
+        $revisione_scadenza = new DateTime($attrezzo['data_revisione']);
+        $diff_giorni = $oggi->diff($revisione_scadenza)->days;
+        $is_scaduto = $oggi > $revisione_scadenza;
+        
+        if ($is_scaduto) {
+            $warnings[] = "🚨 Revisione scaduta da $diff_giorni giorni";
+        } elseif ($diff_giorni <= 30) {
+            $warnings[] = "⚠️ Revisione scade tra $diff_giorni giorni";
+        }
+    }
+    
+    return $warnings;
+}
+
 function hse_getPosFileByCantiere($cantiere_id, $user_id) {
     global $wpdb;
     
@@ -355,7 +518,15 @@ function hse_getCantiereData($user_id) {
             $richiesta['id']
         ), ARRAY_A);
         
+        // 🚛 NUOVO: Carica automezzi
+        $automezzi = hse_getAutomezziByRichiestaId($richiesta['id']);
+        
+        // 🔧 NUOVO: Carica attrezzi
+        $attrezzi = hse_getAttrezziByRichiestaId($richiesta['id']);
+        
         $richiesta['personale'] = $personale;
+        $richiesta['automezzi'] = $automezzi;
+        $richiesta['attrezzi'] = $attrezzi;
     }
     
     return $richiesta;
@@ -396,6 +567,57 @@ function hse_validatePersonaleData($personale_data) {
             $idoneita_scadenza = DateTime::createFromFormat('Y-m-d', $persona['idoneita_sanitaria_scadenza']);
             if (!$idoneita_scadenza) {
                 $errors[] = "Data scadenza idoneità sanitaria non valida per il personale $persona_num";
+            }
+        }
+    }
+    
+    return $errors;
+}
+
+// 🚛 NUOVA FUNZIONE: Validazione dati automezzi
+function hse_validateAutomezziData($automezzi_data) {
+    $errors = array();
+    
+    foreach ($automezzi_data as $index => $automezzo) {
+        $automezzo_num = $index + 1;
+        
+        if (empty($automezzo['descrizione_automezzo'])) {
+            $errors[] = "Descrizione automezzo $automezzo_num è obbligatoria";
+        }
+        
+        if (empty($automezzo['targa'])) {
+            $errors[] = "Targa automezzo $automezzo_num è obbligatoria";
+        } elseif (!hse_validateTargaItaliana($automezzo['targa'])) {
+            $errors[] = "Targa automezzo $automezzo_num non valida. Formato richiesto: AA123BB (2 lettere + 3 numeri + 2 lettere)";
+        }
+    }
+    
+    // Controlla targhe duplicate
+    $targhe = array_map(function($a) { return strtoupper(trim($a['targa'])); }, $automezzi_data);
+    $targhe_unique = array_unique($targhe);
+    
+    if (count($targhe) !== count($targhe_unique)) {
+        $errors[] = "Trovate targhe duplicate nell'elenco automezzi";
+    }
+    
+    return $errors;
+}
+
+// 🔧 NUOVA FUNZIONE: Validazione dati attrezzi
+function hse_validateAttrezziData($attrezzi_data) {
+    $errors = array();
+    
+    foreach ($attrezzi_data as $index => $attrezzo) {
+        $attrezzo_num = $index + 1;
+        
+        if (empty($attrezzo['descrizione_attrezzo'])) {
+            $errors[] = "Descrizione attrezzo $attrezzo_num è obbligatoria";
+        }
+        
+        if (!empty($attrezzo['data_revisione'])) {
+            $revisione_data = DateTime::createFromFormat('Y-m-d', $attrezzo['data_revisione']);
+            if (!$revisione_data) {
+                $errors[] = "Data revisione non valida per l'attrezzo $attrezzo_num";
             }
         }
     }
