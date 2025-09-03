@@ -2999,6 +2999,96 @@ function hse_validateScadenze(personaIndex) {
         }
     }
 }
+
+// Funzione AJAX per eliminazione file ulteriori documenti di formazione
+function hse_eliminaFile(fileName, fieldType, personaId, buttonElement) {
+    const fileNames = {
+        'formazione_lavori_quota_file': 'Formazione Lavori in Quota',
+        'formazione_dpi_terza_categoria_file': 'Formazione uso DPI 3° categoria',
+        'formazione_ambienti_confinati_file': 'Formazione Lavori in Ambienti Confinati'
+    };
+    
+    const displayName = fileNames[fieldType] || fieldType;
+    
+    if (confirm(`Sei sicuro di voler eliminare il file ${displayName}?\n\nQuesta operazione non può essere annullata.`)) {
+        
+        // Trova l'indice della persona dal DOM
+        const personaRow = buttonElement.closest('.hse_personale_row');
+        const personaIndex = personaRow ? parseInt(personaRow.getAttribute('data-index')) : 0;
+        
+        // Rimuovi il suffisso '_file' per il tipo di campo
+        const baseFieldType = fieldType.replace('_file', '');
+        
+        // Disabilita il pulsante durante la richiesta
+        buttonElement.disabled = true;
+        buttonElement.innerHTML = '⏳ Eliminando...';
+        
+        fetch(hse_ajaxBaseUrl + 'elimina_file.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                'action': 'elimina_file',
+                'file_type': baseFieldType,
+                'persona_index': personaIndex,
+                'nonce': hse_nonce
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Trova e rimuovi la sezione di successo
+                const successSection = buttonElement.closest('.hse_' + baseFieldType.split('_').pop() + '_success') ||
+                                     buttonElement.closest('[class*="success"]');
+                
+                if (successSection) {
+                    successSection.style.animation = 'hse_fadeOut 0.3s ease-in forwards';
+                    setTimeout(() => {
+                        successSection.remove();
+                        
+                        // Aggiungi campo di input al posto del file eliminato
+                        const fieldContainer = successSection.parentNode || 
+                                             personaRow.querySelector('.' + baseFieldType.replace(/_/g, '_') + '_field');
+                        
+                        if (fieldContainer) {
+                            const inputElement = document.createElement('input');
+                            inputElement.type = 'file';
+                            inputElement.name = 'hse_' + baseFieldType + '_' + personaIndex;
+                            inputElement.accept = '.pdf';
+                            inputElement.className = 'hse_' + baseFieldType.split('_').pop() + '_input';
+                            inputElement.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;';
+                            
+                            fieldContainer.appendChild(inputElement);
+                        }
+                    }, 300);
+                }
+                
+                hse_showToast(`✅ File ${displayName} eliminato con successo.`, 'success');
+                
+                // Aggiorna i dati esistenti se presenti
+                if (hse_existingPersonaleData && hse_existingPersonaleData[personaIndex]) {
+                    hse_existingPersonaleData[personaIndex][fieldType] = '';
+                }
+                
+            } else {
+                hse_showToast(`❌ Errore: ${data.message}`, 'error');
+                
+                // Ripristina il pulsante
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '🗑️ Elimina';
+            }
+        })
+        .catch(error => {
+            console.error('Errore eliminazione file:', error);
+            hse_showToast('❌ Errore di connessione. Riprova.', 'error');
+            
+            // Ripristina il pulsante
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '🗑️ Elimina';
+        });
+    }
+}
 </script>
 <script>
 // Gestione Accordion Principale
