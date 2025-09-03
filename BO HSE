@@ -87,7 +87,73 @@ function createCantieriTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_pos);
     
-    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos");
+    // 🚛 NUOVA TABELLA: AUTOMEZZI
+    $table_cantiere_automezzi = $wpdb->prefix . 'cantiere_automezzi';
+    $sql_cantiere_automezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        descrizione_automezzo varchar(255) NOT NULL,
+        targa varchar(8) NOT NULL,
+        user_id int(11) NOT NULL,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id),
+        KEY user_id (user_id),
+        KEY targa (targa)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_automezzi);
+    
+    // 🔧 NUOVA TABELLA: ATTREZZI
+    $table_cantiere_attrezzi = $wpdb->prefix . 'cantiere_attrezzi';
+    $sql_cantiere_attrezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_attrezzi (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        descrizione_attrezzo varchar(255) NOT NULL,
+        data_revisione date,
+        user_id int(11) NOT NULL,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id),
+        KEY user_id (user_id),
+        KEY data_revisione (data_revisione)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_attrezzi);
+    
+    // 🚛 NUOVA TABELLA: ASSEGNAZIONI AUTOMEZZI AI CANTIERI
+    $table_cantiere_automezzi_assegnazioni = $wpdb->prefix . 'cantiere_automezzi_assegnazioni';
+    $sql_cantiere_automezzi_assegnazioni = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi_assegnazioni (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        automezzo_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_automezzo (cantiere_id, user_id, automezzo_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY automezzo_id (automezzo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_automezzi_assegnazioni);
+    
+    // 🔧 NUOVA TABELLA: ASSEGNAZIONI ATTREZZI AI CANTIERI
+    $table_cantiere_attrezzi_assegnazioni = $wpdb->prefix . 'cantiere_attrezzi_assegnazioni';
+    $sql_cantiere_attrezzi_assegnazioni = "CREATE TABLE IF NOT EXISTS $table_cantiere_attrezzi_assegnazioni (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        attrezzo_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_attrezzo (cantiere_id, user_id, attrezzo_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY attrezzo_id (attrezzo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_attrezzi_assegnazioni);
+    
+    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni");
 }
 
 // Esegui creazione tabelle
@@ -548,6 +614,185 @@ function getOperaiAssegnatiCantiere($cantiere_id, $user_id = null) {
         WHERE oa.cantiere_id = %d $where_user
         ORDER BY oa.data_assegnazione DESC
     ", $cantiere_id), ARRAY_A);
+}
+
+// 🚛 NUOVE FUNZIONI PER AUTOMEZZI
+
+function getAutomezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_automezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function getAutomezziAssegnatiCantiere($cantiere_id, $user_id = null) {
+    global $wpdb;
+    
+    $where_user = $user_id ? $wpdb->prepare(" AND aa.user_id = %d", $user_id) : "";
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_automezzo, a.targa
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
+        WHERE aa.cantiere_id = %d $where_user
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id), ARRAY_A);
+}
+
+function getAutomezzoCantieriAssegnazioni($automezzo_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantieri c ON aa.cantiere_id = c.id
+        WHERE aa.automezzo_id = %d AND aa.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $automezzo_id, $user_id), ARRAY_A);
+}
+
+function validateTargaItaliana($targa) {
+    // Formato italiano: 2 lettere + 3 numeri + 2 lettere (AA123BB)
+    $pattern = '/^[A-Z]{2}[0-9]{3}[A-Z]{2}$/';
+    return preg_match($pattern, strtoupper($targa));
+}
+
+// 🔧 NUOVE FUNZIONI PER ATTREZZI
+
+function getAttrezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_attrezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function getAttrezziAssegnatiCantiere($cantiere_id, $user_id = null) {
+    global $wpdb;
+    
+    $where_user = $user_id ? $wpdb->prepare(" AND at.user_id = %d", $user_id) : "";
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, a.descrizione_attrezzo, a.data_revisione
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantiere_attrezzi a ON at.attrezzo_id = a.id
+        WHERE at.cantiere_id = %d $where_user
+        ORDER BY at.data_assegnazione DESC
+    ", $cantiere_id), ARRAY_A);
+}
+
+function getAttrezzoCantieriAssegnazioni($attrezzo_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantieri c ON at.cantiere_id = c.id
+        WHERE at.attrezzo_id = %d AND at.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $attrezzo_id, $user_id), ARRAY_A);
+}
+
+function checkAttrezzoScadenze($attrezzo) {
+    $warnings = array();
+    $oggi = new DateTime();
+    
+    if (!empty($attrezzo['data_revisione'])) {
+        $revisione_scadenza = new DateTime($attrezzo['data_revisione']);
+        $diff_giorni = $oggi->diff($revisione_scadenza)->days;
+        $is_scaduto = $oggi > $revisione_scadenza;
+        
+        if ($is_scaduto) {
+            $warnings[] = "🚨 Revisione scaduta da $diff_giorni giorni";
+        } elseif ($diff_giorni <= 30) {
+            $warnings[] = "⚠️ Revisione scade tra $diff_giorni giorni";
+        }
+    }
+    
+    return $warnings;
+}
+
+// 🚀 FUNZIONI HELPER PER GESTIONE ASSEGNAZIONI AUTOMEZZI E ATTREZZI
+
+function getAutomezziAssegnazioniByUser($user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_automezzo, a.targa, c.nome as cantiere_nome, c.id as cantiere_id
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
+        JOIN {$wpdb->prefix}cantieri c ON aa.cantiere_id = c.id
+        WHERE aa.user_id = %d
+        ORDER BY c.nome ASC, a.descrizione_automezzo ASC
+    ", $user_id), ARRAY_A);
+}
+
+function getAttrezziAssegnazioniByUser($user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, a.descrizione_attrezzo, a.data_revisione, c.nome as cantiere_nome, c.id as cantiere_id
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantiere_attrezzi a ON at.attrezzo_id = a.id
+        JOIN {$wpdb->prefix}cantieri c ON at.cantiere_id = c.id
+        WHERE at.user_id = %d
+        ORDER BY c.nome ASC, a.descrizione_attrezzo ASC
+    ", $user_id), ARRAY_A);
+}
+
+function groupAutomezziAssegnazioniByAutomezzo($assegnazioni) {
+    $automezzi_grouped = array();
+    
+    foreach ($assegnazioni as $assegnazione) {
+        $automezzo_key = $assegnazione['automezzo_id'];
+        
+        if (!isset($automezzi_grouped[$automezzo_key])) {
+            $automezzi_grouped[$automezzo_key] = array(
+                'automezzo_id' => $assegnazione['automezzo_id'],
+                'descrizione_automezzo' => $assegnazione['descrizione_automezzo'],
+                'targa' => $assegnazione['targa'],
+                'cantieri' => array()
+            );
+        }
+        
+        $automezzi_grouped[$automezzo_key]['cantieri'][] = array(
+            'cantiere_id' => $assegnazione['cantiere_id'],
+            'cantiere_nome' => $assegnazione['cantiere_nome'],
+            'data_assegnazione' => $assegnazione['data_assegnazione']
+        );
+    }
+    
+    return $automezzi_grouped;
+}
+
+function groupAttrezziAssegnazioniByAttrezzo($assegnazioni) {
+    $attrezzi_grouped = array();
+    
+    foreach ($assegnazioni as $assegnazione) {
+        $attrezzo_key = $assegnazione['attrezzo_id'];
+        
+        if (!isset($attrezzi_grouped[$attrezzo_key])) {
+            $attrezzi_grouped[$attrezzo_key] = array(
+                'attrezzo_id' => $assegnazione['attrezzo_id'],
+                'descrizione_attrezzo' => $assegnazione['descrizione_attrezzo'],
+                'data_revisione' => $assegnazione['data_revisione'],
+                'cantieri' => array()
+            );
+        }
+        
+        $attrezzi_grouped[$attrezzo_key]['cantieri'][] = array(
+            'cantiere_id' => $assegnazione['cantiere_id'],
+            'cantiere_nome' => $assegnazione['cantiere_nome'],
+            'data_assegnazione' => $assegnazione['data_assegnazione']
+        );
+    }
+    
+    return $attrezzi_grouped;
 }
 
 // 🚀 NUOVA FUNZIONE: Recupera tutte le assegnazioni operai per un utente
@@ -1074,7 +1319,7 @@ echo '<strong>Filtri Attivi:</strong> <span id="filter-list"></span>';
 echo '<button onclick="clearAllFilters()" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px; cursor: pointer;">Rimuovi Tutti</button>';
 echo '</div>';
 
-// TABELLA RICHIESTE (CON COLONNA CANTIERI + NUOVA COLONNA ASSEGNAZIONI OPERAI)
+// TABELLA RICHIESTE (CON COLONNA CANTIERI + NUOVA COLONNA ASSEGNAZIONI OPERAI + AUTOMEZZI + ATTREZZI)
 echo '<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">';
 echo '<tr style="background: #0066a2 !important; color: white !important;">';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">ID</th>';
@@ -1086,6 +1331,8 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">POS</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Mezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Automezzi</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🔧 Attrezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Conformità</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Abilitazione HSA</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Accesso al Cantiere</th>';
@@ -1115,6 +1362,14 @@ foreach ($richieste as $richiesta) {
     // 🚀 NUOVISSIMO: Assegnazioni operai
     $operai_assegnazioni = getOperaiAssegnazioniByUser($user_id);
     $operai_grouped = groupAssegnazioniByOperaio($operai_assegnazioni);
+    
+    // 🚛 NUOVO: Assegnazioni automezzi
+    $automezzi_assegnazioni = getAutomezziAssegnazioniByUser($user_id);
+    $automezzi_grouped = groupAutomezziAssegnazioniByAutomezzo($automezzi_assegnazioni);
+    
+    // 🔧 NUOVO: Assegnazioni attrezzi
+    $attrezzi_assegnazioni = getAttrezziAssegnazioniByUser($user_id);
+    $attrezzi_grouped = groupAttrezziAssegnazioniByAttrezzo($attrezzi_assegnazioni);
     
     echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hsa-status="' . $stato_hsa['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $richiesta['id'] . '</td>';
@@ -1188,6 +1443,42 @@ foreach ($richieste as $richiesta) {
         echo '</button>';
     } else {
         echo '<span style="color: #ffc107;">0</span>';
+    }
+    echo '</td>';
+    
+    // 🚛 NUOVO: Automezzi
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 10px;">';
+    if (!empty($automezzi_grouped)) {
+        foreach ($automezzi_grouped as $automezzo) {
+            echo '<div style="background: #fff3cd; color: #856404; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #ffc107;">';
+            echo '<strong>🚛 ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
+            echo '<span style="font-size: 9px; color: #6c757d;">📋 ' . htmlspecialchars($automezzo['targa']) . '</span><br>';
+            foreach ($automezzo['cantieri'] as $cantiere_assegnazione) {
+                echo '<span style="font-size: 9px; color: #6c757d;">├ ' . htmlspecialchars($cantiere_assegnazione['cantiere_nome']) . '</span><br>';
+            }
+            echo '</div>';
+        }
+    } else {
+        echo '<span style="color: #6c757d; font-style: italic;">Nessun automezzo</span>';
+    }
+    echo '</td>';
+    
+    // 🔧 NUOVO: Attrezzi
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 10px;">';
+    if (!empty($attrezzi_grouped)) {
+        foreach ($attrezzi_grouped as $attrezzo) {
+            echo '<div style="background: #e3f2fd; color: #1565c0; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #2196f3;">';
+            echo '<strong>🔧 ' . htmlspecialchars($attrezzo['descrizione_attrezzo']) . '</strong><br>';
+            if ($attrezzo['data_revisione']) {
+                echo '<span style="font-size: 9px; color: #6c757d;">📅 Rev: ' . date('d/m/Y', strtotime($attrezzo['data_revisione'])) . '</span><br>';
+            }
+            foreach ($attrezzo['cantieri'] as $cantiere_assegnazione) {
+                echo '<span style="font-size: 9px; color: #6c757d;">├ ' . htmlspecialchars($cantiere_assegnazione['cantiere_nome']) . '</span><br>';
+            }
+            echo '</div>';
+        }
+    } else {
+        echo '<span style="color: #6c757d; font-style: italic;">Nessun attrezzo</span>';
     }
     echo '</td>';
     

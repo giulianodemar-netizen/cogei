@@ -58,6 +58,40 @@ function hse_createCantiereTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_personale);
     
+    // 🚛 NUOVA TABELLA: AUTOMEZZI
+    $table_cantiere_automezzi = $wpdb->prefix . 'cantiere_automezzi';
+    $sql_cantiere_automezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        descrizione_automezzo varchar(255) NOT NULL,
+        targa varchar(8) NOT NULL,
+        user_id int(11) NOT NULL,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id),
+        KEY user_id (user_id),
+        KEY targa (targa)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_automezzi);
+    
+    // 🔧 NUOVA TABELLA: ATTREZZI
+    $table_cantiere_attrezzi = $wpdb->prefix . 'cantiere_attrezzi';
+    $sql_cantiere_attrezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_attrezzi (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        richiesta_id int(11) NOT NULL,
+        descrizione_attrezzo varchar(255) NOT NULL,
+        data_revisione date,
+        user_id int(11) NOT NULL,
+        data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
+        data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY richiesta_id (richiesta_id),
+        KEY user_id (user_id),
+        KEY data_revisione (data_revisione)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_attrezzi);
+    
     $table_cantieri = $wpdb->prefix . 'cantieri';
     $sql_cantieri = "CREATE TABLE IF NOT EXISTS $table_cantieri (
         id int(11) NOT NULL AUTO_INCREMENT,
@@ -102,6 +136,38 @@ function hse_createCantiereTablesIfNotExists() {
         KEY operaio_id (operaio_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_operai);
+    
+    // 🚛 NUOVA TABELLA: ASSEGNAZIONI AUTOMEZZI AI CANTIERI
+    $table_cantiere_automezzi_assegnazioni = $wpdb->prefix . 'cantiere_automezzi_assegnazioni';
+    $sql_cantiere_automezzi_assegnazioni = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi_assegnazioni (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        automezzo_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_automezzo (cantiere_id, user_id, automezzo_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY automezzo_id (automezzo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_automezzi_assegnazioni);
+    
+    // 🔧 NUOVA TABELLA: ASSEGNAZIONI ATTREZZI AI CANTIERI
+    $table_cantiere_attrezzi_assegnazioni = $wpdb->prefix . 'cantiere_attrezzi_assegnazioni';
+    $sql_cantiere_attrezzi_assegnazioni = "CREATE TABLE IF NOT EXISTS $table_cantiere_attrezzi_assegnazioni (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        cantiere_id int(11) NOT NULL,
+        user_id int(11) NOT NULL,
+        attrezzo_id int(11) NOT NULL,
+        data_assegnazione datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cantiere_user_attrezzo (cantiere_id, user_id, attrezzo_id),
+        KEY cantiere_id (cantiere_id),
+        KEY user_id (user_id),
+        KEY attrezzo_id (attrezzo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_cantiere_attrezzi_assegnazioni);
     
     $table_cantiere_pos = $wpdb->prefix . 'cantiere_pos_files';
     $sql_cantiere_pos = "CREATE TABLE IF NOT EXISTS $table_cantiere_pos (
@@ -261,6 +327,103 @@ function hse_getOperaiAssegnatiCantiere($cantiere_id, $user_id) {
     ", $cantiere_id, $user_id), ARRAY_A);
 }
 
+// 🚛 NUOVE FUNZIONI PER AUTOMEZZI
+
+function hse_getAutomezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_automezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_automezzo, a.targa
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
+        WHERE aa.cantiere_id = %d AND aa.user_id = %d
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getAutomezzoCantieriAssegnazioni($automezzo_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantieri c ON aa.cantiere_id = c.id
+        WHERE aa.automezzo_id = %d AND aa.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $automezzo_id, $user_id), ARRAY_A);
+}
+
+function hse_validateTargaItaliana($targa) {
+    // Formato italiano: 2 lettere + 3 numeri + 2 lettere (AA123BB)
+    $pattern = '/^[A-Z]{2}[0-9]{3}[A-Z]{2}$/';
+    return preg_match($pattern, strtoupper($targa));
+}
+
+// 🔧 NUOVE FUNZIONI PER ATTREZZI
+
+function hse_getAttrezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_attrezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAttrezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, a.descrizione_attrezzo, a.data_revisione
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantiere_attrezzi a ON at.attrezzo_id = a.id
+        WHERE at.cantiere_id = %d AND at.user_id = %d
+        ORDER BY at.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getAttrezzoCantieriAssegnazioni($attrezzo_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT at.*, c.nome as cantiere_nome, c.stato as cantiere_stato
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni at
+        JOIN {$wpdb->prefix}cantieri c ON at.cantiere_id = c.id
+        WHERE at.attrezzo_id = %d AND at.user_id = %d
+        ORDER BY c.stato, c.nome
+    ", $attrezzo_id, $user_id), ARRAY_A);
+}
+
+function hse_checkAttrezzoScadenze($attrezzo) {
+    $warnings = array();
+    $oggi = new DateTime();
+    
+    if (!empty($attrezzo['data_revisione'])) {
+        $revisione_scadenza = new DateTime($attrezzo['data_revisione']);
+        $diff_giorni = $oggi->diff($revisione_scadenza)->days;
+        $is_scaduto = $oggi > $revisione_scadenza;
+        
+        if ($is_scaduto) {
+            $warnings[] = "🚨 Revisione scaduta da $diff_giorni giorni";
+        } elseif ($diff_giorni <= 30) {
+            $warnings[] = "⚠️ Revisione scade tra $diff_giorni giorni";
+        }
+    }
+    
+    return $warnings;
+}
+
 function hse_getPosFileByCantiere($cantiere_id, $user_id) {
     global $wpdb;
     
@@ -355,7 +518,15 @@ function hse_getCantiereData($user_id) {
             $richiesta['id']
         ), ARRAY_A);
         
+        // 🚛 NUOVO: Carica automezzi
+        $automezzi = hse_getAutomezziByRichiestaId($richiesta['id']);
+        
+        // 🔧 NUOVO: Carica attrezzi
+        $attrezzi = hse_getAttrezziByRichiestaId($richiesta['id']);
+        
         $richiesta['personale'] = $personale;
+        $richiesta['automezzi'] = $automezzi;
+        $richiesta['attrezzi'] = $attrezzi;
     }
     
     return $richiesta;
@@ -396,6 +567,57 @@ function hse_validatePersonaleData($personale_data) {
             $idoneita_scadenza = DateTime::createFromFormat('Y-m-d', $persona['idoneita_sanitaria_scadenza']);
             if (!$idoneita_scadenza) {
                 $errors[] = "Data scadenza idoneità sanitaria non valida per il personale $persona_num";
+            }
+        }
+    }
+    
+    return $errors;
+}
+
+// 🚛 NUOVA FUNZIONE: Validazione dati automezzi
+function hse_validateAutomezziData($automezzi_data) {
+    $errors = array();
+    
+    foreach ($automezzi_data as $index => $automezzo) {
+        $automezzo_num = $index + 1;
+        
+        if (empty($automezzo['descrizione_automezzo'])) {
+            $errors[] = "Descrizione automezzo $automezzo_num è obbligatoria";
+        }
+        
+        if (empty($automezzo['targa'])) {
+            $errors[] = "Targa automezzo $automezzo_num è obbligatoria";
+        } elseif (!hse_validateTargaItaliana($automezzo['targa'])) {
+            $errors[] = "Targa automezzo $automezzo_num non valida. Formato richiesto: AA123BB (2 lettere + 3 numeri + 2 lettere)";
+        }
+    }
+    
+    // Controlla targhe duplicate
+    $targhe = array_map(function($a) { return strtoupper(trim($a['targa'])); }, $automezzi_data);
+    $targhe_unique = array_unique($targhe);
+    
+    if (count($targhe) !== count($targhe_unique)) {
+        $errors[] = "Trovate targhe duplicate nell'elenco automezzi";
+    }
+    
+    return $errors;
+}
+
+// 🔧 NUOVA FUNZIONE: Validazione dati attrezzi
+function hse_validateAttrezziData($attrezzi_data) {
+    $errors = array();
+    
+    foreach ($attrezzi_data as $index => $attrezzo) {
+        $attrezzo_num = $index + 1;
+        
+        if (empty($attrezzo['descrizione_attrezzo'])) {
+            $errors[] = "Descrizione attrezzo $attrezzo_num è obbligatoria";
+        }
+        
+        if (!empty($attrezzo['data_revisione'])) {
+            $revisione_data = DateTime::createFromFormat('Y-m-d', $attrezzo['data_revisione']);
+            if (!$revisione_data) {
+                $errors[] = "Data revisione non valida per l'attrezzo $attrezzo_num";
             }
         }
     }
@@ -526,10 +748,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
             $hse_numero_personale = intval($_POST['hse_numero_personale']);
             $hse_personale_data = array();
             
+            // 🚛 NUOVO: Gestione automezzi
+            $hse_numero_automezzi = intval($_POST['hse_numero_automezzi'] ?? 0);
+            $hse_automezzi_data = array();
+            
+            // 🔧 NUOVO: Gestione attrezzi
+            $hse_numero_attrezzi = intval($_POST['hse_numero_attrezzi'] ?? 0);
+            $hse_attrezzi_data = array();
+            
             if ($hse_numero_personale <= 0) {
                 $hse_error_messages[] = "Il numero del personale deve essere maggiore di 0";
             }
             
+            // Validazione dati personale
             for ($i = 0; $i < $hse_numero_personale; $i++) {
                 if (isset($_POST['hse_personale_nome'][$i])) {
                     $hse_personale_data[] = array(
@@ -543,8 +774,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                 }
             }
             
+            // 🚛 NUOVO: Validazione dati automezzi
+            for ($i = 0; $i < $hse_numero_automezzi; $i++) {
+                if (isset($_POST['hse_automezzi_descrizione'][$i]) && !empty($_POST['hse_automezzi_descrizione'][$i])) {
+                    $hse_automezzi_data[] = array(
+                        'descrizione_automezzo' => sanitize_text_field($_POST['hse_automezzi_descrizione'][$i]),
+                        'targa' => sanitize_text_field($_POST['hse_automezzi_targa'][$i])
+                    );
+                }
+            }
+            
+            // 🔧 NUOVO: Validazione dati attrezzi
+            for ($i = 0; $i < $hse_numero_attrezzi; $i++) {
+                if (isset($_POST['hse_attrezzi_descrizione'][$i]) && !empty($_POST['hse_attrezzi_descrizione'][$i])) {
+                    $hse_attrezzi_data[] = array(
+                        'descrizione_attrezzo' => sanitize_text_field($_POST['hse_attrezzi_descrizione'][$i]),
+                        'data_revisione' => sanitize_text_field($_POST['hse_attrezzi_data_revisione'][$i] ?? '')
+                    );
+                }
+            }
+            
             $hse_personale_errors = hse_validatePersonaleData($hse_personale_data);
-            $hse_error_messages = array_merge($hse_error_messages, $hse_personale_errors);
+            $hse_automezzi_errors = hse_validateAutomezziData($hse_automezzi_data);
+            $hse_attrezzi_errors = hse_validateAttrezziData($hse_attrezzi_data);
+            
+            $hse_error_messages = array_merge($hse_error_messages, $hse_personale_errors, $hse_automezzi_errors, $hse_attrezzi_errors);
             
             if (empty($hse_error_messages)) {
                 $hse_dvr_file = '';
@@ -688,7 +942,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
-                    $hse_success_message = "✅ Parte A salvata con successo! Dati personale e documenti formazione aggiornati ($hse_new_count persone).";
+                    // 🚛 NUOVO: Gestione automezzi
+                    $hse_existing_automezzi = hse_getAutomezziByRichiestaId($hse_richiesta_id);
+                    $hse_existing_automezzi_count = count($hse_existing_automezzi);
+                    $hse_new_automezzi_count = count($hse_automezzi_data);
+                    
+                    for ($i = 0; $i < $hse_new_automezzi_count; $i++) {
+                        $hse_automezzo_data = array(
+                            'richiesta_id' => $hse_richiesta_id,
+                            'descrizione_automezzo' => $hse_automezzi_data[$i]['descrizione_automezzo'],
+                            'targa' => strtoupper($hse_automezzi_data[$i]['targa']),
+                            'user_id' => $hse_current_user_id
+                        );
+                        
+                        if ($i < $hse_existing_automezzi_count) {
+                            $wpdb->update(
+                                $wpdb->prefix . 'cantiere_automezzi',
+                                $hse_automezzo_data,
+                                array('id' => $hse_existing_automezzi[$i]['id'])
+                            );
+                        } else {
+                            $wpdb->insert($wpdb->prefix . 'cantiere_automezzi', $hse_automezzo_data);
+                        }
+                    }
+                    
+                    // Rimuovi automezzi in eccesso
+                    if ($hse_new_automezzi_count < $hse_existing_automezzi_count) {
+                        for ($i = $hse_new_automezzi_count; $i < $hse_existing_automezzi_count; $i++) {
+                            if (isset($hse_existing_automezzi[$i])) {
+                                $wpdb->delete(
+                                    $wpdb->prefix . 'cantiere_automezzi_assegnazioni',
+                                    array('user_id' => $hse_current_user_id, 'automezzo_id' => $hse_existing_automezzi[$i]['id'])
+                                );
+                                
+                                $wpdb->delete(
+                                    $wpdb->prefix . 'cantiere_automezzi',
+                                    array('id' => $hse_existing_automezzi[$i]['id'])
+                                );
+                            }
+                        }
+                    }
+                    
+                    // 🔧 NUOVO: Gestione attrezzi
+                    $hse_existing_attrezzi = hse_getAttrezziByRichiestaId($hse_richiesta_id);
+                    $hse_existing_attrezzi_count = count($hse_existing_attrezzi);
+                    $hse_new_attrezzi_count = count($hse_attrezzi_data);
+                    
+                    for ($i = 0; $i < $hse_new_attrezzi_count; $i++) {
+                        $hse_attrezzo_data = array(
+                            'richiesta_id' => $hse_richiesta_id,
+                            'descrizione_attrezzo' => $hse_attrezzi_data[$i]['descrizione_attrezzo'],
+                            'data_revisione' => $hse_attrezzi_data[$i]['data_revisione'] ?: null,
+                            'user_id' => $hse_current_user_id
+                        );
+                        
+                        if ($i < $hse_existing_attrezzi_count) {
+                            $wpdb->update(
+                                $wpdb->prefix . 'cantiere_attrezzi',
+                                $hse_attrezzo_data,
+                                array('id' => $hse_existing_attrezzi[$i]['id'])
+                            );
+                        } else {
+                            $wpdb->insert($wpdb->prefix . 'cantiere_attrezzi', $hse_attrezzo_data);
+                        }
+                    }
+                    
+                    // Rimuovi attrezzi in eccesso
+                    if ($hse_new_attrezzi_count < $hse_existing_attrezzi_count) {
+                        for ($i = $hse_new_attrezzi_count; $i < $hse_existing_attrezzi_count; $i++) {
+                            if (isset($hse_existing_attrezzi[$i])) {
+                                $wpdb->delete(
+                                    $wpdb->prefix . 'cantiere_attrezzi_assegnazioni',
+                                    array('user_id' => $hse_current_user_id, 'attrezzo_id' => $hse_existing_attrezzi[$i]['id'])
+                                );
+                                
+                                $wpdb->delete(
+                                    $wpdb->prefix . 'cantiere_attrezzi',
+                                    array('id' => $hse_existing_attrezzi[$i]['id'])
+                                );
+                            }
+                        }
+                    }
+                    
+                    $hse_success_message = "✅ Parte A salvata con successo! Dati personale ($hse_new_count persone), automezzi ($hse_new_automezzi_count) e attrezzi ($hse_new_attrezzi_count) aggiornati.";
                 }
             }
         } elseif (isset($_POST['hse_cantiere_submit_parte_b'])) {
@@ -699,7 +1035,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
             $hse_operai_key = 'hse_operai_selezionati_' . $hse_cantiere_id;
             $hse_operai_selezionati = isset($_POST[$hse_operai_key]) && is_array($_POST[$hse_operai_key]) ? array_map('intval', $_POST[$hse_operai_key]) : array();
             
-            if ($hse_cantiere_id && !empty($hse_operai_selezionati)) {
+            // 🚛 NUOVO: Gestione automezzi selezionati
+            $hse_automezzi_key = 'hse_automezzi_selezionati_' . $hse_cantiere_id;
+            $hse_automezzi_selezionati = isset($_POST[$hse_automezzi_key]) && is_array($_POST[$hse_automezzi_key]) ? array_map('intval', $_POST[$hse_automezzi_key]) : array();
+            
+            // 🔧 NUOVO: Gestione attrezzi selezionati
+            $hse_attrezzi_key = 'hse_attrezzi_selezionati_' . $hse_cantiere_id;
+            $hse_attrezzi_selezionati = isset($_POST[$hse_attrezzi_key]) && is_array($_POST[$hse_attrezzi_key]) ? array_map('intval', $_POST[$hse_attrezzi_key]) : array();
+            
+            // Almeno una selezione deve essere fatta
+            if ($hse_cantiere_id && (empty($hse_operai_selezionati) && empty($hse_automezzi_selezionati) && empty($hse_attrezzi_selezionati))) {
+                $hse_error_messages[] = "Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere";
+            } else {
                 $hse_pos_file = '';
                 $hse_mezzi_file = '';
                 
@@ -753,7 +1100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
                     );
                     
-                    $hse_assigned_count = 0;
+                    $hse_assigned_operai_count = 0;
                     foreach ($hse_operai_selezionati as $hse_operaio_id) {
                         $result = $wpdb->insert(
                             $wpdb->prefix . 'cantiere_operai_assegnazioni',
@@ -765,7 +1112,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         );
                         
                         if ($result) {
-                            $hse_assigned_count++;
+                            $hse_assigned_operai_count++;
+                        }
+                    }
+                    
+                    // 🚛 NUOVO: Aggiorna assegnazioni automezzi per questo cantiere
+                    $wpdb->delete(
+                        $wpdb->prefix . 'cantiere_automezzi_assegnazioni',
+                        array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
+                    );
+                    
+                    $hse_assigned_automezzi_count = 0;
+                    foreach ($hse_automezzi_selezionati as $hse_automezzo_id) {
+                        $result = $wpdb->insert(
+                            $wpdb->prefix . 'cantiere_automezzi_assegnazioni',
+                            array(
+                                'cantiere_id' => $hse_cantiere_id,
+                                'user_id' => $hse_current_user_id,
+                                'automezzo_id' => $hse_automezzo_id
+                            )
+                        );
+                        
+                        if ($result) {
+                            $hse_assigned_automezzi_count++;
+                        }
+                    }
+                    
+                    // 🔧 NUOVO: Aggiorna assegnazioni attrezzi per questo cantiere
+                    $wpdb->delete(
+                        $wpdb->prefix . 'cantiere_attrezzi_assegnazioni',
+                        array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
+                    );
+                    
+                    $hse_assigned_attrezzi_count = 0;
+                    foreach ($hse_attrezzi_selezionati as $hse_attrezzo_id) {
+                        $result = $wpdb->insert(
+                            $wpdb->prefix . 'cantiere_attrezzi_assegnazioni',
+                            array(
+                                'cantiere_id' => $hse_cantiere_id,
+                                'user_id' => $hse_current_user_id,
+                                'attrezzo_id' => $hse_attrezzo_id
+                            )
+                        );
+                        
+                        if ($result) {
+                            $hse_assigned_attrezzi_count++;
                         }
                     }
                     
@@ -773,11 +1164,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         "SELECT nome FROM {$wpdb->prefix}cantieri WHERE id = %d", $hse_cantiere_id
                     ));
                     
-                    $hse_success_message = "✅ Parte B salvata con successo per il cantiere '$hse_cantiere_nome'! $hse_assigned_count operai assegnati.";
+                    $hse_success_message = "✅ Parte B salvata con successo per il cantiere '$hse_cantiere_nome'! Assegnati: $hse_assigned_operai_count operai, $hse_assigned_automezzi_count automezzi, $hse_assigned_attrezzi_count attrezzi.";
                     
                     $hse_has_any_assignment = $wpdb->get_var($wpdb->prepare(
-                        "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_operai_assegnazioni WHERE user_id = %d",
-                        $hse_current_user_id
+                        "SELECT COUNT(*) FROM (
+                            SELECT cantiere_id FROM {$wpdb->prefix}cantiere_operai_assegnazioni WHERE user_id = %d
+                            UNION
+                            SELECT cantiere_id FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni WHERE user_id = %d
+                            UNION
+                            SELECT cantiere_id FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni WHERE user_id = %d
+                        ) AS all_assignments",
+                        $hse_current_user_id, $hse_current_user_id, $hse_current_user_id
                     ));
                     
                     if ($hse_has_any_assignment > 0) {
@@ -788,8 +1185,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         );
                     }
                 }
-            } else {
-                $hse_error_messages[] = "Devi selezionare almeno un operaio per il cantiere";
             }
         }
     }
@@ -1447,9 +1842,224 @@ echo '</div>';
 
 echo '</div>'; // Fine hse_personale_group
 
+// 🚛 NUOVO: Accordion Automezzi
+echo '<div class="hse_automezzi_group" style="margin-bottom: 30px; background: #fff3cd; padding: 0; border-radius: 10px; border-left: 5px solid #ffc107; overflow: hidden;">';
+
+// Header accordion automezzi
+$hse_numero_automezzi_value = ($hse_existing_data && !empty($hse_existing_data['automezzi'])) ? count($hse_existing_data['automezzi']) : 0;
+echo '<div class="hse_accordion_header hse_automezzi_accordion_header" onclick="hse_toggleAccordion(\'automezzi\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(255, 193, 7, 0.1); transition: all 0.3s ease;">';
+echo '<h3 class="hse_automezzi_title" style="color: #856404; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #ffc107; color: #000; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🚛</span>Elenco Automezzi <span id="hse_automezzi_count" class="hse_automezzi_count" style="background: #856404; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_automezzi_value . ' automezzi)</span></h3>';
+echo '<span class="hse_accordion_arrow" id="hse_arrow_automezzi" style="font-size: 18px; font-weight: bold; color: #856404; transition: transform 0.3s ease;">▼</span>';
+echo '</div>';
+
+// Content accordion automezzi (chiuso di default)
+echo '<div class="hse_accordion_content" id="hse_content_automezzi" style="display: none; padding: 25px; transition: all 0.3s ease;">';
+
+echo '<input type="hidden" name="hse_numero_automezzi" id="hse_numero_automezzi" value="' . $hse_numero_automezzi_value . '">';
+
+// Informazioni targa italiana
+echo '<div class="hse_targa_info_box" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; border-radius: 8px; padding: 15px; margin-bottom: 20px;">';
+echo '<div class="hse_targa_info_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
+echo '<span class="hse_targa_info_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">🚗</span>';
+echo '<strong class="hse_targa_info_title" style="color: #1565c0; font-size: 14px;">Formato Targa Italiana</strong>';
+echo '</div>';
+echo '<div class="hse_targa_info_text" style="color: #1565c0; font-size: 13px; line-height: 1.4;">';
+echo 'Le targhe devono rispettare il <strong>formato italiano standard: AA123BB</strong> (2 lettere + 3 numeri + 2 lettere). ';
+echo 'La validazione avverrà automaticamente durante la digitazione.';
+echo '</div>';
+echo '</div>';
+
+echo '<div id="hse_automezzi_container" class="hse_automezzi_container">';
+
+// Precompila automezzi esistenti
+if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
+    foreach ($hse_existing_data['automezzi'] as $index => $hse_automezzo) {
+        
+        // Verifica se questo automezzo è assegnato a cantieri
+        $hse_automezzo_cantieri = hse_getAutomezzoCantieriAssegnazioni($hse_automezzo['id'], $hse_current_user_id);
+        $hse_is_assigned = !empty($hse_automezzo_cantieri);
+        
+        $hse_assigned_style = $hse_is_assigned ? 'border: 2px solid #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);' : 'border: 1px solid #ddd; background: white;';
+        
+        echo '<div class="hse_automezzo_row" data-index="' . $index . '" data-automezzo-id="' . $hse_automezzo['id'] . '" style="' . $hse_assigned_style . ' padding: 15px; margin-bottom: 15px; border-radius: 8px;">';
+        
+        // Mostra cantieri assegnati se presente
+        if ($hse_is_assigned) {
+            echo '<div class="hse_automezzo_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            foreach ($hse_automezzo_cantieri as $cantiere_info) {
+                $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
+                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Dati automezzo
+        echo '<div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+        
+        echo '<div class="hse_automezzo_descrizione_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo:</label>';
+        echo '<input type="text" name="hse_automezzi_descrizione[]" value="' . esc_attr($hse_automezzo['descrizione_automezzo']) . '" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
+        echo '</div>';
+        
+        echo '<div class="hse_automezzo_targa_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa:</label>';
+        echo '<input type="text" name="hse_automezzi_targa[]" value="' . esc_attr($hse_automezzo['targa']) . '" placeholder="AA123BB" maxlength="7" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" oninput="hse_validateTargaInput(this)" required>';
+        echo '<div class="hse_targa_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>';
+        echo '</div>';
+        
+        echo '<div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">';
+        if (count($hse_existing_data['automezzi']) > 0) {
+            echo '<button type="button" onclick="hse_deleteAutomezzo(' . $hse_automezzo['id'] . ', \'' . addslashes($hse_automezzo['descrizione_automezzo'] . ' - ' . $hse_automezzo['targa']) . '\', ' . ($hse_is_assigned ? 'true' : 'false') . ')" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Elimina</button>';
+        }
+        echo '</div>';
+        
+        echo '</div>';
+        
+        echo '</div>'; // Fine row automezzo
+    }
+} else {
+    // Nessun automezzo esistente, mostra messaggio
+    echo '<div class="hse_no_automezzi_message" style="text-align: center; padding: 20px; color: #856404; font-style: italic; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin-bottom: 15px;">';
+    echo '🚛 Nessun automezzo inserito. Usa il pulsante qui sotto per aggiungere automezzi.';
+    echo '</div>';
+}
+
+echo '</div>'; // Fine automezzi container
+
+// Pulsanti gestione automezzi
+echo '<div class="hse_automezzi_controls" style="margin-top: 20px; text-align: center;">';
+echo '<button type="button" onclick="hse_addAutomezzo()" class="hse_add_automezzo_btn" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-weight: bold;">➕ Aggiungi Automezzo</button>';
+if ($hse_numero_automezzi_value > 0) {
+    echo '<button type="button" onclick="hse_removeLastAutomezzo()" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">➖ Rimuovi Ultimo</button>';
+}
+echo '</div>';
+
+echo '</div>'; // Fine accordion content automezzi
+echo '</div>'; // Fine automezzi group
+
+// 🔧 NUOVO: Accordion Attrezzi
+echo '<div class="hse_attrezzi_group" style="margin-bottom: 30px; background: #e3f2fd; padding: 0; border-radius: 10px; border-left: 5px solid #2196f3; overflow: hidden;">';
+
+// Header accordion attrezzi
+$hse_numero_attrezzi_value = ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) ? count($hse_existing_data['attrezzi']) : 0;
+echo '<div class="hse_accordion_header hse_attrezzi_accordion_header" onclick="hse_toggleAccordion(\'attrezzi\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(33, 150, 243, 0.1); transition: all 0.3s ease;">';
+echo '<h3 class="hse_attrezzi_title" style="color: #1565c0; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🔧</span>Elenco Attrezzi <span id="hse_attrezzi_count" class="hse_attrezzi_count" style="background: #1565c0; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_attrezzi_value . ' attrezzi)</span></h3>';
+echo '<span class="hse_accordion_arrow" id="hse_arrow_attrezzi" style="font-size: 18px; font-weight: bold; color: #1565c0; transition: transform 0.3s ease;">▼</span>';
+echo '</div>';
+
+// Content accordion attrezzi (chiuso di default)
+echo '<div class="hse_accordion_content" id="hse_content_attrezzi" style="display: none; padding: 25px; transition: all 0.3s ease;">';
+
+echo '<input type="hidden" name="hse_numero_attrezzi" id="hse_numero_attrezzi" value="' . $hse_numero_attrezzi_value . '">';
+
+// Informazioni data revisione
+echo '<div class="hse_revisione_info_box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 20px;">';
+echo '<div class="hse_revisione_info_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
+echo '<span class="hse_revisione_info_icon" style="background: #ffc107; color: #000; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">📅</span>';
+echo '<strong class="hse_revisione_info_title" style="color: #856404; font-size: 14px;">Data Revisione Attrezzi</strong>';
+echo '</div>';
+echo '<div class="hse_revisione_info_text" style="color: #856404; font-size: 13px; line-height: 1.4;">';
+echo 'La <strong>data revisione è opzionale</strong> ma consigliata per tenere traccia della manutenzione degli attrezzi. ';
+echo 'Il sistema ti avvertirà automaticamente quando si avvicinano le scadenze.';
+echo '</div>';
+echo '</div>';
+
+echo '<div id="hse_attrezzi_container" class="hse_attrezzi_container">';
+
+// Precompila attrezzi esistenti
+if ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) {
+    foreach ($hse_existing_data['attrezzi'] as $index => $hse_attrezzo) {
+        
+        // Verifica se questo attrezzo è assegnato a cantieri
+        $hse_attrezzo_cantieri = hse_getAttrezzoCantieriAssegnazioni($hse_attrezzo['id'], $hse_current_user_id);
+        $hse_is_assigned = !empty($hse_attrezzo_cantieri);
+        
+        // Controlla scadenze
+        $hse_scadenze_warnings = hse_checkAttrezzoScadenze($hse_attrezzo);
+        $hse_has_warnings = !empty($hse_scadenze_warnings);
+        
+        $hse_assigned_style = $hse_is_assigned ? 'border: 2px solid #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);' : 'border: 1px solid #ddd; background: white;';
+        if ($hse_has_warnings) {
+            $hse_assigned_style = 'border: 2px solid #dc3545; background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);';
+        }
+        
+        echo '<div class="hse_attrezzo_row" data-index="' . $index . '" data-attrezzo-id="' . $hse_attrezzo['id'] . '" style="' . $hse_assigned_style . ' padding: 15px; margin-bottom: 15px; border-radius: 8px;">';
+        
+        // Mostra cantieri assegnati se presente
+        if ($hse_is_assigned) {
+            echo '<div class="hse_attrezzo_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            foreach ($hse_attrezzo_cantieri as $cantiere_info) {
+                $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
+                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Mostra avvisi revisione se presenti
+        if ($hse_has_warnings) {
+            echo '<div class="hse_attrezzo_revisione_warning" style="background: rgba(220, 53, 69, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #dc3545;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #721c24; font-size: 13px; font-weight: bold;">⚠️ Avvisi Revisione:</h5>';
+            foreach ($hse_scadenze_warnings as $warning) {
+                echo '<div style="color: #721c24; font-size: 12px; margin-bottom: 4px;">' . $warning . '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Dati attrezzo
+        echo '<div class="hse_attrezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+        
+        echo '<div class="hse_attrezzo_descrizione_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo:</label>';
+        echo '<input type="text" name="hse_attrezzi_descrizione[]" value="' . esc_attr($hse_attrezzo['descrizione_attrezzo']) . '" placeholder="es. Saldatrice elettrica 220V" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
+        echo '</div>';
+        
+        echo '<div class="hse_attrezzo_revisione_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">📅 Data Revisione (opzionale):</label>';
+        echo '<input type="date" name="hse_attrezzi_data_revisione[]" value="' . esc_attr($hse_attrezzo['data_revisione']) . '" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" onchange="hse_validateRevisioneDate(this)">';
+        echo '<div class="hse_revisione_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>';
+        echo '</div>';
+        
+        echo '<div class="hse_attrezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">';
+        if (count($hse_existing_data['attrezzi']) > 0) {
+            echo '<button type="button" onclick="hse_deleteAttrezzo(' . $hse_attrezzo['id'] . ', \'' . addslashes($hse_attrezzo['descrizione_attrezzo']) . '\', ' . ($hse_is_assigned ? 'true' : 'false') . ')" class="hse_remove_attrezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Elimina</button>';
+        }
+        echo '</div>';
+        
+        echo '</div>';
+        
+        echo '</div>'; // Fine row attrezzo
+    }
+} else {
+    // Nessun attrezzo esistente, mostra messaggio
+    echo '<div class="hse_no_attrezzi_message" style="text-align: center; padding: 20px; color: #1565c0; font-style: italic; background: rgba(33, 150, 243, 0.1); border-radius: 8px; margin-bottom: 15px;">';
+    echo '🔧 Nessun attrezzo inserito. Usa il pulsante qui sotto per aggiungere attrezzi.';
+    echo '</div>';
+}
+
+echo '</div>'; // Fine attrezzi container
+
+// Pulsanti gestione attrezzi
+echo '<div class="hse_attrezzi_controls" style="margin-top: 20px; text-align: center;">';
+echo '<button type="button" onclick="hse_addAttrezzo()" class="hse_add_attrezzo_btn" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-weight: bold;">➕ Aggiungi Attrezzo</button>';
+if ($hse_numero_attrezzi_value > 0) {
+    echo '<button type="button" onclick="hse_removeLastAttrezzo()" class="hse_remove_attrezzo_btn" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">➖ Rimuovi Ultimo</button>';
+}
+echo '</div>';
+
+echo '</div>'; // Fine accordion content attrezzi
+echo '</div>'; // Fine attrezzi group
+
 // Pulsante Salva Parte A
 echo '<div class="hse_submit_parte_a_section" style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 2px solid #e9ecef;">';
-echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti Aziendali + Personale</button>';
+echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti + Personale + Automezzi + Attrezzi</button>';
 echo '</div>';
 
 echo '</div>'; // Fine hse_parte_a
@@ -1608,6 +2218,104 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         }
         echo '</div>';
         
+        // 🚛 NUOVO: Selezione automezzi per questo cantiere
+        echo '<div class="hse_automezzi_selection_group" style="margin-bottom: 20px;">';
+        echo '<label class="hse_automezzi_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">🚛 Seleziona Automezzi per questo Cantiere</label>';
+        
+        if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
+            $hse_automezzi_assegnati = hse_getAutomezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
+            $hse_automezzi_assegnati_ids = array_map(function($au) { return $au['automezzo_id']; }, $hse_automezzi_assegnati);
+            
+            echo '<div class="hse_automezzi_selection_container" style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffc107;">';
+            echo '<p class="hse_automezzi_help" style="color: #856404; margin-bottom: 15px;">Seleziona gli automezzi che utilizzerai in questo cantiere specifico:</p>';
+            
+            foreach ($hse_existing_data['automezzi'] as $index => $hse_automezzo) {
+                $hse_automezzoName = $hse_automezzo['descrizione_automezzo'] . ' (' . $hse_automezzo['targa'] . ')';
+                $hse_isSelected = in_array($hse_automezzo['id'], $hse_automezzi_assegnati_ids) ? 'checked' : '';
+                
+                // Verifica se è assegnato ad altri cantieri
+                $hse_automezzo_cantieri = hse_getAutomezzoCantieriAssegnazioni($hse_automezzo['id'], $hse_current_user_id);
+                $hse_is_assigned_elsewhere = false;
+                foreach ($hse_automezzo_cantieri as $cantiere_info) {
+                    if ($cantiere_info['cantiere_id'] != $hse_cantiere['id']) {
+                        $hse_is_assigned_elsewhere = true;
+                        break;
+                    }
+                }
+                
+                $hse_label_style = 'color: #856404;';
+                $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
+                
+                echo '<label class="hse_automezzo_checkbox" style="display: block; margin-bottom: 10px; cursor: pointer; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_automezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_automezzo['id'] . '" ' . $hse_isSelected . ' class="hse_automezzo_input" style="margin-right: 8px;">';
+                echo '<span class="hse_automezzo_name">🚛 ' . htmlspecialchars($hse_automezzoName) . $hse_assignment_info . '</span>';
+                echo '</label>';
+            }
+            
+            echo '</div>';
+        } else {
+            echo '<div class="hse_automezzi_warning" style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">';
+            echo '<p class="hse_warning_text" style="color: #856404; margin: 0;">⚠️ Prima completa la Parte A con l\'elenco degli automezzi</p>';
+            echo '</div>';
+        }
+        echo '</div>';
+        
+        // 🔧 NUOVO: Selezione attrezzi per questo cantiere
+        echo '<div class="hse_attrezzi_selection_group" style="margin-bottom: 20px;">';
+        echo '<label class="hse_attrezzi_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">🔧 Seleziona Attrezzi per questo Cantiere</label>';
+        
+        if ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) {
+            $hse_attrezzi_assegnati = hse_getAttrezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
+            $hse_attrezzi_assegnati_ids = array_map(function($at) { return $at['attrezzo_id']; }, $hse_attrezzi_assegnati);
+            
+            echo '<div class="hse_attrezzi_selection_container" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #2196f3;">';
+            echo '<p class="hse_attrezzi_help" style="color: #1565c0; margin-bottom: 15px;">Seleziona gli attrezzi che utilizzerai in questo cantiere specifico:</p>';
+            
+            foreach ($hse_existing_data['attrezzi'] as $index => $hse_attrezzo) {
+                $hse_attrezzoName = $hse_attrezzo['descrizione_attrezzo'];
+                if ($hse_attrezzo['data_revisione']) {
+                    $hse_attrezzoName .= ' (Rev: ' . date('d/m/Y', strtotime($hse_attrezzo['data_revisione'])) . ')';
+                }
+                $hse_isSelected = in_array($hse_attrezzo['id'], $hse_attrezzi_assegnati_ids) ? 'checked' : '';
+                
+                // Verifica se è assegnato ad altri cantieri
+                $hse_attrezzo_cantieri = hse_getAttrezzoCantieriAssegnazioni($hse_attrezzo['id'], $hse_current_user_id);
+                $hse_is_assigned_elsewhere = false;
+                foreach ($hse_attrezzo_cantieri as $cantiere_info) {
+                    if ($cantiere_info['cantiere_id'] != $hse_cantiere['id']) {
+                        $hse_is_assigned_elsewhere = true;
+                        break;
+                    }
+                }
+                
+                // Controlla scadenze revisione
+                $hse_scadenze_warnings = hse_checkAttrezzoScadenze($hse_attrezzo);
+                $hse_has_warnings = !empty($hse_scadenze_warnings);
+                
+                $hse_label_style = 'color: #1565c0;';
+                $hse_warning_text = '';
+                
+                if ($hse_has_warnings) {
+                    $hse_label_style = 'color: #dc3545; font-weight: bold;';
+                    $hse_warning_text .= ' 🚨 (Revisione scaduta!)';
+                }
+                
+                $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
+                
+                echo '<label class="hse_attrezzo_checkbox" style="display: block; margin-bottom: 10px; cursor: pointer; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_attrezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_attrezzo['id'] . '" ' . $hse_isSelected . ' class="hse_attrezzo_input" style="margin-right: 8px;">';
+                echo '<span class="hse_attrezzo_name">🔧 ' . htmlspecialchars($hse_attrezzoName) . $hse_warning_text . $hse_assignment_info . '</span>';
+                echo '</label>';
+            }
+            
+            echo '</div>';
+        } else {
+            echo '<div class="hse_attrezzi_warning" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">';
+            echo '<p class="hse_warning_text" style="color: #1565c0; margin: 0;">⚠️ Prima completa la Parte A con l\'elenco degli attrezzi</p>';
+            echo '</div>';
+        }
+        echo '</div>';
+        
         // Riepilogo competenze per questo cantiere
         if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             $hse_operai_assegnati = hse_getOperaiAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
@@ -1716,6 +2424,7 @@ echo '</div>'; // Fine hse_cantiere_form_container
 // Dati HSE per frontend con nuovi campi
 var hse_existingPersonaleData = <?php echo json_encode($hse_existing_data && !empty($hse_existing_data['personale']) ? $hse_existing_data['personale'] : array()); ?>;
 var hse_cantieriAssegnati = <?php echo json_encode($hse_cantieri_assegnati); ?>;
+var hse_currentUserId = <?php echo $hse_current_user_id; ?>;
 var hse_ajaxBaseUrl = '<?php echo home_url('/cogei/ajax_fornitori/'); ?>';
 var hse_nonce = '<?php echo wp_create_nonce('cantiere_form_' . $hse_current_user_id); ?>';
 
@@ -2189,7 +2898,525 @@ function hse_toggleAccordion(sectionId) {
     }
 }
 
-// Gestione Accordion Personale
+// 🚛 NUOVE FUNZIONI: Gestione Automezzi
+
+function hse_addAutomezzo() {
+    const container = document.getElementById('hse_automezzi_container');
+    const currentCount = parseInt(document.getElementById('hse_numero_automezzi').value);
+    const newIndex = currentCount;
+    
+    // Rimuovi messaggio "nessun automezzo" se presente
+    const noAutomezziMessage = container.querySelector('.hse_no_automezzi_message');
+    if (noAutomezziMessage) {
+        noAutomezziMessage.remove();
+    }
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'hse_automezzo_row';
+    newRow.setAttribute('data-index', newIndex);
+    newRow.style.cssText = 'border: 1px solid #ddd; background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px;';
+    
+    newRow.innerHTML = `
+        <div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="hse_automezzo_descrizione_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo:</label>
+                <input type="text" name="hse_automezzi_descrizione[]" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+            </div>
+            <div class="hse_automezzo_targa_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa:</label>
+                <input type="text" name="hse_automezzi_targa[]" placeholder="AA123BB" maxlength="7" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" oninput="hse_validateTargaInput(this)" required>
+                <div class="hse_targa_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>
+            </div>
+            <div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">
+                <button type="button" onclick="hse_removeAutomezzoRow(this)" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Rimuovi</button>
+            </div>
+        </div>
+    `;
+    
+    // Animazione di inserimento
+    newRow.style.opacity = '0';
+    newRow.style.transform = 'translateY(-10px)';
+    container.appendChild(newRow);
+    
+    setTimeout(() => {
+        newRow.style.transition = 'all 0.3s ease';
+        newRow.style.opacity = '1';
+        newRow.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Aggiorna contatori
+    document.getElementById('hse_numero_automezzi').value = currentCount + 1;
+    hse_updateAutomezziCount();
+    
+    // Focus sul primo campo
+    const firstInput = newRow.querySelector('input[name="hse_automezzi_descrizione[]"]');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 300);
+    }
+    
+    hse_showToast('✅ Nuovo automezzo aggiunto', 'success');
+}
+
+function hse_removeAutomezzoRow(button) {
+    const row = button.closest('.hse_automezzo_row');
+    const container = document.getElementById('hse_automezzi_container');
+    
+    // Animazione di rimozione
+    row.style.transition = 'all 0.3s ease';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(-20px)';
+    
+    setTimeout(() => {
+        row.remove();
+        
+        // Aggiorna contatori
+        const currentCount = parseInt(document.getElementById('hse_numero_automezzi').value);
+        document.getElementById('hse_numero_automezzi').value = Math.max(0, currentCount - 1);
+        hse_updateAutomezziCount();
+        
+        // Mostra messaggio se non ci sono più automezzi
+        const remainingRows = container.querySelectorAll('.hse_automezzo_row');
+        if (remainingRows.length === 0) {
+            const noAutomezziMessage = document.createElement('div');
+            noAutomezziMessage.className = 'hse_no_automezzi_message';
+            noAutomezziMessage.style.cssText = 'text-align: center; padding: 20px; color: #856404; font-style: italic; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin-bottom: 15px;';
+            noAutomezziMessage.innerHTML = '🚛 Nessun automezzo inserito. Usa il pulsante qui sotto per aggiungere automezzi.';
+            container.appendChild(noAutomezziMessage);
+        }
+    }, 300);
+    
+    hse_showToast('🗑️ Automezzo rimosso', 'info');
+}
+
+function hse_removeLastAutomezzo() {
+    const container = document.getElementById('hse_automezzi_container');
+    const rows = container.querySelectorAll('.hse_automezzo_row');
+    
+    if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        const removeButton = lastRow.querySelector('.hse_remove_automezzo_btn');
+        if (removeButton) {
+            hse_removeAutomezzoRow(removeButton);
+        }
+    }
+}
+
+function hse_updateAutomezziCount() {
+    const count = parseInt(document.getElementById('hse_numero_automezzi').value);
+    const countElement = document.getElementById('hse_automezzi_count');
+    if (countElement) {
+        countElement.textContent = `(${count} automezzi)`;
+    }
+}
+
+function hse_validateTargaInput(input) {
+    const targa = input.value.toUpperCase();
+    const feedbackDiv = input.parentNode.querySelector('.hse_targa_validation_feedback');
+    
+    // Pattern targa italiana: AA123BB
+    const pattern = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
+    
+    if (targa.length === 0) {
+        input.style.borderColor = '#ddd';
+        input.style.backgroundColor = 'white';
+        feedbackDiv.innerHTML = '';
+        return;
+    }
+    
+    if (pattern.test(targa)) {
+        input.style.borderColor = '#28a745';
+        input.style.backgroundColor = '#f8fff8';
+        feedbackDiv.innerHTML = '<span style="color: #28a745;">✅ Targa valida</span>';
+    } else {
+        input.style.borderColor = '#dc3545';
+        input.style.backgroundColor = '#fff5f5';
+        
+        let message = '';
+        if (targa.length < 7) {
+            message = `⚠️ Formato: AA123BB (${7 - targa.length} caratteri mancanti)`;
+        } else if (targa.length > 7) {
+            message = '⚠️ Targa troppo lunga (max 7 caratteri)';
+        } else {
+            message = '❌ Formato non valido. Richiesto: AA123BB';
+        }
+        
+        feedbackDiv.innerHTML = `<span style="color: #dc3545;">${message}</span>`;
+    }
+    
+    input.value = targa; // Forza maiuscole
+}
+
+function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
+    if (isAssigned) {
+        if (!confirm(`⚠️ ATTENZIONE\n\nL'automezzo "${automezzoInfo}" è attualmente assegnato a dei cantieri.\n\nSe lo elimini, verrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?`)) {
+            return;
+        }
+    } else {
+        if (!confirm(`Sei sicuro di voler eliminare l'automezzo "${automezzoInfo}"?`)) {
+            return;
+        }
+    }
+    
+    // Mostra loading
+    const automezzoRow = document.querySelector(`[data-automezzo-id="${automezzoId}"]`);
+    if (automezzoRow) {
+        automezzoRow.style.opacity = '0.5';
+        automezzoRow.style.pointerEvents = 'none';
+    }
+    
+    // AJAX call
+    const formData = new FormData();
+    formData.append('automezzo_id', automezzoId);
+    formData.append('user_id', hse_currentUserId);
+    if (isAssigned) {
+        formData.append('force_delete', 'true');
+    }
+    
+    fetch('/cogei/ajax_fornitori/elimina_automezzo.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hse_showToast('✅ ' + data.message, 'success');
+            
+            // Rimuovi dalla DOM con animazione
+            if (automezzoRow) {
+                automezzoRow.style.transition = 'all 0.5s ease';
+                automezzoRow.style.opacity = '0';
+                automezzoRow.style.transform = 'translateX(-100%)';
+                
+                setTimeout(() => {
+                    automezzoRow.remove();
+                    hse_updateAutomezziCount();
+                }, 500);
+            }
+            
+            // Ricarica la pagina dopo un delay per aggiornare i dati
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+            
+        } else if (data.warning) {
+            // Mostra warning e chiedi conferma
+            if (confirm(`⚠️ ${data.message}`)) {
+                // Richiama con force_delete
+                hse_deleteAutomezzo(automezzoId, automezzoInfo, true);
+            } else {
+                // Ripristina lo stato
+                if (automezzoRow) {
+                    automezzoRow.style.opacity = '1';
+                    automezzoRow.style.pointerEvents = 'auto';
+                }
+            }
+        } else {
+            hse_showToast('❌ ' + data.message, 'error');
+            
+            // Ripristina lo stato
+            if (automezzoRow) {
+                automezzoRow.style.opacity = '1';
+                automezzoRow.style.pointerEvents = 'auto';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        hse_showToast('❌ Errore di connessione', 'error');
+        
+        // Ripristina lo stato
+        if (automezzoRow) {
+            automezzoRow.style.opacity = '1';
+            automezzoRow.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+// 🔧 NUOVE FUNZIONI: Gestione Attrezzi
+
+function hse_addAttrezzo() {
+    const container = document.getElementById('hse_attrezzi_container');
+    const currentCount = parseInt(document.getElementById('hse_numero_attrezzi').value);
+    const newIndex = currentCount;
+    
+    // Rimuovi messaggio "nessun attrezzo" se presente
+    const noAttrezziMessage = container.querySelector('.hse_no_attrezzi_message');
+    if (noAttrezziMessage) {
+        noAttrezziMessage.remove();
+    }
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'hse_attrezzo_row';
+    newRow.setAttribute('data-index', newIndex);
+    newRow.style.cssText = 'border: 1px solid #ddd; background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px;';
+    
+    newRow.innerHTML = `
+        <div class="hse_attrezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="hse_attrezzo_descrizione_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo:</label>
+                <input type="text" name="hse_attrezzi_descrizione[]" placeholder="es. Saldatrice elettrica 220V" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+            </div>
+            <div class="hse_attrezzo_revisione_field">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">📅 Data Revisione (opzionale):</label>
+                <input type="date" name="hse_attrezzi_data_revisione[]" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" onchange="hse_validateRevisioneDate(this)">
+                <div class="hse_revisione_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>
+            </div>
+            <div class="hse_attrezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">
+                <button type="button" onclick="hse_removeAttrezzoRow(this)" class="hse_remove_attrezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Rimuovi</button>
+            </div>
+        </div>
+    `;
+    
+    // Animazione di inserimento
+    newRow.style.opacity = '0';
+    newRow.style.transform = 'translateY(-10px)';
+    container.appendChild(newRow);
+    
+    setTimeout(() => {
+        newRow.style.transition = 'all 0.3s ease';
+        newRow.style.opacity = '1';
+        newRow.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Aggiorna contatori
+    document.getElementById('hse_numero_attrezzi').value = currentCount + 1;
+    hse_updateAttrezziCount();
+    
+    // Focus sul primo campo
+    const firstInput = newRow.querySelector('input[name="hse_attrezzi_descrizione[]"]');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 300);
+    }
+    
+    hse_showToast('✅ Nuovo attrezzo aggiunto', 'success');
+}
+
+function hse_removeAttrezzoRow(button) {
+    const row = button.closest('.hse_attrezzo_row');
+    const container = document.getElementById('hse_attrezzi_container');
+    
+    // Animazione di rimozione
+    row.style.transition = 'all 0.3s ease';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(-20px)';
+    
+    setTimeout(() => {
+        row.remove();
+        
+        // Aggiorna contatori
+        const currentCount = parseInt(document.getElementById('hse_numero_attrezzi').value);
+        document.getElementById('hse_numero_attrezzi').value = Math.max(0, currentCount - 1);
+        hse_updateAttrezziCount();
+        
+        // Mostra messaggio se non ci sono più attrezzi
+        const remainingRows = container.querySelectorAll('.hse_attrezzo_row');
+        if (remainingRows.length === 0) {
+            const noAttrezziMessage = document.createElement('div');
+            noAttrezziMessage.className = 'hse_no_attrezzi_message';
+            noAttrezziMessage.style.cssText = 'text-align: center; padding: 20px; color: #1565c0; font-style: italic; background: rgba(33, 150, 243, 0.1); border-radius: 8px; margin-bottom: 15px;';
+            noAttrezziMessage.innerHTML = '🔧 Nessun attrezzo inserito. Usa il pulsante qui sotto per aggiungere attrezzi.';
+            container.appendChild(noAttrezziMessage);
+        }
+    }, 300);
+    
+    hse_showToast('🗑️ Attrezzo rimosso', 'info');
+}
+
+function hse_removeLastAttrezzo() {
+    const container = document.getElementById('hse_attrezzi_container');
+    const rows = container.querySelectorAll('.hse_attrezzo_row');
+    
+    if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        const removeButton = lastRow.querySelector('.hse_remove_attrezzo_btn');
+        if (removeButton) {
+            hse_removeAttrezzoRow(removeButton);
+        }
+    }
+}
+
+function hse_updateAttrezziCount() {
+    const count = parseInt(document.getElementById('hse_numero_attrezzi').value);
+    const countElement = document.getElementById('hse_attrezzi_count');
+    if (countElement) {
+        countElement.textContent = `(${count} attrezzi)`;
+    }
+}
+
+function hse_validateRevisioneDate(input) {
+    const dataRevisione = input.value;
+    const feedbackDiv = input.parentNode.querySelector('.hse_revisione_validation_feedback');
+    
+    if (!dataRevisione) {
+        input.style.borderColor = '#ddd';
+        input.style.backgroundColor = 'white';
+        feedbackDiv.innerHTML = '';
+        return;
+    }
+    
+    const oggi = new Date();
+    const revisione = new Date(dataRevisione);
+    const diffTime = revisione - oggi;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        input.style.borderColor = '#dc3545';
+        input.style.backgroundColor = '#fff5f5';
+        feedbackDiv.innerHTML = `<span style="color: #dc3545;">🚨 Revisione scaduta da ${Math.abs(diffDays)} giorni</span>`;
+    } else if (diffDays <= 30) {
+        input.style.borderColor = '#ffc107';
+        input.style.backgroundColor = '#fffdf0';
+        feedbackDiv.innerHTML = `<span style="color: #856404;">⚠️ Revisione scade tra ${diffDays} giorni</span>`;
+    } else {
+        input.style.borderColor = '#28a745';
+        input.style.backgroundColor = '#f8fff8';
+        feedbackDiv.innerHTML = `<span style="color: #28a745;">✅ Revisione valida</span>`;
+    }
+}
+
+function hse_deleteAttrezzo(attrezzoId, attrezzoInfo, isAssigned) {
+    if (isAssigned) {
+        if (!confirm(`⚠️ ATTENZIONE\n\nL'attrezzo "${attrezzoInfo}" è attualmente assegnato a dei cantieri.\n\nSe lo elimini, verrà rimosso automaticamente da tutti i cantieri assegnati.\n\nVuoi continuare?`)) {
+            return;
+        }
+    } else {
+        if (!confirm(`Sei sicuro di voler eliminare l'attrezzo "${attrezzoInfo}"?`)) {
+            return;
+        }
+    }
+    
+    // Mostra loading
+    const attrezzoRow = document.querySelector(`[data-attrezzo-id="${attrezzoId}"]`);
+    if (attrezzoRow) {
+        attrezzoRow.style.opacity = '0.5';
+        attrezzoRow.style.pointerEvents = 'none';
+    }
+    
+    // AJAX call
+    const formData = new FormData();
+    formData.append('attrezzo_id', attrezzoId);
+    formData.append('user_id', hse_currentUserId);
+    if (isAssigned) {
+        formData.append('force_delete', 'true');
+    }
+    
+    fetch('/cogei/ajax_fornitori/elimina_attrezzo.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hse_showToast('✅ ' + data.message, 'success');
+            
+            // Rimuovi dalla DOM con animazione
+            if (attrezzoRow) {
+                attrezzoRow.style.transition = 'all 0.5s ease';
+                attrezzoRow.style.opacity = '0';
+                attrezzoRow.style.transform = 'translateX(-100%)';
+                
+                setTimeout(() => {
+                    attrezzoRow.remove();
+                    hse_updateAttrezziCount();
+                }, 500);
+            }
+            
+            // Ricarica la pagina dopo un delay per aggiornare i dati
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+            
+        } else if (data.warning) {
+            // Mostra warning e chiedi conferma
+            if (confirm(`⚠️ ${data.message}`)) {
+                // Richiama con force_delete
+                hse_deleteAttrezzo(attrezzoId, attrezzoInfo, true);
+            } else {
+                // Ripristina lo stato
+                if (attrezzoRow) {
+                    attrezzoRow.style.opacity = '1';
+                    attrezzoRow.style.pointerEvents = 'auto';
+                }
+            }
+        } else {
+            hse_showToast('❌ ' + data.message, 'error');
+            
+            // Ripristina lo stato
+            if (attrezzoRow) {
+                attrezzoRow.style.opacity = '1';
+                attrezzoRow.style.pointerEvents = 'auto';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Errore:', error);
+        hse_showToast('❌ Errore di connessione', 'error');
+        
+        // Ripristina lo stato
+        if (attrezzoRow) {
+            attrezzoRow.style.opacity = '1';
+            attrezzoRow.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+// Toast notifications helper
+function hse_showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = 'hse_toast';
+    
+    const colors = {
+        success: 'linear-gradient(135deg, #28a745, #20c997)',
+        error: 'linear-gradient(135deg, #dc3545, #c82333)',
+        warning: 'linear-gradient(135deg, #ffc107, #fd7e14)',
+        info: 'linear-gradient(135deg, #17a2b8, #138496)'
+    };
+    
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        background: ${colors[type] || colors.info};
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideInFromRight 0.5s ease-out;
+        max-width: 350px;
+        word-wrap: break-word;
+    `;
+    
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Auto rimozione dopo 4 secondi
+    setTimeout(() => {
+        toast.style.animation = 'slideOutToRight 0.5s ease-in forwards';
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 500);
+    }, 4000);
+}
+
+// CSS per animazioni toast
+const toastStyles = document.createElement('style');
+toastStyles.textContent = `
+    @keyframes slideInFromRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutToRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(toastStyles);
+
 function hse_togglePersonaAccordion(personaIndex) {
     const content = document.getElementById('hse_content_persona_' + personaIndex);
     const arrow = document.getElementById('hse_arrow_persona_' + personaIndex);
@@ -2699,6 +3926,65 @@ function hse_validateFormBeforeSubmit(formType) {
             hse_hasErrors = true;
         }
         
+        // 🚛 NUOVO: Validazione automezzi
+        const hse_automezziDescrizioneInputs = document.querySelectorAll('input[name="hse_automezzi_descrizione[]"]');
+        const hse_automezziTargaInputs = document.querySelectorAll('input[name="hse_automezzi_targa[]"]');
+        
+        for (let i = 0; i < hse_automezziDescrizioneInputs.length; i++) {
+            const automezzoNum = i + 1;
+            
+            if (!hse_automezziDescrizioneInputs[i].value.trim()) {
+                hse_errors.push(`Descrizione automezzo ${automezzoNum} è obbligatoria`);
+                hse_hasErrors = true;
+            }
+            
+            const targa = hse_automezziTargaInputs[i] ? hse_automezziTargaInputs[i].value.trim().toUpperCase() : '';
+            if (!targa) {
+                hse_errors.push(`Targa automezzo ${automezzoNum} è obbligatoria`);
+                hse_hasErrors = true;
+            } else {
+                // Validazione formato targa italiana AA123BB
+                const targaPattern = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
+                if (!targaPattern.test(targa)) {
+                    hse_errors.push(`Targa automezzo ${automezzoNum} non valida. Formato richiesto: AA123BB`);
+                    hse_hasErrors = true;
+                }
+            }
+        }
+        
+        // Controlla targhe duplicate
+        if (hse_automezziTargaInputs.length > 1) {
+            const targhe = Array.from(hse_automezziTargaInputs).map(input => input.value.trim().toUpperCase()).filter(t => t);
+            const targheUnique = [...new Set(targhe)];
+            if (targhe.length !== targheUnique.length) {
+                hse_errors.push('Trovate targhe duplicate nell\'elenco automezzi');
+                hse_hasErrors = true;
+            }
+        }
+        
+        // 🔧 NUOVO: Validazione attrezzi
+        const hse_attrezziDescrizioneInputs = document.querySelectorAll('input[name="hse_attrezzi_descrizione[]"]');
+        const hse_attrezziRevisioneInputs = document.querySelectorAll('input[name="hse_attrezzi_data_revisione[]"]');
+        
+        for (let i = 0; i < hse_attrezziDescrizioneInputs.length; i++) {
+            const attrezzoNum = i + 1;
+            
+            if (!hse_attrezziDescrizioneInputs[i].value.trim()) {
+                hse_errors.push(`Descrizione attrezzo ${attrezzoNum} è obbligatoria`);
+                hse_hasErrors = true;
+            }
+            
+            // Validazione data revisione se presente
+            const dataRevisione = hse_attrezziRevisioneInputs[i] ? hse_attrezziRevisioneInputs[i].value.trim() : '';
+            if (dataRevisione) {
+                const revisioneDate = new Date(dataRevisione);
+                if (isNaN(revisioneDate.getTime())) {
+                    hse_errors.push(`Data revisione non valida per l'attrezzo ${attrezzoNum}`);
+                    hse_hasErrors = true;
+                }
+            }
+        }
+        
         if (hse_hasErrors) {
             alert('⚠️ Errori di validazione:\n\n' + hse_errors.join('\n'));
             return false;
@@ -3076,6 +4362,23 @@ if (typeof window !== 'undefined') {
     window.hse_addPersona = hse_addPersona;
     window.hse_removePersonaFromDOM = hse_removePersonaFromDOM;
     window.hse_validateScadenze = hse_validateScadenze;
+    
+    // 🚛 NUOVO: Funzioni automezzi
+    window.hse_addAutomezzo = hse_addAutomezzo;
+    window.hse_removeLastAutomezzo = hse_removeLastAutomezzo;
+    window.hse_updateAutomezziCount = hse_updateAutomezziCount;
+    window.hse_validateTargaInput = hse_validateTargaInput;
+    window.hse_deleteAutomezzo = hse_deleteAutomezzo;
+    
+    // 🔧 NUOVO: Funzioni attrezzi
+    window.hse_addAttrezzo = hse_addAttrezzo;
+    window.hse_removeLastAttrezzo = hse_removeLastAttrezzo;
+    window.hse_updateAttrezziCount = hse_updateAttrezziCount;
+    window.hse_validateRevisioneDate = hse_validateRevisioneDate;
+    window.hse_deleteAttrezzo = hse_deleteAttrezzo;
+    
+    // Utility
+    window.hse_showToast = hse_showToast;
 }
 </script>
 <style>
@@ -3093,7 +4396,9 @@ if (typeof window !== 'undefined') {
 /* Stili Accordion Headers */
 .hse_accordion_header:hover,
 .hse_persona_accordion_header:hover,
-.hse_cantiere_accordion_header:hover {
+.hse_cantiere_accordion_header:hover,
+.hse_automezzi_accordion_header:hover,
+.hse_attrezzi_accordion_header:hover {
     background: rgba(33, 150, 243, 0.15) !important;
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
@@ -3105,6 +4410,16 @@ if (typeof window !== 'undefined') {
 
 .hse_cantiere_accordion_header:hover {
     background: linear-gradient(135deg, #1976d2, #1565c0) !important;
+}
+
+/* 🚛 NUOVO: Stili header automezzi */
+.hse_automezzi_accordion_header:hover {
+    background: rgba(255, 193, 7, 0.2) !important;
+}
+
+/* 🔧 NUOVO: Stili header attrezzi */
+.hse_attrezzi_accordion_header:hover {
+    background: rgba(33, 150, 243, 0.2) !important;
 }
 
 /* Accordion Arrow Animations */
@@ -3173,6 +4488,153 @@ if (typeof window !== 'undefined') {
 @keyframes hse_warningPulse {
     0%, 100% { box-shadow: 0 0 0 rgba(220, 53, 69, 0.4); }
     50% { box-shadow: 0 0 10px rgba(220, 53, 69, 0.6); }
+}
+
+/* 🚛 NUOVO: Stili Automezzi */
+.hse_automezzi_group {
+    animation: hse_slideInLeft 0.8s ease-out;
+}
+
+.hse_automezzo_row {
+    transition: all 0.4s ease;
+    position: relative;
+}
+
+.hse_automezzo_row:hover {
+    box-shadow: 0 4px 16px rgba(255, 193, 7, 0.2);
+    transform: translateY(-1px);
+}
+
+.hse_targa_info_box {
+    transition: all 0.3s ease;
+}
+
+.hse_targa_info_box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+}
+
+/* Validazione targa italiana */
+input[name="hse_automezzi_targa[]"] {
+    font-family: 'Courier New', monospace !important;
+    font-weight: bold !important;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+input[name="hse_automezzi_targa[]"]:focus {
+    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
+    border-color: #ffc107 !important;
+}
+
+/* Feedback validazione targa */
+.hse_targa_validation_feedback {
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+/* 🔧 NUOVO: Stili Attrezzi */
+.hse_attrezzi_group {
+    animation: hse_slideInLeft 0.8s ease-out;
+}
+
+.hse_attrezzo_row {
+    transition: all 0.4s ease;
+    position: relative;
+}
+
+.hse_attrezzo_row:hover {
+    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+    transform: translateY(-1px);
+}
+
+.hse_revisione_info_box {
+    transition: all 0.3s ease;
+}
+
+.hse_revisione_info_box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
+}
+
+/* Validazione data revisione */
+input[name="hse_attrezzi_data_revisione[]"]:focus {
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3);
+    border-color: #2196f3 !important;
+}
+
+/* Feedback validazione revisione */
+.hse_revisione_validation_feedback {
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+/* Pulsanti rimozione veicoli/attrezzi */
+.hse_remove_automezzo_btn:hover,
+.hse_remove_attrezzo_btn:hover {
+    background: #c82333 !important;
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+.hse_remove_automezzo_btn:active,
+.hse_remove_attrezzo_btn:active {
+    transform: scale(0.95);
+}
+
+/* Pulsanti aggiungi veicoli/attrezzi */
+.hse_add_automezzo_btn:hover,
+.hse_add_attrezzo_btn:hover {
+    background: #218838 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+/* Cantieri assegnati info per veicoli/attrezzi */
+.hse_automezzo_cantieri_info,
+.hse_attrezzo_cantieri_info {
+    animation: hse_slideInDown 0.5s ease-out;
+}
+
+.hse_attrezzo_revisione_warning {
+    animation: hse_warningSlideIn 0.5s ease-out;
+}
+
+/* Checkbox selection in Part B */
+.hse_automezzo_checkbox input[type="checkbox"]:checked + .hse_automezzo_name,
+.hse_attrezzo_checkbox input[type="checkbox"]:checked + .hse_attrezzo_name {
+    color: #155724 !important;
+    font-weight: bold !important;
+    text-shadow: 0 1px 2px rgba(21, 87, 36, 0.2);
+}
+
+.hse_automezzo_input,
+.hse_attrezzo_input {
+    transform: scale(1.2);
+    margin-right: 10px;
+}
+
+/* Containers per selezione Part B */
+.hse_automezzi_selection_container {
+    border-left: 4px solid #ffc107;
+    transition: all 0.3s ease;
+}
+
+.hse_automezzi_selection_container:hover {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.2);
+}
+
+.hse_attrezzi_selection_container {
+    border-left: 4px solid #2196f3;
+    transition: all 0.3s ease;
+}
+
+.hse_attrezzi_selection_container:hover {
+    background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
 }
 
 /* Sezioni documenti personali (UNILAV + Idoneità) */
