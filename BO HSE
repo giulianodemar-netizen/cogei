@@ -608,7 +608,8 @@ function getOperaiAssegnatiCantiere($cantiere_id, $user_id = null) {
     
     return $wpdb->get_results($wpdb->prepare("
         SELECT oa.*, p.nome, p.cognome, p.data_nascita,
-               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file,
+               p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
         WHERE oa.cantiere_id = %d $where_user
@@ -801,7 +802,8 @@ function getOperaiAssegnazioniByUser($user_id) {
     
     return $wpdb->get_results($wpdb->prepare("
         SELECT oa.*, p.nome, p.cognome, p.data_nascita, c.nome as cantiere_nome, c.id as cantiere_id,
-               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file,
+               p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
         JOIN {$wpdb->prefix}cantieri c ON oa.cantiere_id = c.id
@@ -826,6 +828,9 @@ function groupAssegnazioniByOperaio($assegnazioni) {
                 'formazione_antincendio_file' => $assegnazione['formazione_antincendio_file'],
                 'formazione_primo_soccorso_file' => $assegnazione['formazione_primo_soccorso_file'],
                 'formazione_preposti_file' => $assegnazione['formazione_preposti_file'],
+                'formazione_lavori_quota_file' => $assegnazione['formazione_lavori_quota_file'] ?? '',
+                'formazione_dpi_terza_categoria_file' => $assegnazione['formazione_dpi_terza_categoria_file'] ?? '',
+                'formazione_ambienti_confinati_file' => $assegnazione['formazione_ambienti_confinati_file'] ?? '',
                 'cantieri' => array()
             );
         }
@@ -1590,9 +1595,27 @@ foreach ($richieste as $richiesta) {
                 $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">👮 Preposti</a>';
             }
             
+            // 🎯 NUOVE FORMAZIONI AGGIUNTIVE
+            $formazioni_aggiuntive = [];
+            if (!empty($persona['formazione_lavori_quota_file'])) {
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2;">🏗️ Lavori in Quota</a>';
+            }
+            if (!empty($persona['formazione_dpi_terza_categoria_file'])) {
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" style="color: #0066a2;">🦺 DPI 3° Categoria</a>';
+            }
+            if (!empty($persona['formazione_ambienti_confinati_file'])) {
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_ambienti_confinati_file']) . '" target="_blank" style="color: #0066a2;">🕳️ Ambienti Confinati</a>';
+            }
+            
             if (!empty($formazioni)) {
-                echo '<div style="font-size: 11px;">' . implode(' | ', $formazioni) . '</div>';
-            } else {
+                echo '<div style="font-size: 11px; margin-bottom: 5px;"><strong>Formazioni Base:</strong><br>' . implode(' | ', $formazioni) . '</div>';
+            }
+            
+            if (!empty($formazioni_aggiuntive)) {
+                echo '<div style="font-size: 11px; padding: 5px; background: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107; border-radius: 3px;"><strong>🎯 Formazioni Aggiuntive:</strong><br>' . implode(' | ', $formazioni_aggiuntive) . '</div>';
+            }
+            
+            if (empty($formazioni) && empty($formazioni_aggiuntive)) {
                 echo '<div style="font-size: 11px; color: #dc3545;">Nessuna formazione caricata</div>';
             }
             echo '</div>';
