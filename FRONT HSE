@@ -1995,15 +1995,90 @@ echo '<h3 class="hse_automezzi_title" style="color: #856404; margin: 0; display:
 echo '<span class="hse_accordion_arrow" id="hse_arrow_automezzi" style="font-size: 18px; font-weight: bold; color: #856404; transition: transform 0.3s ease;">▼</span>';
 echo '</div>';
 
-// Content accordion automezzi (chiuso di default) - RIMOSSO DALLA PARTE B
+// Content accordion automezzi (chiuso di default)
 echo '<div class="hse_accordion_content" id="hse_content_automezzi" style="display: none; padding: 25px; transition: all 0.3s ease;">';
 
-echo '<input type="hidden" name="hse_numero_automezzi" id="hse_numero_automezzi" value="0">';
+echo '<input type="hidden" name="hse_numero_automezzi" id="hse_numero_automezzi" value="' . $hse_numero_automezzi_value . '">';
 
-echo '<div style="background: #fff3cd; padding: 20px; border-radius: 8px; text-align: center; color: #856404; border-left: 4px solid #ffc107;">';
-echo '<h4 style="margin: 0 0 10px 0; color: #856404;">📋 Sezione Automezzi Rimossa dalla Parte B</h4>';
-echo '<p style="margin: 0 0 10px 0; font-size: 14px;">La gestione automezzi non è più parte della Parte B del modulo.</p>';
-echo '<p style="margin: 0; font-size: 13px; line-height: 1.4;"><strong>Nota:</strong> Gli automezzi vengono ora gestiti direttamente nelle assegnazioni ai singoli cantieri nella sezione dedicata.</p>';
+// Informazioni targa italiana
+echo '<div class="hse_targa_info_box" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; border-radius: 8px; padding: 15px; margin-bottom: 20px;">';
+echo '<div class="hse_targa_info_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
+echo '<span class="hse_targa_info_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">🚗</span>';
+echo '<strong class="hse_targa_info_title" style="color: #1565c0; font-size: 14px;">Formato Targa Italiana</strong>';
+echo '</div>';
+echo '<div class="hse_targa_info_text" style="color: #1565c0; font-size: 13px; line-height: 1.4;">';
+echo 'Le targhe devono rispettare il <strong>formato italiano standard: AA123BB</strong> (2 lettere + 3 numeri + 2 lettere). ';
+echo 'La validazione avverrà automaticamente durante la digitazione.';
+echo '</div>';
+echo '</div>';
+
+echo '<div id="hse_automezzi_container" class="hse_automezzi_container">';
+
+// Precompila automezzi esistenti
+if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
+    foreach ($hse_existing_data['automezzi'] as $index => $hse_automezzo) {
+        
+        // Verifica se questo automezzo è assegnato a cantieri
+        $hse_automezzo_cantieri = hse_getAutomezzoCantieriAssegnazioni($hse_automezzo['id'], $hse_current_user_id);
+        $hse_is_assigned = !empty($hse_automezzo_cantieri);
+        
+        $hse_assigned_style = $hse_is_assigned ? 'border: 2px solid #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);' : 'border: 1px solid #ddd; background: white;';
+        
+        echo '<div class="hse_automezzo_row" data-index="' . $index . '" data-automezzo-id="' . $hse_automezzo['id'] . '" style="' . $hse_assigned_style . ' padding: 15px; margin-bottom: 15px; border-radius: 8px;">';
+        
+        // Mostra cantieri assegnati se presente
+        if ($hse_is_assigned) {
+            echo '<div class="hse_automezzo_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
+            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            foreach ($hse_automezzo_cantieri as $cantiere_info) {
+                $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
+                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Dati automezzo
+        echo '<div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+        
+        echo '<div class="hse_automezzo_descrizione_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo:</label>';
+        echo '<input type="text" name="hse_automezzi_descrizione[]" value="' . esc_attr($hse_automezzo['descrizione_automezzo']) . '" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
+        echo '</div>';
+        
+        echo '<div class="hse_automezzo_targa_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa:</label>';
+        echo '<input type="text" name="hse_automezzi_targa[]" value="' . esc_attr($hse_automezzo['targa']) . '" placeholder="AA123BB" maxlength="7" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" oninput="hse_validateTargaInput(this)" required>';
+        echo '<div class="hse_targa_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>';
+        echo '</div>';
+        
+        echo '<div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">';
+        if (count($hse_existing_data['automezzi']) > 0) {
+            echo '<button type="button" onclick="hse_deleteAutomezzo(' . $hse_automezzo['id'] . ', \'' . addslashes($hse_automezzo['descrizione_automezzo'] . ' - ' . $hse_automezzo['targa']) . '\', ' . ($hse_is_assigned ? 'true' : 'false') . ')" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Elimina</button>';
+        }
+        echo '</div>';
+        
+        echo '</div>';
+        
+        echo '</div>'; // Fine row automezzo
+    }
+} else {
+    // Nessun automezzo esistente, mostra messaggio
+    echo '<div class="hse_no_automezzi_message" style="text-align: center; padding: 20px; color: #856404; font-style: italic; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin-bottom: 15px;">';
+    echo '🚛 Nessun automezzo inserito. Usa il pulsante qui sotto per aggiungere automezzi.';
+    echo '</div>';
+}
+
+echo '</div>'; // Fine automezzi container
+
+// Pulsanti gestione automezzi
+echo '<div class="hse_automezzi_controls" style="margin-top: 20px; text-align: center;">';
+echo '<button type="button" onclick="hse_addAutomezzo()" class="hse_add_automezzo_btn" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-weight: bold;">➕ Aggiungi Automezzo</button>';
+if ($hse_numero_automezzi_value > 0) {
+    echo '<button type="button" onclick="hse_removeLastAutomezzo()" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">➖ Rimuovi Ultimo</button>';
+}
 echo '</div>';
 
 echo '</div>'; // Fine accordion content automezzi
@@ -2184,29 +2259,6 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             echo '</div>';
         }
         echo '<small class="hse_pos_help" style="color: #666;">Formato: PDF, Max: 10MB</small>';
-        echo '</div>';
-        
-        // Elenco Mezzi per questo cantiere
-        echo '<div class="hse_mezzi_group" style="margin-bottom: 20px;">';
-        echo '<label class="hse_mezzi_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">🚛 Elenco Mezzi per questo cantiere</label>';
-        $hse_mezzi_style = ($hse_pos_data && $hse_pos_data['mezzi_file']) ? 
-            'width: 100%; padding: 10px; border: 3px solid #28a745; border-radius: 5px; background: #f8fff8;' : 
-            'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
-        echo '<input type="file" name="hse_mezzi_file_' . $hse_cantiere['id'] . '" accept=".pdf" class="hse_mezzi_input" style="' . $hse_mezzi_style . '">';
-        if ($hse_pos_data && $hse_pos_data['mezzi_file']) {
-            echo '<div class="hse_mezzi_success" style="margin-top: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 8px; border-left: 5px solid #28a745;">';
-            echo '<div class="hse_success_content" style="display: flex; align-items: center; gap: 10px;">';
-            echo '<span class="hse_success_icon" style="background: #28a745; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px;">✓</span>';
-            echo '<div class="hse_success_info" style="flex: 1;">';
-            echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">🚛 File Mezzi Caricato</div>';
-            echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
-            echo '<a href="' . esc_url($hse_pos_data['mezzi_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza Mezzi</a>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-        }
-        echo '<small class="hse_mezzi_help" style="color: #666;">Formato: PDF, Max: 10MB (opzionale)</small>';
         echo '</div>';
         
         // Selezione operai per questo cantiere
@@ -2476,7 +2528,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
     echo '<ul class="hse_disabled_help_list" style="margin: 0; padding-left: 20px; color: #0c5460;">';
     echo '<li class="hse_disabled_help_item">✅ Completa e salva la <strong>Parte A - Documenti Aziendali + Personale</strong></li>';
     echo '<li class="hse_disabled_help_item">📞 Contatta l\'ufficio per richiedere l\'abilitazione al cantiere</li>';
-    echo '<li class="hse_disabled_help_item">📄 Prepara i documenti richiesti per la Parte B (POS, elenco mezzi per ogni cantiere)</li>';
+    echo '<li class="hse_disabled_help_item">📄 Prepara i documenti richiesti per la Parte B (POS per ogni cantiere)</li>';
     echo '</ul>';
     echo '</div>';
     echo '</div>';

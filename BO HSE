@@ -159,6 +159,52 @@ function createCantieriTablesIfNotExists() {
 // Esegui creazione tabelle
 createCantieriTablesIfNotExists();
 
+// ================== FUNZIONI HELPER PER AUTOMEZZI E ATTREZZI ==================
+
+function hse_getAutomezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_automezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAttrezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_attrezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_automezzo, a.targa
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
+        WHERE aa.cantiere_id = %d AND aa.user_id = %d
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getAttrezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_attrezzo, a.data_revisione
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_attrezzi a ON aa.attrezzo_id = a.id
+        WHERE aa.cantiere_id = %d AND aa.user_id = %d
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
 // ================== GESTIONE AZIONI CANTIERI (ESTESO) ==================
 
 if (isset($_GET['cantiere_action']) && isset($_POST['cantiere_submit'])) {
