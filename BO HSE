@@ -1309,8 +1309,6 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DVR</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">POS</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Mezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Automezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🔧 Attrezzi</th>';
@@ -1370,40 +1368,6 @@ foreach ($richieste as $richiesta) {
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
     if ($richiesta['rct_file']) {
         echo '<a href="' . esc_url($richiesta['rct_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT">🛡️ ✓</a>';
-    } else {
-        echo '<span style="color: #dc3545;">✗</span>';
-    }
-    echo '</td>';
-    
-    // File POS (mostra se ha almeno un POS per qualche cantiere)
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    $has_pos = false;
-    foreach ($cantieri_assegnati as $cantiere) {
-        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
-        if ($pos_data && $pos_data['pos_file']) {
-            $has_pos = true;
-            break;
-        }
-    }
-    if ($has_pos) {
-        echo '<span style="color: #28a745; font-weight: bold;" title="Ha caricato POS per almeno un cantiere">📋 ✓</span>';
-    } else {
-        echo '<span style="color: #dc3545;">✗</span>';
-    }
-    echo '</td>';
-    
-    // File Mezzi (mostra se ha almeno un file mezzi per qualche cantiere)
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    $has_mezzi = false;
-    foreach ($cantieri_assegnati as $cantiere) {
-        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
-        if ($pos_data && $pos_data['mezzi_file']) {
-            $has_mezzi = true;
-            break;
-        }
-    }
-    if ($has_mezzi) {
-        echo '<span style="color: #28a745; font-weight: bold;" title="Ha caricato elenco mezzi per almeno un cantiere">🚛 ✓</span>';
     } else {
         echo '<span style="color: #dc3545;">✗</span>';
     }
@@ -1728,6 +1692,8 @@ foreach ($richieste as $richiesta) {
     echo 'rct_file: "' . addslashes($richiesta['rct_file']) . '",';
     echo 'numero_personale: ' . intval($richiesta['numero_personale']) . ',';
     echo 'personale_inserito: ' . count($personale) . ',';
+    echo 'automezzi_count: ' . count(hse_getAutomezziByRichiestaId($richiesta['id'])) . ',';
+    echo 'attrezzi_count: ' . count(hse_getAttrezziByRichiestaId($richiesta['id'])) . ',';
     echo 'stato: {';
     echo 'key: "' . $stato_hse['key'] . '",';
     echo 'label: "' . addslashes($stato_hse['label']) . '",';
@@ -1759,6 +1725,38 @@ foreach ($richieste as $richiesta) {
         echo '{';
         echo 'id: ' . $cantiere['id'] . ',';
         echo 'nome: "' . addslashes($cantiere['nome']) . '",';
+        
+        // Aggiungi dati POS per questo cantiere
+        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
+        echo 'pos_file: "' . addslashes($pos_data['pos_file'] ?? '') . '",';
+        echo 'mezzi_file: "' . addslashes($pos_data['mezzi_file'] ?? '') . '",';
+        
+        // Aggiungi automezzi assegnati a questo cantiere
+        $automezzi_cantiere = hse_getAutomezziAssegnatiCantiere($cantiere['id'], $user_id);
+        echo 'automezzi: [';
+        foreach ($automezzi_cantiere as $automezzo) {
+            echo '{';
+            echo 'id: ' . $automezzo['automezzo_id'] . ',';
+            echo 'descrizione: "' . addslashes($automezzo['descrizione_automezzo']) . '",';
+            echo 'targa: "' . addslashes($automezzo['targa']) . '",';
+            echo 'data_assegnazione: "' . addslashes($automezzo['data_assegnazione']) . '"';
+            echo '},';
+        }
+        echo '],';
+        
+        // Aggiungi attrezzi assegnati a questo cantiere
+        $attrezzi_cantiere = hse_getAttrezziAssegnatiCantiere($cantiere['id'], $user_id);
+        echo 'attrezzi: [';
+        foreach ($attrezzi_cantiere as $attrezzo) {
+            echo '{';
+            echo 'id: ' . $attrezzo['attrezzo_id'] . ',';
+            echo 'descrizione: "' . addslashes($attrezzo['descrizione_attrezzo']) . '",';
+            echo 'data_revisione: "' . addslashes($attrezzo['data_revisione'] ?? '') . '",';
+            echo 'data_assegnazione: "' . addslashes($attrezzo['data_assegnazione']) . '"';
+            echo '},';
+        }
+        echo '],';
+        
         echo 'operai: [';
         foreach ($operai_cantiere as $operaio_assegnazione) {
             $operaio_details = array_filter($personale, function($p) use ($operaio_assegnazione) {
@@ -2724,11 +2722,10 @@ function loadStatusDetails(richiestaId) {
         // Calcola lo stato di completamento
         const dvr_completo = richiestaData.dvr_file && richiestaData.dvr_file.length > 0;
         const rct_completo = richiestaData.rct_file && richiestaData.rct_file.length > 0;
-        const operai_dichiarati = richiestaData.numero_personale > 0;
         const operai_inseriti = richiestaData.personale_inserito > 0;
         
-        const elementi_completati = [dvr_completo, rct_completo, operai_dichiarati, operai_inseriti].filter(Boolean).length;
-        const elementi_totali = 4;
+        const elementi_completati = [dvr_completo, rct_completo, operai_inseriti].filter(Boolean).length;
+        const elementi_totali = 3;
         
         contentDiv.innerHTML = `
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
@@ -2744,11 +2741,14 @@ function loadStatusDetails(richiestaId) {
                     <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${rct_completo ? '#28a745' : '#dc3545'};">
                         <strong>🛡️ RCT:</strong> <span style="color: ${rct_completo ? '#28a745' : '#dc3545'};">${rct_completo ? '✅ Caricato' : '❌ Mancante'}</span>
                     </div>
-                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${operai_dichiarati ? '#28a745' : '#dc3545'};">
-                        <strong>👷 Operai Dichiarati:</strong> <span style="color: ${operai_dichiarati ? '#28a745' : '#dc3545'};">${operai_dichiarati ? '✅ ' + richiestaData.numero_personale + ' dichiarati' : '❌ Nessuno dichiarato'}</span>
-                    </div>
                     <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${operai_inseriti ? '#28a745' : '#dc3545'};">
-                        <strong>👥 Operai Inseriti:</strong> <span style="color: ${operai_inseriti ? '#28a745' : '#dc3545'};">${operai_inseriti ? '✅ ' + richiestaData.personale_inserito + ' inseriti' : '❌ Nessuno inserito'}</span>
+                        <strong>👥 Operai nel Sistema:</strong> <span style="color: ${operai_inseriti ? '#28a745' : '#dc3545'};">${operai_inseriti ? '✅ ' + richiestaData.personale_inserito + ' inseriti' : '❌ Nessuno inserito'}</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #17a2b8;">
+                        <strong>🚛 Automezzi:</strong> <span style="color: #17a2b8;">${richiestaData.automezzi_count || 0} registrati</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #6f42c1;">
+                        <strong>🔧 Attrezzi:</strong> <span style="color: #6f42c1;">${richiestaData.attrezzi_count || 0} registrati</span>
                     </div>
                 </div>
             </div>
@@ -2759,10 +2759,7 @@ function loadStatusDetails(richiestaId) {
                 <ul style="margin: 0; padding-left: 20px; color: #856404;">
                     ${!dvr_completo ? '<li>Caricare il documento DVR</li>' : ''}
                     ${!rct_completo ? '<li>Caricare il documento RCT</li>' : ''}
-                    ${!operai_dichiarati ? '<li>Dichiarare il numero di operai previsti</li>' : ''}
-                    ${!operai_inseriti ? '<li>Inserire nel sistema gli operai dichiarati</li>' : ''}
-                    ${operai_dichiarati && operai_inseriti && richiestaData.numero_personale > richiestaData.personale_inserito ? 
-                        '<li>Inserire tutti gli operai dichiarati (mancano ' + (richiestaData.numero_personale - richiestaData.personale_inserito) + ')</li>' : ''}
+                    ${!operai_inseriti ? '<li>Inserire nel sistema almeno un operaio</li>' : ''}
                 </ul>
             </div>
             ` : `
@@ -2825,7 +2822,7 @@ function showCantiereWorkers(cantiereId, userId, cantiereName, aziendaNome) {
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">
                 <div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h4 style="margin: 0;">👷 Operai Assegnati al Cantiere</h4>
+                        <h4 style="margin: 0;">🏗️ Dettagli Cantiere Assegnato</h4>
                         <button onclick="closeCantiereWorkersModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
                     </div>
                     <p id="workers-cantiere-info" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
@@ -2893,82 +2890,143 @@ function loadCantiereWorkers(cantiereId, userId) {
     // Simula caricamento
     setTimeout(() => {
         const operaiTotali = cantiereData.operai.length;
+        const automezziTotali = cantiereData.automezzi.length;
+        const attrezziTotali = cantiereData.attrezzi.length;
+        const hasPOS = cantiereData.pos_file && cantiereData.pos_file.length > 0;
+        const hasMezziFile = cantiereData.mezzi_file && cantiereData.mezzi_file.length > 0;
+        
         const operaiConAntincendio = cantiereData.operai.filter(o => o.competenze.includes('Antincendio')).length;
         const operaiConPrimoSoccorso = cantiereData.operai.filter(o => o.competenze.includes('Primo Soccorso')).length;
         const operaiConPreposti = cantiereData.operai.filter(o => o.competenze.includes('Preposti')).length;
         
         contentDiv.innerHTML = `
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-                <h5 style="margin: 0 0 10px 0; color: #2196f3;">📊 Riepilogo Assegnazioni</h5>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px;">
+                <h5 style="margin: 0 0 10px 0; color: #2196f3;">📊 Riepilogo Risorse Cantiere</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 12px;">
                     <div style="text-align: center; padding: 8px; background: #28a745; color: white; border-radius: 4px;">
                         <div style="font-size: 16px; font-weight: bold;">${operaiTotali}</div>
-                        <div>👷 Operai Totali</div>
-                    </div>
-                    <div style="text-align: center; padding: 8px; background: #17a2b8; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${operaiConAntincendio}</div>
-                        <div>🔥 Con Antincendio</div>
+                        <div>👷 Operai</div>
                     </div>
                     <div style="text-align: center; padding: 8px; background: #ffc107; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${operaiConPrimoSoccorso}</div>
-                        <div>🚑 Con Primo Soccorso</div>
+                        <div style="font-size: 16px; font-weight: bold;">${automezziTotali}</div>
+                        <div>🚛 Automezzi</div>
                     </div>
-                    <div style="text-align: center; padding: 8px; background: #6f42c1; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${operaiConPreposti}</div>
-                        <div>👮 Preposti</div>
+                    <div style="text-align: center; padding: 8px; background: #17a2b8; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${attrezziTotali}</div>
+                        <div>🔧 Attrezzi</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: ${hasPOS ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${hasPOS ? '✅' : '❌'}</div>
+                        <div>📋 POS</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: ${hasMezziFile ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${hasMezziFile ? '✅' : '❌'}</div>
+                        <div>📄 Elenco Mezzi</div>
                     </div>
                 </div>
             </div>
             
-            <h5 style="color: #2196f3; margin-bottom: 15px;">👥 Lista Operai Assegnati</h5>
-            
             ${operaiTotali > 0 ? `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                ${cantiereData.operai.map(operaio => {
-                    // Calcola età
-                    const oggi = new Date();
-                    const nascita = new Date(operaio.data_nascita);
-                    const eta = Math.floor((oggi - nascita) / (365.25 * 24 * 60 * 60 * 1000));
-                    
-                    // Determina il colore del bordo in base alle competenze
-                    let borderColor = '#dc3545'; // rosso per nessuna competenza
-                    if (operaio.competenze.length >= 3) {
-                        borderColor = '#28a745'; // verde per molte competenze
-                    } else if (operaio.competenze.length >= 1) {
-                        borderColor = '#ffc107'; // giallo per alcune competenze
-                    }
-                    
-                    return `
-                    <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                            <div>
-                                <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
-                                <div style="font-size: 11px; color: #666;">Età: ${eta} anni</div>
-                                <div style="font-size: 10px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
-                            </div>
-                            <div style="font-size: 16px;">${operaio.icons || '⚠️'}</div>
+            <div style="margin-bottom: 20px;">
+                <h5 style="color: #2196f3; margin-bottom: 15px;">👷 Operai Assegnati (${operaiTotali})</h5>
+                <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; font-size: 11px;">
+                        <div style="text-align: center; padding: 6px; background: #ff5722; color: white; border-radius: 4px;">
+                            <strong>${operaiConAntincendio}</strong> 🔥 Antincendio
                         </div>
-                        <div style="font-size: 10px; color: #666;">
-                            <strong>Competenze:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna formazione registrata'}
+                        <div style="text-align: center; padding: 6px; background: #4caf50; color: white; border-radius: 4px;">
+                            <strong>${operaiConPrimoSoccorso}</strong> 🚑 P. Soccorso
+                        </div>
+                        <div style="text-align: center; padding: 6px; background: #673ab7; color: white; border-radius: 4px;">
+                            <strong>${operaiConPreposti}</strong> 👮 Preposti
                         </div>
                     </div>
-                    `;
-                }).join('')}
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                    ${cantiereData.operai.map(operaio => {
+                        // Calcola età
+                        const oggi = new Date();
+                        const nascita = new Date(operaio.data_nascita);
+                        const eta = Math.floor((oggi - nascita) / (365.25 * 24 * 60 * 60 * 1000));
+                        
+                        // Determina il colore del bordo in base alle competenze
+                        let borderColor = '#dc3545'; // rosso per nessuna competenza
+                        if (operaio.competenze.length >= 3) {
+                            borderColor = '#28a745'; // verde per molte competenze
+                        } else if (operaio.competenze.length >= 1) {
+                            borderColor = '#ffc107'; // giallo per alcune competenze
+                        }
+                        
+                        return `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
+                                    <div style="font-size: 11px; color: #666;">Età: ${eta} anni</div>
+                                    <div style="font-size: 10px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                                </div>
+                                <div style="font-size: 16px;">${operaio.icons || '⚠️'}</div>
+                            </div>
+                            <div style="font-size: 10px; color: #666;">
+                                <strong>Competenze:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna formazione registrata'}
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
             </div>
             ` : `
-            <div style="background: #fff3cd; padding: 20px; border-radius: 6px; text-align: center; color: #856404;">
+            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center; color: #856404;">
                 <div style="font-size: 18px; margin-bottom: 10px;">👷</div>
                 <div>Nessun operaio assegnato a questo cantiere</div>
             </div>
             `}
             
+            ${automezziTotali > 0 ? `
+            <div style="margin-bottom: 20px;">
+                <h5 style="color: #ffc107; margin-bottom: 15px;">🚛 Automezzi Assegnati (${automezziTotali})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    ${cantiereData.automezzi.map(automezzo => `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; border-left: 4px solid #ffc107;">
+                            <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${automezzo.descrizione}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                                <strong>Targa:</strong> <span style="font-family: monospace; font-weight: bold;">${automezzo.targa}</span>
+                            </div>
+                            <div style="font-size: 10px; color: #888;">
+                                Assegnato: ${new Date(automezzo.data_assegnazione).toLocaleDateString('it-IT')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            ${attrezziTotali > 0 ? `
+            <div style="margin-bottom: 20px;">
+                <h5 style="color: #17a2b8; margin-bottom: 15px;">🔧 Attrezzi Assegnati (${attrezziTotali})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    ${cantiereData.attrezzi.map(attrezzo => `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; border-left: 4px solid #17a2b8;">
+                            <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${attrezzo.descrizione}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                                <strong>Revisione:</strong> ${attrezzo.data_revisione ? new Date(attrezzo.data_revisione).toLocaleDateString('it-IT') : 'Non specificata'}
+                            </div>
+                            <div style="font-size: 10px; color: #888;">
+                                Assegnato: ${new Date(attrezzo.data_assegnazione).toLocaleDateString('it-IT')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
             <div style="margin-top: 20px; text-align: center;">
                 <button onclick="closeCantiereWorkersModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">
                     Chiudi
                 </button>
-                ${operaiTotali > 0 ? `
-                <button onclick="alert('Funzionalità in sviluppo: gestione assegnazioni operai')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
-                    📝 Gestisci Assegnazioni
+                ${(operaiTotali > 0 || automezziTotali > 0 || attrezziTotali > 0) ? `
+                <button onclick="alert('Funzionalità in sviluppo: gestione dettagliata risorse cantiere')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    📝 Gestisci Risorse
                 </button>
                 ` : ''}
             </div>
@@ -3419,7 +3477,7 @@ function exportTableToCSV() {
 function generateClientSideCSV() {
     var headers = [
         'ID Richiesta', 'Ragione Sociale', 'Email', 'P.IVA', 'DVR', 'RCT', 
-        'POS', 'Mezzi', 'Personale', 'Stato Richiesta HSE', 
+        'Personale', 'Stato Richiesta HSE', 
         'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai'
     ];
     
