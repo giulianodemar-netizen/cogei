@@ -1707,6 +1707,103 @@ foreach ($richieste as $richiesta) {
 }
 
 echo '</table>';
+
+// ================== JAVASCRIPT DATA STRUCTURES ==================
+echo '<script>';
+echo 'window.richiesteData = {';
+foreach ($richieste as $richiesta) {
+    $user_id = $richiesta['user_id'];
+    $user = get_userdata($user_id);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $personale = getPersonaleByRichiestaId($richiesta['id']);
+    $stato_hse = determineStatoHSE($richiesta, $personale);
+    $cantieri_assegnati = getCantieriAssegnatiUser($user_id);
+    $operai_assegnazioni = getOperaiAssegnazioniByUser($user_id);
+    
+    echo $richiesta['id'] . ': {';
+    echo 'id: ' . $richiesta['id'] . ',';
+    echo 'user_id: ' . $user_id . ',';
+    echo 'azienda_nome: "' . addslashes($rag_soc ?: $user->display_name) . '",';
+    echo 'dvr_file: "' . addslashes($richiesta['dvr_file']) . '",';
+    echo 'rct_file: "' . addslashes($richiesta['rct_file']) . '",';
+    echo 'numero_personale: ' . intval($richiesta['numero_personale']) . ',';
+    echo 'personale_inserito: ' . count($personale) . ',';
+    echo 'stato: {';
+    echo 'key: "' . $stato_hse['key'] . '",';
+    echo 'label: "' . addslashes($stato_hse['label']) . '",';
+    echo 'color: "' . $stato_hse['color'] . '"';
+    echo '},';
+    echo 'personale: [';
+    foreach ($personale as $persona) {
+        echo '{';
+        echo 'id: ' . $persona['id'] . ',';
+        echo 'nome: "' . addslashes($persona['nome']) . '",';
+        echo 'cognome: "' . addslashes($persona['cognome']) . '",';
+        echo 'data_nascita: "' . addslashes($persona['data_nascita']) . '",';
+        echo 'formazione_antincendio: ' . (!empty($persona['formazione_antincendio_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_primo_soccorso: ' . (!empty($persona['formazione_primo_soccorso_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_preposti: ' . (!empty($persona['formazione_preposti_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_lavori_quota: ' . (!empty($persona['formazione_lavori_quota_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_dpi_terza: ' . (!empty($persona['formazione_dpi_terza_categoria_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_ambienti_confinati: ' . (!empty($persona['formazione_ambienti_confinati_file']) ? 'true' : 'false');
+        echo '},';
+    }
+    echo '],';
+    echo 'cantieri: [';
+    foreach ($cantieri_assegnati as $cantiere) {
+        // Trova operai assegnati a questo cantiere specifico
+        $operai_cantiere = array_filter($operai_assegnazioni, function($assegnazione) use ($cantiere) {
+            return $assegnazione['cantiere_id'] == $cantiere['id'];
+        });
+        
+        echo '{';
+        echo 'id: ' . $cantiere['id'] . ',';
+        echo 'nome: "' . addslashes($cantiere['nome']) . '",';
+        echo 'operai: [';
+        foreach ($operai_cantiere as $operaio_assegnazione) {
+            $operaio_details = array_filter($personale, function($p) use ($operaio_assegnazione) {
+                return $p['id'] == $operaio_assegnazione['operaio_id'];
+            });
+            $operaio = reset($operaio_details);
+            if ($operaio) {
+                echo '{';
+                echo 'id: ' . $operaio['id'] . ',';
+                echo 'nome: "' . addslashes($operaio['nome']) . '",';
+                echo 'cognome: "' . addslashes($operaio['cognome']) . '",';
+                echo 'data_nascita: "' . addslashes($operaio['data_nascita']) . '",';
+                echo 'data_assegnazione: "' . addslashes($operaio_assegnazione['data_assegnazione']) . '",';
+                
+                $competenze = [];
+                if (!empty($operaio['formazione_antincendio_file'])) $competenze[] = 'Antincendio';
+                if (!empty($operaio['formazione_primo_soccorso_file'])) $competenze[] = 'Primo Soccorso';
+                if (!empty($operaio['formazione_preposti_file'])) $competenze[] = 'Preposti';
+                if (!empty($operaio['formazione_lavori_quota_file'])) $competenze[] = 'Lavori in Quota';
+                if (!empty($operaio['formazione_dpi_terza_categoria_file'])) $competenze[] = 'DPI 3° Categoria';
+                if (!empty($operaio['formazione_ambienti_confinati_file'])) $competenze[] = 'Ambienti Confinati';
+                
+                echo 'competenze: ["' . implode('", "', array_map('addslashes', $competenze)) . '"],';
+                
+                $icons = [];
+                if (!empty($operaio['formazione_antincendio_file'])) $icons[] = '🔥';
+                if (!empty($operaio['formazione_primo_soccorso_file'])) $icons[] = '🚑';
+                if (!empty($operaio['formazione_preposti_file'])) $icons[] = '👮';
+                if (!empty($operaio['formazione_lavori_quota_file'])) $icons[] = '🏗️';
+                if (!empty($operaio['formazione_dpi_terza_categoria_file'])) $icons[] = '🦺';
+                if (!empty($operaio['formazione_ambienti_confinati_file'])) $icons[] = '🕳️';
+                
+                echo 'icons: "' . implode('', $icons) . '"';
+                echo '},';
+            }
+        }
+        echo ']';
+        echo '},';
+    }
+    echo ']';
+    echo '},';
+}
+echo '};';
+echo '</script>';
+
 echo '</div>'; // Fine tab richieste
 // ================== TAB 2: GESTIONE CANTIERI (ESTESO) ==================
 echo '<div id="content-cantieri" class="tab-content" style="display: none;">';
@@ -2608,38 +2705,103 @@ function closeStatusDetailsModal() {
 }
 
 function loadStatusDetails(richiestaId) {
-    // Mock data per ora - in futuro può essere sostituito con chiamata AJAX
     const contentDiv = document.getElementById('status-details-content');
+    
+    // Ottieni i dati reali dalla struttura JavaScript
+    const richiestaData = window.richiesteData[richiestaId];
+    
+    if (!richiestaData) {
+        contentDiv.innerHTML = `
+            <div style="background: #f8d7da; padding: 15px; border-radius: 6px; text-align: center; color: #721c24;">
+                ❌ Errore: Dati richiesta non trovati (ID: ${richiestaId})
+            </div>
+        `;
+        return;
+    }
     
     // Simula caricamento
     setTimeout(() => {
+        // Calcola lo stato di completamento
+        const dvr_completo = richiestaData.dvr_file && richiestaData.dvr_file.length > 0;
+        const rct_completo = richiestaData.rct_file && richiestaData.rct_file.length > 0;
+        const operai_dichiarati = richiestaData.numero_personale > 0;
+        const operai_inseriti = richiestaData.personale_inserito > 0;
+        
+        const elementi_completati = [dvr_completo, rct_completo, operai_dichiarati, operai_inseriti].filter(Boolean).length;
+        const elementi_totali = 4;
+        
         contentDiv.innerHTML = `
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
                 <h5 style="margin: 0 0 10px 0; color: #17a2b8;">📋 Stato Compilazione Parte A</h5>
+                <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${richiestaData.stato.color};">
+                    <strong>Stato Attuale:</strong> <span style="color: ${richiestaData.stato.color};">${richiestaData.stato.label}</span><br>
+                    <small>Elementi completati: ${elementi_completati}/${elementi_totali}</small>
+                </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
-                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745;">
-                        <strong>📄 DVR:</strong> <span style="color: #28a745;">✅ Caricato</span>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${dvr_completo ? '#28a745' : '#dc3545'};">
+                        <strong>📄 DVR:</strong> <span style="color: ${dvr_completo ? '#28a745' : '#dc3545'};">${dvr_completo ? '✅ Caricato' : '❌ Mancante'}</span>
                     </div>
-                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745;">
-                        <strong>📄 RCT:</strong> <span style="color: #28a745;">✅ Caricato</span>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${rct_completo ? '#28a745' : '#dc3545'};">
+                        <strong>🛡️ RCT:</strong> <span style="color: ${rct_completo ? '#28a745' : '#dc3545'};">${rct_completo ? '✅ Caricato' : '❌ Mancante'}</span>
                     </div>
-                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #ffc107;">
-                        <strong>👷 Operai Dichiarati:</strong> <span style="color: #856404;">⚠️ 5 dichiarati</span>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${operai_dichiarati ? '#28a745' : '#dc3545'};">
+                        <strong>👷 Operai Dichiarati:</strong> <span style="color: ${operai_dichiarati ? '#28a745' : '#dc3545'};">${operai_dichiarati ? '✅ ' + richiestaData.numero_personale + ' dichiarati' : '❌ Nessuno dichiarato'}</span>
                     </div>
-                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
-                        <strong>👥 Operai Inseriti:</strong> <span style="color: #dc3545;">❌ 2 inseriti</span>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${operai_inseriti ? '#28a745' : '#dc3545'};">
+                        <strong>👥 Operai Inseriti:</strong> <span style="color: ${operai_inseriti ? '#28a745' : '#dc3545'};">${operai_inseriti ? '✅ ' + richiestaData.personale_inserito + ' inseriti' : '❌ Nessuno inserito'}</span>
                     </div>
                 </div>
             </div>
             
-            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 5px solid #ffc107;">
+            ${elementi_completati < elementi_totali ? `
+            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 5px solid #ffc107; margin-bottom: 15px;">
                 <h5 style="margin: 0 0 10px 0; color: #856404;">⚠️ Cosa Manca per Completare</h5>
                 <ul style="margin: 0; padding-left: 20px; color: #856404;">
-                    <li>Inserire nel sistema tutti i 5 operai dichiarati (attualmente solo 2)</li>
-                    <li>Compilare i dati anagrafici completi per ogni operaio</li>
-                    <li>Verificare che i documenti DVR e RCT siano aggiornati</li>
+                    ${!dvr_completo ? '<li>Caricare il documento DVR</li>' : ''}
+                    ${!rct_completo ? '<li>Caricare il documento RCT</li>' : ''}
+                    ${!operai_dichiarati ? '<li>Dichiarare il numero di operai previsti</li>' : ''}
+                    ${!operai_inseriti ? '<li>Inserire nel sistema gli operai dichiarati</li>' : ''}
+                    ${operai_dichiarati && operai_inseriti && richiestaData.numero_personale > richiestaData.personale_inserito ? 
+                        '<li>Inserire tutti gli operai dichiarati (mancano ' + (richiestaData.numero_personale - richiestaData.personale_inserito) + ')</li>' : ''}
                 </ul>
             </div>
+            ` : `
+            <div style="background: #d4edda; padding: 15px; border-radius: 6px; border-left: 5px solid #28a745; margin-bottom: 15px;">
+                <h5 style="margin: 0 0 10px 0; color: #155724;">✅ Parte A Completata</h5>
+                <p style="margin: 0; color: #155724;">Tutti gli elementi richiesti per la Parte A sono stati completati correttamente.</p>
+            </div>
+            `}
+            
+            ${richiestaData.personale.length > 0 ? `
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 5px solid #2196f3;">
+                <h5 style="margin: 0 0 10px 0; color: #1976d2;">👥 Operai Registrati (${richiestaData.personale.length})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 12px;">
+                    ${richiestaData.personale.map(operaio => {
+                        const competenze = [];
+                        let icons = '';
+                        if (operaio.formazione_antincendio) { competenze.push('Antincendio'); icons += '🔥'; }
+                        if (operaio.formazione_primo_soccorso) { competenze.push('Primo Soccorso'); icons += '🚑'; }
+                        if (operaio.formazione_preposti) { competenze.push('Preposti'); icons += '👮'; }
+                        if (operaio.formazione_lavori_quota) { competenze.push('Lavori in Quota'); icons += '🏗️'; }
+                        if (operaio.formazione_dpi_terza) { competenze.push('DPI 3° Cat.'); icons += '🦺'; }
+                        if (operaio.formazione_ambienti_confinati) { competenze.push('Amb. Confinati'); icons += '🕳️'; }
+                        
+                        return `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+                            <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
+                            <div style="font-size: 10px; color: #666; margin: 2px 0;">
+                                Nato: ${operaio.data_nascita || 'N/A'}
+                            </div>
+                            <div style="font-size: 14px; margin: 4px 0;">${icons || '⚠️'}</div>
+                            <div style="font-size: 10px; color: #666;">
+                                ${competenze.length > 0 ? competenze.join(', ') : 'Nessuna formazione'}
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            ` : ''}
             
             <div style="margin-top: 15px; text-align: center;">
                 <button onclick="closeStatusDetailsModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
@@ -2647,7 +2809,7 @@ function loadStatusDetails(richiestaId) {
                 </button>
             </div>
         `;
-    }, 500);
+    }, 300);
 }
 
 // 🆕 NUOVA FUNZIONE: Mostra operai assegnati a un cantiere specifico
@@ -2700,86 +2862,118 @@ function closeCantiereWorkersModal() {
 }
 
 function loadCantiereWorkers(cantiereId, userId) {
-    // Mock data per ora - in futuro può essere sostituito con chiamata AJAX
     const contentDiv = document.getElementById('workers-details-content');
+    
+    // Trova i dati del cantiere specifico per questo utente
+    const richiesteData = window.richiesteData;
+    let cantiereData = null;
+    let richiestaId = null;
+    
+    // Cerca il cantiere nei dati delle richieste
+    for (const [reqId, richiesta] of Object.entries(richiesteData)) {
+        if (richiesta.user_id == userId) {
+            const cantiere = richiesta.cantieri.find(c => c.id == cantiereId);
+            if (cantiere) {
+                cantiereData = cantiere;
+                richiestaId = reqId;
+                break;
+            }
+        }
+    }
+    
+    if (!cantiereData) {
+        contentDiv.innerHTML = `
+            <div style="background: #f8d7da; padding: 15px; border-radius: 6px; text-align: center; color: #721c24;">
+                ❌ Errore: Dati cantiere non trovati (Cantiere ID: ${cantiereId}, User ID: ${userId})
+            </div>
+        `;
+        return;
+    }
     
     // Simula caricamento
     setTimeout(() => {
+        const operaiTotali = cantiereData.operai.length;
+        const operaiConAntincendio = cantiereData.operai.filter(o => o.competenze.includes('Antincendio')).length;
+        const operaiConPrimoSoccorso = cantiereData.operai.filter(o => o.competenze.includes('Primo Soccorso')).length;
+        const operaiConPreposti = cantiereData.operai.filter(o => o.competenze.includes('Preposti')).length;
+        
         contentDiv.innerHTML = `
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
                 <h5 style="margin: 0 0 10px 0; color: #2196f3;">📊 Riepilogo Assegnazioni</h5>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px;">
                     <div style="text-align: center; padding: 8px; background: #28a745; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">3</div>
+                        <div style="font-size: 16px; font-weight: bold;">${operaiTotali}</div>
                         <div>👷 Operai Totali</div>
                     </div>
                     <div style="text-align: center; padding: 8px; background: #17a2b8; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">2</div>
+                        <div style="font-size: 16px; font-weight: bold;">${operaiConAntincendio}</div>
                         <div>🔥 Con Antincendio</div>
                     </div>
                     <div style="text-align: center; padding: 8px; background: #ffc107; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">1</div>
+                        <div style="font-size: 16px; font-weight: bold;">${operaiConPrimoSoccorso}</div>
                         <div>🚑 Con Primo Soccorso</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: #6f42c1; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${operaiConPreposti}</div>
+                        <div>👮 Preposti</div>
                     </div>
                 </div>
             </div>
             
             <h5 style="color: #2196f3; margin-bottom: 15px;">👥 Lista Operai Assegnati</h5>
             
+            ${operaiTotali > 0 ? `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid #28a745;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                        <div>
-                            <div style="font-weight: bold; color: #333;">Mario Rossi</div>
-                            <div style="font-size: 11px; color: #666;">Età: 45 anni</div>
-                            <div style="font-size: 10px; color: #888;">Assegnato: 15/01/2024</div>
+                ${cantiereData.operai.map(operaio => {
+                    // Calcola età
+                    const oggi = new Date();
+                    const nascita = new Date(operaio.data_nascita);
+                    const eta = Math.floor((oggi - nascita) / (365.25 * 24 * 60 * 60 * 1000));
+                    
+                    // Determina il colore del bordo in base alle competenze
+                    let borderColor = '#dc3545'; // rosso per nessuna competenza
+                    if (operaio.competenze.length >= 3) {
+                        borderColor = '#28a745'; // verde per molte competenze
+                    } else if (operaio.competenze.length >= 1) {
+                        borderColor = '#ffc107'; // giallo per alcune competenze
+                    }
+                    
+                    return `
+                    <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div>
+                                <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
+                                <div style="font-size: 11px; color: #666;">Età: ${eta} anni</div>
+                                <div style="font-size: 10px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                            </div>
+                            <div style="font-size: 16px;">${operaio.icons || '⚠️'}</div>
                         </div>
-                        <div style="font-size: 16px;">🔥🚑👮</div>
-                    </div>
-                    <div style="font-size: 10px; color: #666;">
-                        <strong>Competenze:</strong> Antincendio, Primo Soccorso, Preposti
-                    </div>
-                </div>
-                
-                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid #ffc107;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                        <div>
-                            <div style="font-weight: bold; color: #333;">Giuseppe Verdi</div>
-                            <div style="font-size: 11px; color: #666;">Età: 38 anni</div>
-                            <div style="font-size: 10px; color: #888;">Assegnato: 20/01/2024</div>
+                        <div style="font-size: 10px; color: #666;">
+                            <strong>Competenze:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna formazione registrata'}
                         </div>
-                        <div style="font-size: 16px;">🔥</div>
                     </div>
-                    <div style="font-size: 10px; color: #666;">
-                        <strong>Competenze:</strong> Antincendio
-                    </div>
-                </div>
-                
-                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid #dc3545;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                        <div>
-                            <div style="font-weight: bold; color: #333;">Franco Bianchi</div>
-                            <div style="font-size: 11px; color: #666;">Età: 52 anni</div>
-                            <div style="font-size: 10px; color: #888;">Assegnato: 22/01/2024</div>
-                        </div>
-                        <div style="font-size: 16px;">⚠️</div>
-                    </div>
-                    <div style="font-size: 10px; color: #666;">
-                        <strong>Competenze:</strong> Nessuna formazione registrata
-                    </div>
-                </div>
+                    `;
+                }).join('')}
             </div>
+            ` : `
+            <div style="background: #fff3cd; padding: 20px; border-radius: 6px; text-align: center; color: #856404;">
+                <div style="font-size: 18px; margin-bottom: 10px;">👷</div>
+                <div>Nessun operaio assegnato a questo cantiere</div>
+            </div>
+            `}
             
             <div style="margin-top: 20px; text-align: center;">
                 <button onclick="closeCantiereWorkersModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">
                     Chiudi
                 </button>
-                <button onclick="alert('Funzionalità in sviluppo')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                ${operaiTotali > 0 ? `
+                <button onclick="alert('Funzionalità in sviluppo: gestione assegnazioni operai')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
                     📝 Gestisci Assegnazioni
                 </button>
+                ` : ''}
             </div>
         `;
-    }, 500);
+    }, 300);
 }
 
 function loadCantiereDetailsData(cantiereId) {
