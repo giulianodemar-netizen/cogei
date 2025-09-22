@@ -2529,6 +2529,26 @@ function updateSubmitButtonCounter() {
     }
 }
 
+// 🆕 NUOVA FUNZIONE: Chiudi modal assegnazioni
+function closeAssignmentModal() {
+    document.getElementById('assignment-modal').style.display = 'none';
+    
+    // Reset form
+    const form = document.getElementById('assignment-form');
+    if (form) {
+        form.reset();
+    }
+    
+    // Reset checkboxes
+    const checkboxes = document.querySelectorAll('input[name="user_ids[]"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    // Reset submit button
+    updateSubmitButtonCounter();
+    
+    console.log('✕ Modal assegnazioni chiuso');
+}
+
 // FILTRO ASSEGNAZIONI
 function filterAssignments() {
     const selectedCantiereId = document.getElementById('cantiere-filter').value;
@@ -3534,6 +3554,16 @@ document.addEventListener("DOMContentLoaded", function() {
         cantiereDetailsModal.addEventListener('click', function(e) {
             if (e.target === this) {
                 closeCantiereDetailsModal();
+            }
+        });
+    }
+    
+    // 🆕 NUOVO: Event listener per modal assegnazioni
+    const assignmentModal = document.getElementById('assignment-modal');
+    if (assignmentModal) {
+        assignmentModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAssignmentModal();
             }
         });
     }
