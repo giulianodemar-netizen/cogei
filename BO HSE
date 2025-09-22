@@ -418,7 +418,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
         'Mezzi',
         'Numero Personale',
         'Parte B Completata',
-        'Stato Abilitazione HSA',
+        'Stato Richiesta HSE',
         'Accesso al Cantiere',
         'Cantieri Assegnati',
         'Data Creazione'
@@ -444,7 +444,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
         
         $personale = getPersonaleByRichiestaId($richiesta['id']);
         $accesso_cantiere = determineAccessoCantiere($abilita_cantiere);
-        $stato_hsa = determineStatoHSA($richiesta, $personale);
+        $stato_hse = determineStatoHSE($richiesta, $personale);
         
         // 🏗️ NUOVO: Recupera cantieri assegnati
         $cantieri_assegnati = getCantieriAssegnatiUser($richiesta['user_id']);
@@ -464,7 +464,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
             $richiesta['mezzi_file'] ? 'Caricato' : 'Non caricato',
             $richiesta['numero_personale'],
             $richiesta['parte_b_completata'] ? 'Si' : 'No',
-            $stato_hsa['label'],
+            $stato_hse['label'],
             $accesso_cantiere['label'],
             $cantieri_text ?: 'Nessuno',
             $richiesta['data_creazione']
@@ -873,84 +873,61 @@ function determineAccessoCantiere($abilita_cantiere) {
     }
 }
 
-function determineStatoHSA($richiesta, $personale = null) {
-    // Verifica completamento Parte A
-    $parte_a_completa = (!empty($richiesta['dvr_file']) && 
-                        !empty($richiesta['rct_file']) && 
-                        $richiesta['numero_personale'] > 0);
+function determineStatoHSE($richiesta, $personale = null) {
+    // Verifica se non ha mai iniziato la compilazione
+    $documenti_base_mancanti = (empty($richiesta['dvr_file']) && 
+                               empty($richiesta['rct_file']) && 
+                               $richiesta['numero_personale'] == 0);
     
-    if (!$parte_a_completa) {
+    if ($documenti_base_mancanti) {
         return [
-            'key' => 'parte_a_incompleta',
-            'label' => 'Parte A Incompleta',
-            'color' => '#ffc107',
-            'tooltip' => 'Deve completare i documenti preliminari (DVR, RCT, elenco personale)'
+            'key' => 'non_compilata',
+            'label' => 'Non Compilata',
+            'color' => '#dc3545',
+            'tooltip' => 'La richiesta non è stata ancora iniziata'
         ];
     }
     
-    if (!$richiesta['parte_b_completata']) {
-        return [
-            'key' => 'solo_parte_a',
-            'label' => 'Solo Parte A',
-            'color' => '#17a2b8',
-            'tooltip' => 'Ha completato i documenti preliminari ma non ha iniziato la Parte B'
-        ];
-    }
-    
-    $pos_caricato = !empty($richiesta['pos_file']);
-    $mezzi_caricato = !empty($richiesta['mezzi_file']);
+    // Verifica completamento Parte A (DVR, RCT, operai inseriti)
+    $dvr_presente = !empty($richiesta['dvr_file']);
+    $rct_presente = !empty($richiesta['rct_file']);
+    $operai_inseriti = $richiesta['numero_personale'] > 0;
     
     if ($personale === null) {
         $personale = getPersonaleByRichiestaId($richiesta['id']);
     }
     
-    $personale_selezionato = array_filter($personale, function($persona) {
-        return $persona['selezionato_parte_b'] == 1;
-    });
+    // Verifica se ci sono operai inseriti nel sistema
+    $operai_nel_sistema = !empty($personale);
     
-    $ha_personale_selezionato = !empty($personale_selezionato);
+    $elementi_parte_a = [$dvr_presente, $rct_presente, $operai_inseriti, $operai_nel_sistema];
+    $elementi_completati = array_filter($elementi_parte_a);
     
-    $formazioni_complete = true;
-    if ($ha_personale_selezionato) {
-        foreach ($personale_selezionato as $persona) {
-            $ha_almeno_una_formazione = (
-                !empty($persona['formazione_antincendio_file']) ||
-                !empty($persona['formazione_primo_soccorso_file']) ||
-                !empty($persona['formazione_preposti_file'])
-            );
-            
-            if (!$ha_almeno_una_formazione) {
-                $formazioni_complete = false;
-                break;
-            }
-        }
-    } else {
-        $formazioni_complete = false;
-    }
-    
-    $parte_b_elementi_completi = ($pos_caricato && $mezzi_caricato && $ha_personale_selezionato && $formazioni_complete);
-    $parte_b_elementi_parziali = ($pos_caricato || $mezzi_caricato || $ha_personale_selezionato);
-    
-    if ($parte_b_elementi_completi) {
+    if (count($elementi_completati) == 4) {
         return [
-            'key' => 'completo',
-            'label' => 'Completo',
+            'key' => 'completa',
+            'label' => 'Parte A Completa',
             'color' => '#28a745',
-            'tooltip' => 'Ha completato sia i documenti preliminari che quelli specifici del cantiere con formazioni valide'
-        ];
-    } elseif ($parte_b_elementi_parziali) {
-        return [
-            'key' => 'parte_b_incompleta',
-            'label' => 'Parte B Incompleta',
-            'color' => '#fd7e14',
-            'tooltip' => 'Ha iniziato la Parte B ma mancano alcuni elementi (POS, mezzi, personale selezionato o formazioni)'
+            'tooltip' => 'Documenti DVR e RCT caricati, operai inseriti nel sistema',
+            'details' => [
+                'dvr' => $dvr_presente,
+                'rct' => $rct_presente,
+                'operai_numero' => $richiesta['numero_personale'],
+                'operai_inseriti' => count($personale)
+            ]
         ];
     } else {
         return [
-            'key' => 'solo_parte_a',
-            'label' => 'Solo Parte A',
-            'color' => '#17a2b8', 
-            'tooltip' => 'Ha completato i documenti preliminari ma la Parte B risulta vuota'
+            'key' => 'parziale',
+            'label' => 'Parte A Parziale',
+            'color' => '#ffc107',
+            'tooltip' => 'Compilazione parziale: ' . count($elementi_completati) . '/4 elementi completati',
+            'details' => [
+                'dvr' => $dvr_presente,
+                'rct' => $rct_presente,
+                'operai_numero' => $richiesta['numero_personale'],
+                'operai_inseriti' => count($personale)
+            ]
         ];
     }
 }
@@ -1285,21 +1262,20 @@ echo '<input type="text" id="searchInput" placeholder="Scrivi per cercare..." st
 echo '<small style="display: block; margin-top: 5px; color: #666;">Cerca per ragione sociale, email, P.IVA, stato cantiere o qualsiasi altro campo</small>';
 echo '</div>';
 
-// FILTRI STATI HSA
+// FILTRI STATI HSE
 echo '<div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">';
-echo '<strong>🏗️ Filtra per Stati HSA:</strong><br>';
+echo '<strong>🏗️ Filtra per Stati HSE:</strong><br>';
 echo '<button onclick="clearAllFilters()" style="background: #6c757d; color: white; padding: 4px 8px; border: none; border-radius: 8px; font-size: 11px; margin: 2px; cursor: pointer;">Pulisci Tutti</button><br><br>';
 
-$hsa_statuses = [
-    'completo' => ['label' => 'Completo', 'color' => '#28a745'],
-    'parte_b_incompleta' => ['label' => 'Parte B Incompleta', 'color' => '#fd7e14'],
-    'solo_parte_a' => ['label' => 'Solo Parte A', 'color' => '#17a2b8'],
-    'parte_a_incompleta' => ['label' => 'Parte A Incompleta', 'color' => '#ffc107']
+$hse_statuses = [
+    'completa' => ['label' => 'Parte A Completa', 'color' => '#28a745'],
+    'parziale' => ['label' => 'Parte A Parziale', 'color' => '#ffc107'],
+    'non_compilata' => ['label' => 'Non Compilata', 'color' => '#dc3545']
 ];
 
-foreach ($hsa_statuses as $key => $config) {
+foreach ($hse_statuses as $key => $config) {
     echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
-    echo '<input type="checkbox" id="hsa_' . $key . '" onchange="updateFilters()" style="margin-right: 5px;">';
+    echo '<input type="checkbox" id="hse_' . $key . '" onchange="updateFilters()" style="margin-right: 5px;">';
     echo '<span style="background: ' . $config['color'] . '; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;">' . $config['label'] . '</span>';
     echo '</label> ';
 }
@@ -1338,8 +1314,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Automezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🔧 Attrezzi</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Conformità</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Abilitazione HSA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Richiesta HSE</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Accesso al Cantiere</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🏗️ Cantieri Assegnati</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 Assegnazioni Operai</th>';
@@ -1358,7 +1333,7 @@ foreach ($richieste as $richiesta) {
     $personale = getPersonaleByRichiestaId($richiesta['id']);
     
     $accesso_cantiere = determineAccessoCantiere($abilita_cantiere);
-    $stato_hsa = determineStatoHSA($richiesta, $personale);
+    $stato_hse = determineStatoHSE($richiesta, $personale);
     $compliance = calculateComplianceStatus($personale);
     
     // 🏗️ NUOVO: Cantieri assegnati
@@ -1376,7 +1351,7 @@ foreach ($richieste as $richiesta) {
     $attrezzi_assegnazioni = getAttrezziAssegnazioniByUser($user_id);
     $attrezzi_grouped = groupAttrezziAssegnazioniByAttrezzo($attrezzi_assegnazioni);
     
-    echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hsa-status="' . $stato_hsa['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
+    echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hse-status="' . $stato_hse['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $richiesta['id'] . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
@@ -1487,14 +1462,9 @@ foreach ($richieste as $richiesta) {
     }
     echo '</td>';
     
-    // Conformità
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    echo '<span style="background: ' . $compliance['color'] . '; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;" title="' . ($compliance['conforme'] ? 'Tutte le competenze ≥30%' : 'Alcune competenze <30%') . '">' . $compliance['label'] . '</span>';
-    echo '</td>';
-    
-    // Stato Abilitazione HSA
-    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
-    echo '<span style="background: ' . $stato_hsa['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($stato_hsa['tooltip']) . '">' . $stato_hsa['label'] . '</span>';
+    // Stato Richiesta HSE (with click functionality)
+    echo '<td style="padding: 8px; border: 1px solid #ddd; cursor: pointer;" onclick="showStatusDetails(' . $richiesta['id'] . ', \'' . addslashes($rag_soc ?: $user->display_name) . '\')">';
+    echo '<span style="background: ' . $stato_hse['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($stato_hse['tooltip']) . '">' . $stato_hse['label'] . '</span>';
     echo '</td>';
     
     // Accesso al Cantiere
@@ -1502,11 +1472,11 @@ foreach ($richieste as $richiesta) {
     echo '<span style="background: ' . $accesso_cantiere['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($accesso_cantiere['tooltip']) . '">' . $accesso_cantiere['label'] . '</span>';
     echo '</td>';
     
-    // 🏗️ NUOVO: Cantieri Assegnati
+    // 🏗️ NUOVO: Cantieri Assegnati (with click functionality)
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">';
     if (!empty($cantieri_assegnati)) {
         foreach ($cantieri_assegnati as $cantiere) {
-            echo '<div style="background: #e3f2fd; color: #1565c0; padding: 2px 6px; margin: 1px 0; border-radius: 4px; border-left: 3px solid #2196f3;">';
+            echo '<div style="background: #e3f2fd; color: #1565c0; padding: 2px 6px; margin: 1px 0; border-radius: 4px; border-left: 3px solid #2196f3; cursor: pointer;" onclick="showCantiereWorkers(' . $cantiere['id'] . ', ' . $user_id . ', \'' . addslashes($cantiere['nome']) . '\', \'' . addslashes($rag_soc ?: $user->display_name) . '\')">';
             echo '🏗️ ' . htmlspecialchars($cantiere['nome']);
             echo '</div>';
         }
@@ -2588,6 +2558,230 @@ function closeCantiereDetailsModal() {
     document.getElementById('cantiere-details-modal').style.display = 'none';
 }
 
+// 🆕 NUOVA FUNZIONE: Mostra dettagli stato richiesta HSE
+function showStatusDetails(richiestaId, aziendaNome) {
+    // Crea o mostra un modal con i dettagli dello stato
+    let modal = document.getElementById('status-details-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'status-details-modal';
+        modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
+        
+        modal.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto;">
+                <div style="background: #17a2b8; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="margin: 0;">📊 Dettaglio Stato Richiesta HSE</h4>
+                        <button onclick="closeStatusDetailsModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+                    <p id="status-azienda-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                </div>
+                <div id="status-details-content" style="padding: 20px;">
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 16px;">🔄 Caricamento dettagli...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Aggiungi event listener per chiudere cliccando fuori
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeStatusDetailsModal();
+            }
+        });
+    }
+    
+    document.getElementById('status-azienda-name').textContent = '🏢 ' + aziendaNome;
+    document.getElementById('status-details-modal').style.display = 'block';
+    
+    // Carica i dettagli (per ora usa dati mock, in futuro può essere AJAX)
+    loadStatusDetails(richiestaId);
+    
+    console.log('📊 Apertura dettagli stato per richiesta:', richiestaId, 'azienda:', aziendaNome);
+}
+
+function closeStatusDetailsModal() {
+    document.getElementById('status-details-modal').style.display = 'none';
+}
+
+function loadStatusDetails(richiestaId) {
+    // Mock data per ora - in futuro può essere sostituito con chiamata AJAX
+    const contentDiv = document.getElementById('status-details-content');
+    
+    // Simula caricamento
+    setTimeout(() => {
+        contentDiv.innerHTML = `
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #17a2b8;">📋 Stato Compilazione Parte A</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745;">
+                        <strong>📄 DVR:</strong> <span style="color: #28a745;">✅ Caricato</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #28a745;">
+                        <strong>📄 RCT:</strong> <span style="color: #28a745;">✅ Caricato</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #ffc107;">
+                        <strong>👷 Operai Dichiarati:</strong> <span style="color: #856404;">⚠️ 5 dichiarati</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">
+                        <strong>👥 Operai Inseriti:</strong> <span style="color: #dc3545;">❌ 2 inseriti</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 5px solid #ffc107;">
+                <h5 style="margin: 0 0 10px 0; color: #856404;">⚠️ Cosa Manca per Completare</h5>
+                <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                    <li>Inserire nel sistema tutti i 5 operai dichiarati (attualmente solo 2)</li>
+                    <li>Compilare i dati anagrafici completi per ogni operaio</li>
+                    <li>Verificare che i documenti DVR e RCT siano aggiornati</li>
+                </ul>
+            </div>
+            
+            <div style="margin-top: 15px; text-align: center;">
+                <button onclick="closeStatusDetailsModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    Chiudi
+                </button>
+            </div>
+        `;
+    }, 500);
+}
+
+// 🆕 NUOVA FUNZIONE: Mostra operai assegnati a un cantiere specifico
+function showCantiereWorkers(cantiereId, userId, cantiereName, aziendaNome) {
+    // Crea o mostra un modal con gli operai assegnati
+    let modal = document.getElementById('cantiere-workers-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'cantiere-workers-modal';
+        modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
+        
+        modal.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">
+                <div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="margin: 0;">👷 Operai Assegnati al Cantiere</h4>
+                        <button onclick="closeCantiereWorkersModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+                    <p id="workers-cantiere-info" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                </div>
+                <div id="workers-details-content" style="padding: 20px;">
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 16px;">🔄 Caricamento operai...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Aggiungi event listener per chiudere cliccando fuori
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCantiereWorkersModal();
+            }
+        });
+    }
+    
+    document.getElementById('workers-cantiere-info').innerHTML = `🏗️ <strong>${cantiereName}</strong> • 🏢 ${aziendaNome}`;
+    document.getElementById('cantiere-workers-modal').style.display = 'block';
+    
+    // Carica gli operai assegnati
+    loadCantiereWorkers(cantiereId, userId);
+    
+    console.log('👷 Apertura operai per cantiere:', cantiereName, 'azienda:', aziendaNome);
+}
+
+function closeCantiereWorkersModal() {
+    document.getElementById('cantiere-workers-modal').style.display = 'none';
+}
+
+function loadCantiereWorkers(cantiereId, userId) {
+    // Mock data per ora - in futuro può essere sostituito con chiamata AJAX
+    const contentDiv = document.getElementById('workers-details-content');
+    
+    // Simula caricamento
+    setTimeout(() => {
+        contentDiv.innerHTML = `
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #2196f3;">📊 Riepilogo Assegnazioni</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px;">
+                    <div style="text-align: center; padding: 8px; background: #28a745; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">3</div>
+                        <div>👷 Operai Totali</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: #17a2b8; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">2</div>
+                        <div>🔥 Con Antincendio</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: #ffc107; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">1</div>
+                        <div>🚑 Con Primo Soccorso</div>
+                    </div>
+                </div>
+            </div>
+            
+            <h5 style="color: #2196f3; margin-bottom: 15px;">👥 Lista Operai Assegnati</h5>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid #28a745;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: bold; color: #333;">Mario Rossi</div>
+                            <div style="font-size: 11px; color: #666;">Età: 45 anni</div>
+                            <div style="font-size: 10px; color: #888;">Assegnato: 15/01/2024</div>
+                        </div>
+                        <div style="font-size: 16px;">🔥🚑👮</div>
+                    </div>
+                    <div style="font-size: 10px; color: #666;">
+                        <strong>Competenze:</strong> Antincendio, Primo Soccorso, Preposti
+                    </div>
+                </div>
+                
+                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid #ffc107;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: bold; color: #333;">Giuseppe Verdi</div>
+                            <div style="font-size: 11px; color: #666;">Età: 38 anni</div>
+                            <div style="font-size: 10px; color: #888;">Assegnato: 20/01/2024</div>
+                        </div>
+                        <div style="font-size: 16px;">🔥</div>
+                    </div>
+                    <div style="font-size: 10px; color: #666;">
+                        <strong>Competenze:</strong> Antincendio
+                    </div>
+                </div>
+                
+                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid #dc3545;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: bold; color: #333;">Franco Bianchi</div>
+                            <div style="font-size: 11px; color: #666;">Età: 52 anni</div>
+                            <div style="font-size: 10px; color: #888;">Assegnato: 22/01/2024</div>
+                        </div>
+                        <div style="font-size: 16px;">⚠️</div>
+                    </div>
+                    <div style="font-size: 10px; color: #666;">
+                        <strong>Competenze:</strong> Nessuna formazione registrata
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; text-align: center;">
+                <button onclick="closeCantiereWorkersModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                    Chiudi
+                </button>
+                <button onclick="alert('Funzionalità in sviluppo')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    📝 Gestisci Assegnazioni
+                </button>
+            </div>
+        `;
+    }, 500);
+}
+
 function loadCantiereDetailsData(cantiereId) {
     // Reset stato
     document.getElementById('cantiere-details-loading').style.display = 'block';
@@ -3031,7 +3225,7 @@ function exportTableToCSV() {
 function generateClientSideCSV() {
     var headers = [
         'ID Richiesta', 'Ragione Sociale', 'Email', 'P.IVA', 'DVR', 'RCT', 
-        'POS', 'Mezzi', 'Personale', 'Conformità', 'Stato Abilitazione HSA', 
+        'POS', 'Mezzi', 'Personale', 'Stato Richiesta HSE', 
         'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai'
     ];
     
@@ -3140,10 +3334,10 @@ function performSearch() {
 }
 
 function shouldRowBeVisible(row) {
-    var selectedHsaStatuses = [];
-    var hsaCheckboxes = document.querySelectorAll("input[id^=hsa_]:checked");
-    hsaCheckboxes.forEach(function(checkbox) {
-        selectedHsaStatuses.push(checkbox.id.replace("hsa_", ""));
+    var selectedHseStatuses = [];
+    var hseCheckboxes = document.querySelectorAll("input[id^=hse_]:checked");
+    hseCheckboxes.forEach(function(checkbox) {
+        selectedHseStatuses.push(checkbox.id.replace("hse_", ""));
     });
     
     var abilitatoFilter = document.getElementById("filter_abilitato");
@@ -3151,13 +3345,13 @@ function shouldRowBeVisible(row) {
     var showAbilitato = abilitatoFilter && abilitatoFilter.checked;
     var showDisabilitato = disabilitatoFilter && disabilitatoFilter.checked;
     
-    if (selectedHsaStatuses.length === 0 && !showAbilitato && !showDisabilitato) {
+    if (selectedHseStatuses.length === 0 && !showAbilitato && !showDisabilitato) {
         return true;
     }
     
-    if (selectedHsaStatuses.length > 0) {
-        var rowHsaStatus = row.getAttribute("data-hsa-status");
-        if (selectedHsaStatuses.indexOf(rowHsaStatus) === -1) {
+    if (selectedHseStatuses.length > 0) {
+        var rowHseStatus = row.getAttribute("data-hse-status");
+        if (selectedHseStatuses.indexOf(rowHseStatus) === -1) {
             return false;
         }
     }
@@ -3235,10 +3429,10 @@ function clearAllFilters() {
 }
 
 function updateActiveFiltersDisplay(visibleCount) {
-    var selectedHsaStatuses = [];
-    var hsaCheckboxes = document.querySelectorAll("input[id^=hsa_]:checked");
-    hsaCheckboxes.forEach(function(checkbox) {
-        selectedHsaStatuses.push(checkbox.id.replace("hsa_", ""));
+    var selectedHseStatuses = [];
+    var hseCheckboxes = document.querySelectorAll("input[id^=hse_]:checked");
+    hseCheckboxes.forEach(function(checkbox) {
+        selectedHseStatuses.push(checkbox.id.replace("hse_", ""));
     });
     
     var abilitatoFilter = document.getElementById("filter_abilitato");
@@ -3250,8 +3444,8 @@ function updateActiveFiltersDisplay(visibleCount) {
     var filterList = document.getElementById("filter-list");
     var filters = [];
     
-    if (selectedHsaStatuses.length > 0) {
-        filters.push("Stati HSA: " + selectedHsaStatuses.join(", "));
+    if (selectedHseStatuses.length > 0) {
+        filters.push("Stati HSE: " + selectedHseStatuses.join(", "));
     }
     
     if (showAbilitato && showDisabilitato) {
@@ -3416,6 +3610,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 closeEditCantiereModal();
             } else if (document.getElementById('delete-cantiere-modal').style.display === 'block') {
                 closeDeleteCantiereModal();
+            } else if (document.getElementById('status-details-modal') && document.getElementById('status-details-modal').style.display === 'block') {
+                closeStatusDetailsModal();
+            } else if (document.getElementById('cantiere-workers-modal') && document.getElementById('cantiere-workers-modal').style.display === 'block') {
+                closeCantiereWorkersModal();
             }
         }
     });
