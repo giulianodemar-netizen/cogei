@@ -1410,8 +1410,8 @@ echo '<h3 class="hse_documenti_title" style="color: #0066a2; margin: 0; display:
 echo '<span class="hse_accordion_arrow" id="hse_arrow_documenti" style="font-size: 18px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>';
 echo '</div>';
 
-// Content accordion documenti (aperto di default per mantenere facilità di accesso)
-echo '<div class="hse_accordion_content" id="hse_content_documenti" style="display: block; padding: 25px; transition: all 0.3s ease;">';
+// Content accordion documenti (chiuso di default)
+echo '<div class="hse_accordion_content" id="hse_content_documenti" style="display: none; padding: 25px; transition: all 0.3s ease;">';
 
 // DVR File con data emissione
 echo '<div class="hse_form_group hse_dvr_group" style="margin-bottom: 20px;">';
@@ -1574,8 +1574,8 @@ echo '<h3 class="hse_personale_title_main" style="color: #0066a2; margin: 0; dis
 echo '<span class="hse_accordion_arrow" id="hse_arrow_personale" style="font-size: 18px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>';
 echo '</div>';
 
-// Content accordion personale (aperto di default per mantenere funzionalità)
-echo '<div class="hse_accordion_content" id="hse_content_personale" style="display: block; padding: 25px; transition: all 0.3s ease;">';
+// Content accordion personale (chiuso di default)
+echo '<div class="hse_accordion_content" id="hse_content_personale" style="display: none; padding: 25px; transition: all 0.3s ease;">';
 
 // Elenco Personale Dinamico con formazioni + UNILAV + Idoneità Sanitaria
 echo '<div class="hse_form_group hse_personale_group" style="margin-bottom: 20px;">';
@@ -1663,15 +1663,15 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>';
         echo '<div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
         echo '<div class="hse_nome_field">';
-        echo '<label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome:</label>';
+        echo '<label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome *:</label>';
         echo '<input type="text" name="hse_personale_nome[]" value="' . esc_attr($hse_persona['nome']) . '" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">';
         echo '</div>';
         echo '<div class="hse_cognome_field">';
-        echo '<label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome:</label>';
+        echo '<label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome *:</label>';
         echo '<input type="text" name="hse_personale_cognome[]" value="' . esc_attr($hse_persona['cognome']) . '" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">';
         echo '</div>';
         echo '<div class="hse_data_nascita_field">';
-        echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>';
+        echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita *:</label>';
         echo '<input type="date" name="hse_personale_data_nascita[]" value="' . esc_attr($hse_persona['data_nascita']) . '" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">';
         echo '</div>';
         echo '</div>'; // Fine hse_dati_personali_grid
@@ -1688,7 +1688,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // UNILAV Data Emissione
         echo '<div class="hse_unilav_emissione_field">';
-        echo '<label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione:</label>';
+        echo '<label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione *:</label>';
         $hse_unilav_emissione_value = !empty($hse_persona['unilav_data_emissione']) ? $hse_persona['unilav_data_emissione'] : '';
         echo '<input type="date" name="hse_personale_unilav_emissione[]" value="' . esc_attr($hse_unilav_emissione_value) . '" class="hse_unilav_emissione_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">';
         echo '</div>';
@@ -1718,7 +1718,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // UNILAV File
         echo '<div class="hse_unilav_file_field">';
-        echo '<label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV:</label>';
+        echo '<label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV *:</label>';
         if (!empty($hse_persona['unilav_file'])) {
             echo '<div class="hse_unilav_file_success" style="margin-bottom: 6px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 6px;">';
@@ -1746,7 +1746,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Idoneità Sanitaria Scadenza
         echo '<div class="hse_idoneita_sanitaria_field">';
-        echo '<label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza:</label>';
+        echo '<label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza *:</label>';
         $hse_idoneita_scadenza_value = !empty($hse_persona['idoneita_sanitaria_scadenza']) ? $hse_persona['idoneita_sanitaria_scadenza'] : '';
         $hse_idoneita_scadenza_style = 'width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;';
         
@@ -1769,7 +1769,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Idoneità Sanitaria File
         echo '<div class="hse_idoneita_file_field">';
-        echo '<label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità:</label>';
+        echo '<label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità *:</label>';
         if (!empty($hse_persona['idoneita_sanitaria_file'])) {
             echo '<div class="hse_idoneita_file_success" style="margin-bottom: 6px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 6px;">';
@@ -2096,15 +2096,15 @@ echo '<div class="hse_accordion_content" id="hse_content_automezzi" style="displ
 
 echo '<input type="hidden" name="hse_numero_automezzi" id="hse_numero_automezzi" value="' . $hse_numero_automezzi_value . '">';
 
-// Informazioni targa italiana
+// Informazioni targa generica
 echo '<div class="hse_targa_info_box" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; border-radius: 8px; padding: 15px; margin-bottom: 20px;">';
 echo '<div class="hse_targa_info_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
 echo '<span class="hse_targa_info_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">🚗</span>';
-echo '<strong class="hse_targa_info_title" style="color: #1565c0; font-size: 14px;">Formato Targa Italiana</strong>';
+echo '<strong class="hse_targa_info_title" style="color: #1565c0; font-size: 14px;">Targa Veicolo</strong>';
 echo '</div>';
 echo '<div class="hse_targa_info_text" style="color: #1565c0; font-size: 13px; line-height: 1.4;">';
-echo 'Le targhe devono rispettare il <strong>formato italiano standard: AA123BB</strong> (2 lettere + 3 numeri + 2 lettere). ';
-echo 'La validazione avverrà automaticamente durante la digitazione.';
+echo 'Inserisci la targa del veicolo. <strong>Accettati tutti i formati</strong> (italiane, straniere, speciali). ';
+echo 'Non sono previste limitazioni di formato.';
 echo '</div>';
 echo '</div>';
 
@@ -2140,14 +2140,13 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
         echo '<div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
         
         echo '<div class="hse_automezzo_descrizione_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo:</label>';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo *:</label>';
         echo '<input type="text" name="hse_automezzi_descrizione[]" value="' . esc_attr($hse_automezzo['descrizione_automezzo']) . '" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
         echo '</div>';
         
         echo '<div class="hse_automezzo_targa_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa:</label>';
-        echo '<input type="text" name="hse_automezzi_targa[]" value="' . esc_attr($hse_automezzo['targa']) . '" placeholder="AA123BB" maxlength="7" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" oninput="hse_validateTargaInput(this)" required>';
-        echo '<div class="hse_targa_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa *:</label>';
+        echo '<input type="text" name="hse_automezzi_targa[]" value="' . esc_attr($hse_automezzo['targa']) . '" placeholder="Inserisci targa" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" required>';
         echo '</div>';
         
         echo '<div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">';
@@ -3224,13 +3223,12 @@ function hse_addAutomezzo() {
     newRow.innerHTML = `
         <div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
             <div class="hse_automezzo_descrizione_field">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo:</label>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo *:</label>
                 <input type="text" name="hse_automezzi_descrizione[]" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
             </div>
             <div class="hse_automezzo_targa_field">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa:</label>
-                <input type="text" name="hse_automezzi_targa[]" placeholder="AA123BB" maxlength="7" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" oninput="hse_validateTargaInput(this)" required>
-                <div class="hse_targa_validation_feedback" style="margin-top: 5px; font-size: 11px; min-height: 15px;"></div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa *:</label>
+                <input type="text" name="hse_automezzi_targa[]" placeholder="Inserisci targa" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" required>
             </div>
             <div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">
                 <button type="button" onclick="hse_removeAutomezzoRow(this)" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Rimuovi</button>
@@ -4190,20 +4188,20 @@ function hse_addPersona() {
             </div>
         </div>
         
-        <div class="hse_persona_accordion_content" id="hse_content_persona_${hse_newIndex}" style="display: block; padding: 20px; transition: all 0.3s ease;">
+        <div class="hse_persona_accordion_content" id="hse_content_persona_${hse_newIndex}" style="display: none; padding: 20px; transition: all 0.3s ease;">
             <div class="hse_dati_personali" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #0066a2;">
                 <h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>
                 <div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                     <div class="hse_nome_field">
-                        <label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome:</label>
+                        <label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome *:</label>
                         <input type="text" name="hse_personale_nome[]" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">
                     </div>
                     <div class="hse_cognome_field">
-                        <label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome:</label>
+                        <label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome *:</label>
                         <input type="text" name="hse_personale_cognome[]" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">
                     </div>
                     <div class="hse_data_nascita_field">
-                        <label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>
+                        <label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita *:</label>
                         <input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">
                     </div>
                 </div>
@@ -4216,7 +4214,7 @@ function hse_addPersona() {
                     <h6 style="margin: 0 0 10px 0; color: #2196f3; font-size: 13px; font-weight: bold;">📋 UNILAV</h6>
                     <div class="hse_unilav_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                         <div class="hse_unilav_emissione_field">
-                            <label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione:</label>
+                            <label class="hse_unilav_emissione_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📅 Data Emissione *:</label>
                             <input type="date" name="hse_personale_unilav_emissione[]" class="hse_unilav_emissione_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
                         </div>
                         <div class="hse_unilav_scadenza_field">
@@ -4224,7 +4222,7 @@ function hse_addPersona() {
                             <input type="date" name="hse_personale_unilav_scadenza[]" class="hse_unilav_scadenza_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
                         </div>
                         <div class="hse_unilav_file_field">
-                            <label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV:</label>
+                            <label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV *:</label>
                             <input type="file" name="hse_unilav_file_${hse_newIndex}" accept=".pdf" class="hse_unilav_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
                         </div>
                     </div>
@@ -4234,11 +4232,11 @@ function hse_addPersona() {
                     <h6 style="margin: 0 0 10px 0; color: #28a745; font-size: 13px; font-weight: bold;">🏥 Idoneità Sanitaria</h6>
                     <div class="hse_idoneita_grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div class="hse_idoneita_sanitaria_field">
-                            <label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza:</label>
+                            <label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza *:</label>
                             <input type="date" name="hse_personale_idoneita_scadenza[]" class="hse_idoneita_sanitaria_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
                         </div>
                         <div class="hse_idoneita_file_field">
-                            <label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità:</label>
+                            <label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità *:</label>
                             <input type="file" name="hse_idoneita_file_${hse_newIndex}" accept=".pdf" class="hse_idoneita_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
                         </div>
                     </div>
@@ -5111,6 +5109,50 @@ document.addEventListener("DOMContentLoaded", function() {
             hse_showToast('💡 Ricorda di inserire la data di emissione del DVR caricato.', 'info');
         }, 2000);
     }
+    
+    // ⚠️ NUOVO: Controllo modifiche non salvate
+    let hse_formChanged = false;
+    let hse_originalFormData = '';
+    
+    // Cattura lo stato iniziale del form
+    const hse_form = document.getElementById('hse_cantiere_form_main');
+    if (hse_form) {
+        // Salva lo stato iniziale dopo il caricamento completo
+        setTimeout(() => {
+            hse_originalFormData = new FormData(hse_form).toString();
+        }, 2000);
+        
+        // Monitora i cambiamenti nel form
+        hse_form.addEventListener('input', function() {
+            hse_formChanged = true;
+        });
+        
+        hse_form.addEventListener('change', function() {
+            hse_formChanged = true;
+        });
+        
+        // Aggiungi listener per i file input
+        hse_form.addEventListener('change', function(e) {
+            if (e.target.type === 'file') {
+                hse_formChanged = true;
+            }
+        });
+        
+        // Reset flag quando si salva il form
+        hse_form.addEventListener('submit', function() {
+            hse_formChanged = false;
+        });
+    }
+    
+    // Avviso prima di chiudere la pagina se ci sono modifiche non salvate
+    window.addEventListener('beforeunload', function(e) {
+        if (hse_formChanged) {
+            const message = 'Attenzione! Non hai salvato il form dall\'ultima modifica.\n\nSei sicuro di voler chiudere?';
+            e.preventDefault();
+            e.returnValue = message;
+            return message;
+        }
+    });
 });
 
 // Esporta funzioni globali per debugging
