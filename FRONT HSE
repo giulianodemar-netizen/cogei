@@ -1401,9 +1401,17 @@ if (!empty($hse_error_messages) && $hse_current_user_id) {
 echo '<form method="post" enctype="multipart/form-data" class="hse_cantiere_form" id="hse_cantiere_form_main">';
 echo wp_nonce_field('hse_cantiere_form_' . $hse_current_user_id, 'hse_cantiere_nonce');
 
-// PARTE A - Sempre aperta
-echo '<div class="hse_parte_a" style="background: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #0066a2;">';
-echo '<h3 class="hse_parte_a_title" style="color: #0066a2; margin-top: 0; display: flex; align-items: center;"><span class="hse_parte_a_icon" style="background: #0066a2; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">A</span>Documenti Aziendali + Personale</h3>';
+// PARTE A - Documenti Aziendali Accordion
+echo '<div class="hse_documenti_group" style="margin-bottom: 30px; background: #f8f9fa; padding: 0; border-radius: 10px; border-left: 5px solid #0066a2; overflow: hidden;">';
+
+// Header accordion documenti aziendali
+echo '<div class="hse_accordion_header hse_documenti_accordion_header" onclick="hse_toggleAccordion(\'documenti\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 102, 162, 0.1); transition: all 0.3s ease;">';
+echo '<h3 class="hse_documenti_title" style="color: #0066a2; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #0066a2; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">📄</span>Documenti Aziendali</h3>';
+echo '<span class="hse_accordion_arrow" id="hse_arrow_documenti" style="font-size: 18px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>';
+echo '</div>';
+
+// Content accordion documenti (aperto di default per mantenere facilità di accesso)
+echo '<div class="hse_accordion_content" id="hse_content_documenti" style="display: block; padding: 25px; transition: all 0.3s ease;">';
 
 // DVR File con data emissione
 echo '<div class="hse_form_group hse_dvr_group" style="margin-bottom: 20px;">';
@@ -1550,13 +1558,27 @@ if ($rct_has_data) {
 }
 echo '</div>';
 
+echo '</div>'; // Fine accordion content documenti
+echo '</div>'; // Fine documenti group
+
 ?>
 <?php
 
+// 📋 NUOVO: Accordion Personale
+echo '<div class="hse_personale_accordion_group" style="margin-bottom: 30px; background: #e8f4fd; padding: 0; border-radius: 10px; border-left: 5px solid #0066a2; overflow: hidden;">';
+
+// Header accordion personale
+$hse_numero_personale_value = ($hse_existing_data && isset($hse_existing_data['personale']) && is_array($hse_existing_data['personale'])) ? count($hse_existing_data['personale']) : 1;
+echo '<div class="hse_accordion_header hse_personale_accordion_header_main" onclick="hse_toggleAccordion(\'personale\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 102, 162, 0.1); transition: all 0.3s ease;">';
+echo '<h3 class="hse_personale_title_main" style="color: #0066a2; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #0066a2; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">👥</span>Elenco Personale + Documenti Formazione + UNILAV + Idoneità Sanitaria <span id="hse_personale_count" class="hse_personale_count" style="background: #0066a2; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_personale_value . ' persone)</span></h3>';
+echo '<span class="hse_accordion_arrow" id="hse_arrow_personale" style="font-size: 18px; font-weight: bold; color: #0066a2; transition: transform 0.3s ease;">▼</span>';
+echo '</div>';
+
+// Content accordion personale (aperto di default per mantenere funzionalità)
+echo '<div class="hse_accordion_content" id="hse_content_personale" style="display: block; padding: 25px; transition: all 0.3s ease;">';
+
 // Elenco Personale Dinamico con formazioni + UNILAV + Idoneità Sanitaria
 echo '<div class="hse_form_group hse_personale_group" style="margin-bottom: 20px;">';
-$hse_numero_personale_value = ($hse_existing_data && isset($hse_existing_data['personale']) && is_array($hse_existing_data['personale'])) ? count($hse_existing_data['personale']) : 1;
-echo '<label class="hse_personale_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">📋 Elenco Personale + Documenti Formazione + UNILAV + Idoneità Sanitaria <span id="hse_personale_count" class="hse_personale_count" style="background: #0066a2; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_personale_value . ' persone)</span></label>';
 
 echo '<input type="hidden" name="hse_numero_personale" id="hse_numero_personale" value="' . $hse_numero_personale_value . '">';
 
@@ -2055,6 +2077,9 @@ echo '<button type="button" onclick="hse_addPersona()" class="hse_add_persona_bt
 echo '</div>';
 
 echo '</div>'; // Fine hse_personale_group
+
+echo '</div>'; // Fine accordion content personale  
+echo '</div>'; // Fine personale accordion group
 
 // 🚛 NUOVO: Accordion Automezzi
 echo '<div class="hse_automezzi_group" style="margin-bottom: 30px; background: #fff3cd; padding: 0; border-radius: 10px; border-left: 5px solid #ffc107; overflow: hidden;">';
@@ -5282,7 +5307,9 @@ function hse_showDebugInfo() {
 .hse_persona_accordion_header:hover,
 .hse_cantiere_accordion_header:hover,
 .hse_automezzi_accordion_header:hover,
-.hse_attrezzi_accordion_header:hover {
+.hse_attrezzi_accordion_header:hover,
+.hse_documenti_accordion_header:hover,
+.hse_personale_accordion_header_main:hover {
     background: rgba(33, 150, 243, 0.15) !important;
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
@@ -5304,6 +5331,16 @@ function hse_showDebugInfo() {
 /* 🔧 NUOVO: Stili header attrezzi */
 .hse_attrezzi_accordion_header:hover {
     background: rgba(33, 150, 243, 0.2) !important;
+}
+
+/* 📄 NUOVO: Stili header documenti */
+.hse_documenti_accordion_header:hover {
+    background: rgba(0, 102, 162, 0.2) !important;
+}
+
+/* 👥 NUOVO: Stili header personale principale */
+.hse_personale_accordion_header_main:hover {
+    background: rgba(0, 102, 162, 0.2) !important;
 }
 
 /* Accordion Arrow Animations */
