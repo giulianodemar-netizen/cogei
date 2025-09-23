@@ -159,6 +159,52 @@ function createCantieriTablesIfNotExists() {
 // Esegui creazione tabelle
 createCantieriTablesIfNotExists();
 
+// ================== FUNZIONI HELPER PER AUTOMEZZI E ATTREZZI ==================
+
+function hse_getAutomezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_automezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAttrezziByRichiestaId($richiesta_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_attrezzi 
+        WHERE richiesta_id = %d 
+        ORDER BY id ASC
+    ", $richiesta_id), ARRAY_A);
+}
+
+function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_automezzo, a.targa
+        FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
+        WHERE aa.cantiere_id = %d AND aa.user_id = %d
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
+function hse_getAttrezziAssegnatiCantiere($cantiere_id, $user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT aa.*, a.descrizione_attrezzo, a.data_revisione
+        FROM {$wpdb->prefix}cantiere_attrezzi_assegnazioni aa
+        JOIN {$wpdb->prefix}cantiere_attrezzi a ON aa.attrezzo_id = a.id
+        WHERE aa.cantiere_id = %d AND aa.user_id = %d
+        ORDER BY aa.data_assegnazione DESC
+    ", $cantiere_id, $user_id), ARRAY_A);
+}
+
 // ================== GESTIONE AZIONI CANTIERI (ESTESO) ==================
 
 if (isset($_GET['cantiere_action']) && isset($_POST['cantiere_submit'])) {
@@ -418,7 +464,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
         'Mezzi',
         'Numero Personale',
         'Parte B Completata',
-        'Stato Abilitazione HSA',
+        'Stato Richiesta HSE',
         'Accesso al Cantiere',
         'Cantieri Assegnati',
         'Data Creazione'
@@ -444,7 +490,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
         
         $personale = getPersonaleByRichiestaId($richiesta['id']);
         $accesso_cantiere = determineAccessoCantiere($abilita_cantiere);
-        $stato_hsa = determineStatoHSA($richiesta, $personale);
+        $stato_hse = determineStatoHSE($richiesta, $personale);
         
         // 🏗️ NUOVO: Recupera cantieri assegnati
         $cantieri_assegnati = getCantieriAssegnatiUser($richiesta['user_id']);
@@ -464,7 +510,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
             $richiesta['mezzi_file'] ? 'Caricato' : 'Non caricato',
             $richiesta['numero_personale'],
             $richiesta['parte_b_completata'] ? 'Si' : 'No',
-            $stato_hsa['label'],
+            $stato_hse['label'],
             $accesso_cantiere['label'],
             $cantieri_text ?: 'Nessuno',
             $richiesta['data_creazione']
@@ -608,7 +654,8 @@ function getOperaiAssegnatiCantiere($cantiere_id, $user_id = null) {
     
     return $wpdb->get_results($wpdb->prepare("
         SELECT oa.*, p.nome, p.cognome, p.data_nascita,
-               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file,
+               p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
         WHERE oa.cantiere_id = %d $where_user
@@ -801,7 +848,8 @@ function getOperaiAssegnazioniByUser($user_id) {
     
     return $wpdb->get_results($wpdb->prepare("
         SELECT oa.*, p.nome, p.cognome, p.data_nascita, c.nome as cantiere_nome, c.id as cantiere_id,
-               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file
+               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file,
+               p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
         JOIN {$wpdb->prefix}cantieri c ON oa.cantiere_id = c.id
@@ -826,6 +874,9 @@ function groupAssegnazioniByOperaio($assegnazioni) {
                 'formazione_antincendio_file' => $assegnazione['formazione_antincendio_file'],
                 'formazione_primo_soccorso_file' => $assegnazione['formazione_primo_soccorso_file'],
                 'formazione_preposti_file' => $assegnazione['formazione_preposti_file'],
+                'formazione_lavori_quota_file' => $assegnazione['formazione_lavori_quota_file'] ?? '',
+                'formazione_dpi_terza_categoria_file' => $assegnazione['formazione_dpi_terza_categoria_file'] ?? '',
+                'formazione_ambienti_confinati_file' => $assegnazione['formazione_ambienti_confinati_file'] ?? '',
                 'cantieri' => array()
             );
         }
@@ -868,84 +919,65 @@ function determineAccessoCantiere($abilita_cantiere) {
     }
 }
 
-function determineStatoHSA($richiesta, $personale = null) {
-    // Verifica completamento Parte A
-    $parte_a_completa = (!empty($richiesta['dvr_file']) && 
-                        !empty($richiesta['rct_file']) && 
-                        $richiesta['numero_personale'] > 0);
+function determineStatoHSE($richiesta, $personale = null) {
+    // Verifica se non ha mai iniziato la compilazione
+    // Controlla RCT da user meta invece che da file caricato
+    $user_id = $richiesta['user_id'];
+    $rct_from_user_meta = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
     
-    if (!$parte_a_completa) {
+    $documenti_base_mancanti = (empty($richiesta['dvr_file']) && 
+                               empty($rct_from_user_meta) && 
+                               $richiesta['numero_personale'] == 0);
+    
+    if ($documenti_base_mancanti) {
         return [
-            'key' => 'parte_a_incompleta',
-            'label' => 'Parte A Incompleta',
-            'color' => '#ffc107',
-            'tooltip' => 'Deve completare i documenti preliminari (DVR, RCT, elenco personale)'
+            'key' => 'non_compilata',
+            'label' => 'Non Compilata',
+            'color' => '#dc3545',
+            'tooltip' => 'La richiesta non è stata ancora iniziata'
         ];
     }
     
-    if (!$richiesta['parte_b_completata']) {
-        return [
-            'key' => 'solo_parte_a',
-            'label' => 'Solo Parte A',
-            'color' => '#17a2b8',
-            'tooltip' => 'Ha completato i documenti preliminari ma non ha iniziato la Parte B'
-        ];
-    }
-    
-    $pos_caricato = !empty($richiesta['pos_file']);
-    $mezzi_caricato = !empty($richiesta['mezzi_file']);
+    // Verifica completamento Parte A (DVR, RCT da user meta, operai inseriti)
+    $dvr_presente = !empty($richiesta['dvr_file']);
+    $rct_presente = !empty($rct_from_user_meta);
+    $operai_inseriti = $richiesta['numero_personale'] > 0;
     
     if ($personale === null) {
         $personale = getPersonaleByRichiestaId($richiesta['id']);
     }
     
-    $personale_selezionato = array_filter($personale, function($persona) {
-        return $persona['selezionato_parte_b'] == 1;
-    });
+    // Verifica se ci sono operai inseriti nel sistema
+    $operai_nel_sistema = !empty($personale);
     
-    $ha_personale_selezionato = !empty($personale_selezionato);
+    $elementi_parte_a = [$dvr_presente, $rct_presente, $operai_inseriti, $operai_nel_sistema];
+    $elementi_completati = array_filter($elementi_parte_a);
     
-    $formazioni_complete = true;
-    if ($ha_personale_selezionato) {
-        foreach ($personale_selezionato as $persona) {
-            $ha_almeno_una_formazione = (
-                !empty($persona['formazione_antincendio_file']) ||
-                !empty($persona['formazione_primo_soccorso_file']) ||
-                !empty($persona['formazione_preposti_file'])
-            );
-            
-            if (!$ha_almeno_una_formazione) {
-                $formazioni_complete = false;
-                break;
-            }
-        }
-    } else {
-        $formazioni_complete = false;
-    }
-    
-    $parte_b_elementi_completi = ($pos_caricato && $mezzi_caricato && $ha_personale_selezionato && $formazioni_complete);
-    $parte_b_elementi_parziali = ($pos_caricato || $mezzi_caricato || $ha_personale_selezionato);
-    
-    if ($parte_b_elementi_completi) {
+    if (count($elementi_completati) == 4) {
         return [
-            'key' => 'completo',
-            'label' => 'Completo',
+            'key' => 'completa',
+            'label' => 'Parte A Completa',
             'color' => '#28a745',
-            'tooltip' => 'Ha completato sia i documenti preliminari che quelli specifici del cantiere con formazioni valide'
-        ];
-    } elseif ($parte_b_elementi_parziali) {
-        return [
-            'key' => 'parte_b_incompleta',
-            'label' => 'Parte B Incompleta',
-            'color' => '#fd7e14',
-            'tooltip' => 'Ha iniziato la Parte B ma mancano alcuni elementi (POS, mezzi, personale selezionato o formazioni)'
+            'tooltip' => 'Documenti DVR e RCT caricati, operai inseriti nel sistema',
+            'details' => [
+                'dvr' => $dvr_presente,
+                'rct' => $rct_presente,
+                'operai_numero' => $richiesta['numero_personale'],
+                'operai_inseriti' => count($personale)
+            ]
         ];
     } else {
         return [
-            'key' => 'solo_parte_a',
-            'label' => 'Solo Parte A',
-            'color' => '#17a2b8', 
-            'tooltip' => 'Ha completato i documenti preliminari ma la Parte B risulta vuota'
+            'key' => 'parziale',
+            'label' => 'Parte A Parziale',
+            'color' => '#ffc107',
+            'tooltip' => 'Compilazione parziale: ' . count($elementi_completati) . '/4 elementi completati',
+            'details' => [
+                'dvr' => $dvr_presente,
+                'rct' => $rct_presente,
+                'operai_numero' => $richiesta['numero_personale'],
+                'operai_inseriti' => count($personale)
+            ]
         ];
     }
 }
@@ -1280,21 +1312,20 @@ echo '<input type="text" id="searchInput" placeholder="Scrivi per cercare..." st
 echo '<small style="display: block; margin-top: 5px; color: #666;">Cerca per ragione sociale, email, P.IVA, stato cantiere o qualsiasi altro campo</small>';
 echo '</div>';
 
-// FILTRI STATI HSA
+// FILTRI STATI HSE
 echo '<div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">';
-echo '<strong>🏗️ Filtra per Stati HSA:</strong><br>';
+echo '<strong>🏗️ Filtra per Stati HSE:</strong><br>';
 echo '<button onclick="clearAllFilters()" style="background: #6c757d; color: white; padding: 4px 8px; border: none; border-radius: 8px; font-size: 11px; margin: 2px; cursor: pointer;">Pulisci Tutti</button><br><br>';
 
-$hsa_statuses = [
-    'completo' => ['label' => 'Completo', 'color' => '#28a745'],
-    'parte_b_incompleta' => ['label' => 'Parte B Incompleta', 'color' => '#fd7e14'],
-    'solo_parte_a' => ['label' => 'Solo Parte A', 'color' => '#17a2b8'],
-    'parte_a_incompleta' => ['label' => 'Parte A Incompleta', 'color' => '#ffc107']
+$hse_statuses = [
+    'completa' => ['label' => 'Parte A Completa', 'color' => '#28a745'],
+    'parziale' => ['label' => 'Parte A Parziale', 'color' => '#ffc107'],
+    'non_compilata' => ['label' => 'Non Compilata', 'color' => '#dc3545']
 ];
 
-foreach ($hsa_statuses as $key => $config) {
+foreach ($hse_statuses as $key => $config) {
     echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
-    echo '<input type="checkbox" id="hsa_' . $key . '" onchange="updateFilters()" style="margin-right: 5px;">';
+    echo '<input type="checkbox" id="hse_' . $key . '" onchange="updateFilters()" style="margin-right: 5px;">';
     echo '<span style="background: ' . $config['color'] . '; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;">' . $config['label'] . '</span>';
     echo '</label> ';
 }
@@ -1328,13 +1359,10 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DVR</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">POS</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Mezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Automezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🔧 Attrezzi</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Conformità</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Abilitazione HSA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Richiesta HSE</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Accesso al Cantiere</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🏗️ Cantieri Assegnati</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 Assegnazioni Operai</th>';
@@ -1353,7 +1381,7 @@ foreach ($richieste as $richiesta) {
     $personale = getPersonaleByRichiestaId($richiesta['id']);
     
     $accesso_cantiere = determineAccessoCantiere($abilita_cantiere);
-    $stato_hsa = determineStatoHSA($richiesta, $personale);
+    $stato_hse = determineStatoHSE($richiesta, $personale);
     $compliance = calculateComplianceStatus($personale);
     
     // 🏗️ NUOVO: Cantieri assegnati
@@ -1371,7 +1399,7 @@ foreach ($richieste as $richiesta) {
     $attrezzi_assegnazioni = getAttrezziAssegnazioniByUser($user_id);
     $attrezzi_grouped = groupAttrezziAssegnazioniByAttrezzo($attrezzi_assegnazioni);
     
-    echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hsa-status="' . $stato_hsa['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
+    echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hse-status="' . $stato_hse['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $richiesta['id'] . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
@@ -1380,50 +1408,64 @@ foreach ($richieste as $richiesta) {
     // File DVR
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
     if ($richiesta['dvr_file']) {
+        echo '<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">';
         echo '<a href="' . esc_url($richiesta['dvr_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza DVR">📄 ✓</a>';
-    } else {
-        echo '<span style="color: #dc3545;">✗</span>';
-    }
-    echo '</td>';
-    
-    // File RCT
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    if ($richiesta['rct_file']) {
-        echo '<a href="' . esc_url($richiesta['rct_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT">🛡️ ✓</a>';
-    } else {
-        echo '<span style="color: #dc3545;">✗</span>';
-    }
-    echo '</td>';
-    
-    // File POS (mostra se ha almeno un POS per qualche cantiere)
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    $has_pos = false;
-    foreach ($cantieri_assegnati as $cantiere) {
-        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
-        if ($pos_data && $pos_data['pos_file']) {
-            $has_pos = true;
-            break;
+        
+        if (!empty($richiesta['dvr_data_emissione'])) {
+            $dvr_date = DateTime::createFromFormat('Y-m-d', $richiesta['dvr_data_emissione']);
+            if ($dvr_date !== false) {
+                $dvr_formatted = $dvr_date->format('d/m/Y');
+                echo '<span style="color: #666; font-size: 10px; font-weight: bold;">' . $dvr_formatted . '</span>';
+            }
         }
-    }
-    if ($has_pos) {
-        echo '<span style="color: #28a745; font-weight: bold;" title="Ha caricato POS per almeno un cantiere">📋 ✓</span>';
+        echo '</div>';
     } else {
         echo '<span style="color: #dc3545;">✗</span>';
     }
     echo '</td>';
     
-    // File Mezzi (mostra se ha almeno un file mezzi per qualche cantiere)
+    // File RCT (da user meta)
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    $has_mezzi = false;
-    foreach ($cantieri_assegnati as $cantiere) {
-        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
-        if ($pos_data && $pos_data['mezzi_file']) {
-            $has_mezzi = true;
-            break;
+    $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    $rct_scadenza = get_user_meta($user_id, 'user_registration_scad_rct_rco', true);
+    
+    if (!empty($rct_file_id)) {
+        $rct_file_url = wp_get_attachment_url($rct_file_id);
+        if ($rct_file_url) {
+            echo '<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">';
+            echo '<a href="' . esc_url($rct_file_url) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT da iscrizione">🛡️ ✓</a>';
+            
+            if (!empty($rct_scadenza)) {
+                // Parse date from user meta format (dd/mm/yyyy)
+                $scadenza_datetime = DateTime::createFromFormat('d/m/Y', $rct_scadenza);
+                if ($scadenza_datetime === false) {
+                    $scadenza_datetime = DateTime::createFromFormat('Y-m-d', $rct_scadenza);
+                }
+                
+                if ($scadenza_datetime !== false) {
+                    $scadenza_formatted = $scadenza_datetime->format('d/m/Y');
+                    $oggi = new DateTime();
+                    $giorni_alla_scadenza = $oggi->diff($scadenza_datetime)->days;
+                    $is_scaduto = $oggi > $scadenza_datetime;
+                    
+                    if ($is_scaduto) {
+                        $date_color = '#dc3545';
+                        $date_text = $scadenza_formatted;
+                    } elseif ($giorni_alla_scadenza <= 30) {
+                        $date_color = '#ffc107';
+                        $date_text = $scadenza_formatted;
+                    } else {
+                        $date_color = '#28a745';
+                        $date_text = $scadenza_formatted;
+                    }
+                    
+                    echo '<span style="color: ' . $date_color . '; font-size: 10px; font-weight: bold;">' . $date_text . '</span>';
+                }
+            }
+            echo '</div>';
+        } else {
+            echo '<span style="color: #dc3545;">✗</span>';
         }
-    }
-    if ($has_mezzi) {
-        echo '<span style="color: #28a745; font-weight: bold;" title="Ha caricato elenco mezzi per almeno un cantiere">🚛 ✓</span>';
     } else {
         echo '<span style="color: #dc3545;">✗</span>';
     }
@@ -1482,14 +1524,9 @@ foreach ($richieste as $richiesta) {
     }
     echo '</td>';
     
-    // Conformità
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    echo '<span style="background: ' . $compliance['color'] . '; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;" title="' . ($compliance['conforme'] ? 'Tutte le competenze ≥30%' : 'Alcune competenze <30%') . '">' . $compliance['label'] . '</span>';
-    echo '</td>';
-    
-    // Stato Abilitazione HSA
-    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
-    echo '<span style="background: ' . $stato_hsa['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($stato_hsa['tooltip']) . '">' . $stato_hsa['label'] . '</span>';
+    // Stato Richiesta HSE (with click functionality)
+    echo '<td style="padding: 8px; border: 1px solid #ddd; cursor: pointer;" onclick="showStatusDetails(' . $richiesta['id'] . ', \'' . addslashes($rag_soc ?: $user->display_name) . '\')">';
+    echo '<span style="background: ' . $stato_hse['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($stato_hse['tooltip']) . '">' . $stato_hse['label'] . '</span>';
     echo '</td>';
     
     // Accesso al Cantiere
@@ -1497,11 +1534,11 @@ foreach ($richieste as $richiesta) {
     echo '<span style="background: ' . $accesso_cantiere['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($accesso_cantiere['tooltip']) . '">' . $accesso_cantiere['label'] . '</span>';
     echo '</td>';
     
-    // 🏗️ NUOVO: Cantieri Assegnati
+    // 🏗️ NUOVO: Cantieri Assegnati (with click functionality)
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">';
     if (!empty($cantieri_assegnati)) {
         foreach ($cantieri_assegnati as $cantiere) {
-            echo '<div style="background: #e3f2fd; color: #1565c0; padding: 2px 6px; margin: 1px 0; border-radius: 4px; border-left: 3px solid #2196f3;">';
+            echo '<div style="background: #e3f2fd; color: #1565c0; padding: 2px 6px; margin: 1px 0; border-radius: 4px; border-left: 3px solid #2196f3; cursor: pointer;" onclick="showCantiereWorkers(' . $cantiere['id'] . ', ' . $user_id . ', \'' . addslashes($cantiere['nome']) . '\', \'' . addslashes($rag_soc ?: $user->display_name) . '\')">';
             echo '🏗️ ' . htmlspecialchars($cantiere['nome']);
             echo '</div>';
         }
@@ -1590,9 +1627,27 @@ foreach ($richieste as $richiesta) {
                 $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">👮 Preposti</a>';
             }
             
+            // 🎯 NUOVE FORMAZIONI AGGIUNTIVE
+            $formazioni_aggiuntive = [];
+            if (!empty($persona['formazione_lavori_quota_file'])) {
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2;">🏗️ Lavori in Quota</a>';
+            }
+            if (!empty($persona['formazione_dpi_terza_categoria_file'])) {
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" style="color: #0066a2;">🦺 DPI 3° Categoria</a>';
+            }
+            if (!empty($persona['formazione_ambienti_confinati_file'])) {
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_ambienti_confinati_file']) . '" target="_blank" style="color: #0066a2;">🕳️ Ambienti Confinati</a>';
+            }
+            
             if (!empty($formazioni)) {
-                echo '<div style="font-size: 11px;">' . implode(' | ', $formazioni) . '</div>';
-            } else {
+                echo '<div style="font-size: 11px; margin-bottom: 5px;"><strong>Formazioni Base:</strong><br>' . implode(' | ', $formazioni) . '</div>';
+            }
+            
+            if (!empty($formazioni_aggiuntive)) {
+                echo '<div style="font-size: 11px; padding: 5px; background: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107; border-radius: 3px;"><strong>🎯 Formazioni Aggiuntive:</strong><br>' . implode(' | ', $formazioni_aggiuntive) . '</div>';
+            }
+            
+            if (empty($formazioni) && empty($formazioni_aggiuntive)) {
                 echo '<div style="font-size: 11px; color: #dc3545;">Nessuna formazione caricata</div>';
             }
             echo '</div>';
@@ -1714,6 +1769,148 @@ foreach ($richieste as $richiesta) {
 }
 
 echo '</table>';
+
+// ================== JAVASCRIPT DATA STRUCTURES ==================
+echo '<script>';
+echo 'window.richiesteData = {';
+foreach ($richieste as $richiesta) {
+    $user_id = $richiesta['user_id'];
+    $user = get_userdata($user_id);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $personale = getPersonaleByRichiestaId($richiesta['id']);
+    $stato_hse = determineStatoHSE($richiesta, $personale);
+    $cantieri_assegnati = getCantieriAssegnatiUser($user_id);
+    $operai_assegnazioni = getOperaiAssegnazioniByUser($user_id);
+    
+    echo $richiesta['id'] . ': {';
+    echo 'id: ' . $richiesta['id'] . ',';
+    echo 'user_id: ' . $user_id . ',';
+    echo 'azienda_nome: "' . addslashes($rag_soc ?: $user->display_name) . '",';
+    echo 'dvr_file: "' . addslashes($richiesta['dvr_file']) . '",';
+    echo 'dvr_data_emissione: "' . addslashes($richiesta['dvr_data_emissione']) . '",';
+    
+    // RCT da user meta
+    $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    $rct_scadenza = get_user_meta($user_id, 'user_registration_scad_rct_rco', true);
+    $rct_file_url = '';
+    if (!empty($rct_file_id)) {
+        $rct_file_url = wp_get_attachment_url($rct_file_id);
+    }
+    echo 'rct_file: "' . addslashes($rct_file_url) . '",';
+    echo 'rct_scadenza: "' . addslashes($rct_scadenza) . '",';
+    
+    echo 'numero_personale: ' . intval($richiesta['numero_personale']) . ',';
+    echo 'personale_inserito: ' . count($personale) . ',';
+    echo 'automezzi_count: ' . count(hse_getAutomezziByRichiestaId($richiesta['id'])) . ',';
+    echo 'attrezzi_count: ' . count(hse_getAttrezziByRichiestaId($richiesta['id'])) . ',';
+    echo 'stato: {';
+    echo 'key: "' . $stato_hse['key'] . '",';
+    echo 'label: "' . addslashes($stato_hse['label']) . '",';
+    echo 'color: "' . $stato_hse['color'] . '"';
+    echo '},';
+    echo 'personale: [';
+    foreach ($personale as $persona) {
+        echo '{';
+        echo 'id: ' . $persona['id'] . ',';
+        echo 'nome: "' . addslashes($persona['nome']) . '",';
+        echo 'cognome: "' . addslashes($persona['cognome']) . '",';
+        echo 'data_nascita: "' . addslashes($persona['data_nascita']) . '",';
+        echo 'formazione_antincendio: ' . (!empty($persona['formazione_antincendio_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_primo_soccorso: ' . (!empty($persona['formazione_primo_soccorso_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_preposti: ' . (!empty($persona['formazione_preposti_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_lavori_quota: ' . (!empty($persona['formazione_lavori_quota_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_dpi_terza: ' . (!empty($persona['formazione_dpi_terza_categoria_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_ambienti_confinati: ' . (!empty($persona['formazione_ambienti_confinati_file']) ? 'true' : 'false');
+        echo '},';
+    }
+    echo '],';
+    echo 'cantieri: [';
+    foreach ($cantieri_assegnati as $cantiere) {
+        // Trova operai assegnati a questo cantiere specifico
+        $operai_cantiere = array_filter($operai_assegnazioni, function($assegnazione) use ($cantiere) {
+            return $assegnazione['cantiere_id'] == $cantiere['id'];
+        });
+        
+        echo '{';
+        echo 'id: ' . $cantiere['id'] . ',';
+        echo 'nome: "' . addslashes($cantiere['nome']) . '",';
+        
+        // Aggiungi dati POS per questo cantiere
+        $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
+        echo 'pos_file: "' . addslashes($pos_data['pos_file'] ?? '') . '",';
+        echo 'mezzi_file: "' . addslashes($pos_data['mezzi_file'] ?? '') . '",';
+        
+        // Aggiungi automezzi assegnati a questo cantiere
+        $automezzi_cantiere = hse_getAutomezziAssegnatiCantiere($cantiere['id'], $user_id);
+        echo 'automezzi: [';
+        foreach ($automezzi_cantiere as $automezzo) {
+            echo '{';
+            echo 'id: ' . $automezzo['automezzo_id'] . ',';
+            echo 'descrizione: "' . addslashes($automezzo['descrizione_automezzo']) . '",';
+            echo 'targa: "' . addslashes($automezzo['targa']) . '",';
+            echo 'data_assegnazione: "' . addslashes($automezzo['data_assegnazione']) . '"';
+            echo '},';
+        }
+        echo '],';
+        
+        // Aggiungi attrezzi assegnati a questo cantiere
+        $attrezzi_cantiere = hse_getAttrezziAssegnatiCantiere($cantiere['id'], $user_id);
+        echo 'attrezzi: [';
+        foreach ($attrezzi_cantiere as $attrezzo) {
+            echo '{';
+            echo 'id: ' . $attrezzo['attrezzo_id'] . ',';
+            echo 'descrizione: "' . addslashes($attrezzo['descrizione_attrezzo']) . '",';
+            echo 'data_revisione: "' . addslashes($attrezzo['data_revisione'] ?? '') . '",';
+            echo 'data_assegnazione: "' . addslashes($attrezzo['data_assegnazione']) . '"';
+            echo '},';
+        }
+        echo '],';
+        
+        echo 'operai: [';
+        foreach ($operai_cantiere as $operaio_assegnazione) {
+            $operaio_details = array_filter($personale, function($p) use ($operaio_assegnazione) {
+                return $p['id'] == $operaio_assegnazione['operaio_id'];
+            });
+            $operaio = reset($operaio_details);
+            if ($operaio) {
+                echo '{';
+                echo 'id: ' . $operaio['id'] . ',';
+                echo 'nome: "' . addslashes($operaio['nome']) . '",';
+                echo 'cognome: "' . addslashes($operaio['cognome']) . '",';
+                echo 'data_nascita: "' . addslashes($operaio['data_nascita']) . '",';
+                echo 'data_assegnazione: "' . addslashes($operaio_assegnazione['data_assegnazione']) . '",';
+                
+                $competenze = [];
+                if (!empty($operaio['formazione_antincendio_file'])) $competenze[] = 'Antincendio';
+                if (!empty($operaio['formazione_primo_soccorso_file'])) $competenze[] = 'Primo Soccorso';
+                if (!empty($operaio['formazione_preposti_file'])) $competenze[] = 'Preposti';
+                if (!empty($operaio['formazione_lavori_quota_file'])) $competenze[] = 'Lavori in Quota';
+                if (!empty($operaio['formazione_dpi_terza_categoria_file'])) $competenze[] = 'DPI 3° Categoria';
+                if (!empty($operaio['formazione_ambienti_confinati_file'])) $competenze[] = 'Ambienti Confinati';
+                
+                echo 'competenze: ["' . implode('", "', array_map('addslashes', $competenze)) . '"],';
+                
+                $icons = [];
+                if (!empty($operaio['formazione_antincendio_file'])) $icons[] = '🔥';
+                if (!empty($operaio['formazione_primo_soccorso_file'])) $icons[] = '🚑';
+                if (!empty($operaio['formazione_preposti_file'])) $icons[] = '👮';
+                if (!empty($operaio['formazione_lavori_quota_file'])) $icons[] = '🏗️';
+                if (!empty($operaio['formazione_dpi_terza_categoria_file'])) $icons[] = '🦺';
+                if (!empty($operaio['formazione_ambienti_confinati_file'])) $icons[] = '🕳️';
+                
+                echo 'icons: "' . implode('', $icons) . '"';
+                echo '},';
+            }
+        }
+        echo ']';
+        echo '},';
+    }
+    echo ']';
+    echo '},';
+}
+echo '};';
+echo '</script>';
+
 echo '</div>'; // Fine tab richieste
 // ================== TAB 2: GESTIONE CANTIERI (ESTESO) ==================
 echo '<div id="content-cantieri" class="tab-content" style="display: none;">';
@@ -2506,6 +2703,26 @@ function updateSubmitButtonCounter() {
     }
 }
 
+// 🆕 NUOVA FUNZIONE: Chiudi modal assegnazioni
+function closeAssignmentModal() {
+    document.getElementById('assignment-modal').style.display = 'none';
+    
+    // Reset form
+    const form = document.getElementById('assignment-form');
+    if (form) {
+        form.reset();
+    }
+    
+    // Reset checkboxes
+    const checkboxes = document.querySelectorAll('input[name="user_ids[]"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    // Reset submit button
+    updateSubmitButtonCounter();
+    
+    console.log('✕ Modal assegnazioni chiuso');
+}
+
 // FILTRO ASSEGNAZIONI
 function filterAssignments() {
     const selectedCantiereId = document.getElementById('cantiere-filter').value;
@@ -2543,6 +2760,389 @@ function showCantiereDetailsModal(cantiereId) {
 
 function closeCantiereDetailsModal() {
     document.getElementById('cantiere-details-modal').style.display = 'none';
+}
+
+// 🆕 NUOVA FUNZIONE: Mostra dettagli stato richiesta HSE
+function showStatusDetails(richiestaId, aziendaNome) {
+    // Crea o mostra un modal con i dettagli dello stato
+    let modal = document.getElementById('status-details-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'status-details-modal';
+        modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
+        
+        modal.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto;">
+                <div style="background: #17a2b8; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="margin: 0;">📊 Dettaglio Stato Richiesta HSE</h4>
+                        <button onclick="closeStatusDetailsModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+                    <p id="status-azienda-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                </div>
+                <div id="status-details-content" style="padding: 20px;">
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 16px;">🔄 Caricamento dettagli...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Aggiungi event listener per chiudere cliccando fuori
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeStatusDetailsModal();
+            }
+        });
+    }
+    
+    document.getElementById('status-azienda-name').textContent = '🏢 ' + aziendaNome;
+    document.getElementById('status-details-modal').style.display = 'block';
+    
+    // Carica i dettagli (per ora usa dati mock, in futuro può essere AJAX)
+    loadStatusDetails(richiestaId);
+    
+    console.log('📊 Apertura dettagli stato per richiesta:', richiestaId, 'azienda:', aziendaNome);
+}
+
+function closeStatusDetailsModal() {
+    document.getElementById('status-details-modal').style.display = 'none';
+}
+
+function loadStatusDetails(richiestaId) {
+    const contentDiv = document.getElementById('status-details-content');
+    
+    // Ottieni i dati reali dalla struttura JavaScript
+    const richiestaData = window.richiesteData[richiestaId];
+    
+    if (!richiestaData) {
+        contentDiv.innerHTML = `
+            <div style="background: #f8d7da; padding: 15px; border-radius: 6px; text-align: center; color: #721c24;">
+                ❌ Errore: Dati richiesta non trovati (ID: ${richiestaId})
+            </div>
+        `;
+        return;
+    }
+    
+    // Simula caricamento
+    setTimeout(() => {
+        // Calcola lo stato di completamento
+        const dvr_completo = richiestaData.dvr_file && richiestaData.dvr_file.length > 0;
+        const rct_completo = richiestaData.rct_file && richiestaData.rct_file.length > 0;
+        const operai_inseriti = richiestaData.personale_inserito > 0;
+        
+        const elementi_completati = [dvr_completo, rct_completo, operai_inseriti].filter(Boolean).length;
+        const elementi_totali = 3;
+        
+        contentDiv.innerHTML = `
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #17a2b8;">📋 Stato Compilazione Parte A</h5>
+                <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${richiestaData.stato.color};">
+                    <strong>Stato Attuale:</strong> <span style="color: ${richiestaData.stato.color};">${richiestaData.stato.label}</span><br>
+                    <small>Elementi completati: ${elementi_completati}/${elementi_totali}</small>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${dvr_completo ? '#28a745' : '#dc3545'};">
+                        <strong>📄 DVR:</strong> <span style="color: ${dvr_completo ? '#28a745' : '#dc3545'};">${dvr_completo ? '✅ Caricato' : '❌ Mancante'}</span>
+                        ${richiestaData.dvr_data_emissione ? '<br><small style="color: #666;">📅 Emissione: ' + richiestaData.dvr_data_emissione.split('-').reverse().join('/') + '</small>' : ''}
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${rct_completo ? '#28a745' : '#dc3545'};">
+                        <strong>🛡️ RCT:</strong> <span style="color: ${rct_completo ? '#28a745' : '#dc3545'};">${rct_completo ? '✅ Caricato' : '❌ Mancante'}</span>
+                        ${richiestaData.rct_scadenza ? '<br><small style="color: #666;">⏰ Scadenza: ' + richiestaData.rct_scadenza + '</small>' : ''}
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${operai_inseriti ? '#28a745' : '#dc3545'};">
+                        <strong>👥 Operai nel Sistema:</strong> <span style="color: ${operai_inseriti ? '#28a745' : '#dc3545'};">${operai_inseriti ? '✅ ' + richiestaData.personale_inserito + ' inseriti' : '❌ Nessuno inserito'}</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #17a2b8;">
+                        <strong>🚛 Automezzi:</strong> <span style="color: #17a2b8;">${richiestaData.automezzi_count || 0} registrati</span>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #6f42c1;">
+                        <strong>🔧 Attrezzi:</strong> <span style="color: #6f42c1;">${richiestaData.attrezzi_count || 0} registrati</span>
+                    </div>
+                </div>
+            </div>
+            
+            ${elementi_completati < elementi_totali ? `
+            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 5px solid #ffc107; margin-bottom: 15px;">
+                <h5 style="margin: 0 0 10px 0; color: #856404;">⚠️ Cosa Manca per Completare</h5>
+                <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                    ${!dvr_completo ? '<li>Caricare il documento DVR</li>' : ''}
+                    ${!rct_completo ? '<li>Caricare il documento RCT</li>' : ''}
+                    ${!operai_inseriti ? '<li>Inserire nel sistema almeno un operaio</li>' : ''}
+                </ul>
+            </div>
+            ` : `
+            <div style="background: #d4edda; padding: 15px; border-radius: 6px; border-left: 5px solid #28a745; margin-bottom: 15px;">
+                <h5 style="margin: 0 0 10px 0; color: #155724;">✅ Parte A Completata</h5>
+                <p style="margin: 0; color: #155724;">Tutti gli elementi richiesti per la Parte A sono stati completati correttamente.</p>
+            </div>
+            `}
+            
+            ${richiestaData.personale.length > 0 ? `
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 5px solid #2196f3;">
+                <h5 style="margin: 0 0 10px 0; color: #1976d2;">👥 Operai Registrati (${richiestaData.personale.length})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 12px;">
+                    ${richiestaData.personale.map(operaio => {
+                        const competenze = [];
+                        let icons = '';
+                        if (operaio.formazione_antincendio) { competenze.push('Antincendio'); icons += '🔥'; }
+                        if (operaio.formazione_primo_soccorso) { competenze.push('Primo Soccorso'); icons += '🚑'; }
+                        if (operaio.formazione_preposti) { competenze.push('Preposti'); icons += '👮'; }
+                        if (operaio.formazione_lavori_quota) { competenze.push('Lavori in Quota'); icons += '🏗️'; }
+                        if (operaio.formazione_dpi_terza) { competenze.push('DPI 3° Cat.'); icons += '🦺'; }
+                        if (operaio.formazione_ambienti_confinati) { competenze.push('Amb. Confinati'); icons += '🕳️'; }
+                        
+                        return `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+                            <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
+                            <div style="font-size: 10px; color: #666; margin: 2px 0;">
+                                Nato: ${operaio.data_nascita || 'N/A'}
+                            </div>
+                            <div style="font-size: 14px; margin: 4px 0;">${icons || '⚠️'}</div>
+                            <div style="font-size: 10px; color: #666;">
+                                ${competenze.length > 0 ? competenze.join(', ') : 'Nessuna formazione'}
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            <div style="margin-top: 15px; text-align: center;">
+                <button onclick="closeStatusDetailsModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    Chiudi
+                </button>
+            </div>
+        `;
+    }, 300);
+}
+
+// 🆕 NUOVA FUNZIONE: Mostra operai assegnati a un cantiere specifico
+function showCantiereWorkers(cantiereId, userId, cantiereName, aziendaNome) {
+    // Crea o mostra un modal con gli operai assegnati
+    let modal = document.getElementById('cantiere-workers-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'cantiere-workers-modal';
+        modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
+        
+        modal.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">
+                <div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="margin: 0;">🏗️ Dettagli Cantiere Assegnato</h4>
+                        <button onclick="closeCantiereWorkersModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+                    <p id="workers-cantiere-info" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                </div>
+                <div id="workers-details-content" style="padding: 20px;">
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 16px;">🔄 Caricamento operai...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Aggiungi event listener per chiudere cliccando fuori
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCantiereWorkersModal();
+            }
+        });
+    }
+    
+    document.getElementById('workers-cantiere-info').innerHTML = `🏗️ <strong>${cantiereName}</strong> • 🏢 ${aziendaNome}`;
+    document.getElementById('cantiere-workers-modal').style.display = 'block';
+    
+    // Carica gli operai assegnati
+    loadCantiereWorkers(cantiereId, userId);
+    
+    console.log('👷 Apertura operai per cantiere:', cantiereName, 'azienda:', aziendaNome);
+}
+
+function closeCantiereWorkersModal() {
+    document.getElementById('cantiere-workers-modal').style.display = 'none';
+}
+
+function loadCantiereWorkers(cantiereId, userId) {
+    const contentDiv = document.getElementById('workers-details-content');
+    
+    // Trova i dati del cantiere specifico per questo utente
+    const richiesteData = window.richiesteData;
+    let cantiereData = null;
+    let richiestaId = null;
+    
+    // Cerca il cantiere nei dati delle richieste
+    for (const [reqId, richiesta] of Object.entries(richiesteData)) {
+        if (richiesta.user_id == userId) {
+            const cantiere = richiesta.cantieri.find(c => c.id == cantiereId);
+            if (cantiere) {
+                cantiereData = cantiere;
+                richiestaId = reqId;
+                break;
+            }
+        }
+    }
+    
+    if (!cantiereData) {
+        contentDiv.innerHTML = `
+            <div style="background: #f8d7da; padding: 15px; border-radius: 6px; text-align: center; color: #721c24;">
+                ❌ Errore: Dati cantiere non trovati (Cantiere ID: ${cantiereId}, User ID: ${userId})
+            </div>
+        `;
+        return;
+    }
+    
+    // Simula caricamento
+    setTimeout(() => {
+        const operaiTotali = cantiereData.operai.length;
+        const automezziTotali = cantiereData.automezzi.length;
+        const attrezziTotali = cantiereData.attrezzi.length;
+        const hasPOS = cantiereData.pos_file && cantiereData.pos_file.length > 0;
+        const hasMezziFile = cantiereData.mezzi_file && cantiereData.mezzi_file.length > 0;
+        
+        const operaiConAntincendio = cantiereData.operai.filter(o => o.competenze.includes('Antincendio')).length;
+        const operaiConPrimoSoccorso = cantiereData.operai.filter(o => o.competenze.includes('Primo Soccorso')).length;
+        const operaiConPreposti = cantiereData.operai.filter(o => o.competenze.includes('Preposti')).length;
+        
+        contentDiv.innerHTML = `
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #2196f3;">📊 Riepilogo Risorse Cantiere</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 12px;">
+                    <div style="text-align: center; padding: 8px; background: #28a745; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${operaiTotali}</div>
+                        <div>👷 Operai</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: #ffc107; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${automezziTotali}</div>
+                        <div>🚛 Automezzi</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: #17a2b8; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${attrezziTotali}</div>
+                        <div>🔧 Attrezzi</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: ${hasPOS ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${hasPOS ? '✅' : '❌'}</div>
+                        <div>📋 POS</div>
+                    </div>
+                    <div style="text-align: center; padding: 8px; background: ${hasMezziFile ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                        <div style="font-size: 16px; font-weight: bold;">${hasMezziFile ? '✅' : '❌'}</div>
+                        <div>📄 Elenco Mezzi</div>
+                    </div>
+                </div>
+            </div>
+            
+            ${operaiTotali > 0 ? `
+            <div style="margin-bottom: 20px;">
+                <h5 style="color: #2196f3; margin-bottom: 15px;">👷 Operai Assegnati (${operaiTotali})</h5>
+                <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; font-size: 11px;">
+                        <div style="text-align: center; padding: 6px; background: #ff5722; color: white; border-radius: 4px;">
+                            <strong>${operaiConAntincendio}</strong> 🔥 Antincendio
+                        </div>
+                        <div style="text-align: center; padding: 6px; background: #4caf50; color: white; border-radius: 4px;">
+                            <strong>${operaiConPrimoSoccorso}</strong> 🚑 P. Soccorso
+                        </div>
+                        <div style="text-align: center; padding: 6px; background: #673ab7; color: white; border-radius: 4px;">
+                            <strong>${operaiConPreposti}</strong> 👮 Preposti
+                        </div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                    ${cantiereData.operai.map(operaio => {
+                        // Calcola età
+                        const oggi = new Date();
+                        const nascita = new Date(operaio.data_nascita);
+                        const eta = Math.floor((oggi - nascita) / (365.25 * 24 * 60 * 60 * 1000));
+                        
+                        // Determina il colore del bordo in base alle competenze
+                        let borderColor = '#dc3545'; // rosso per nessuna competenza
+                        if (operaio.competenze.length >= 3) {
+                            borderColor = '#28a745'; // verde per molte competenze
+                        } else if (operaio.competenze.length >= 1) {
+                            borderColor = '#ffc107'; // giallo per alcune competenze
+                        }
+                        
+                        return `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
+                                    <div style="font-size: 11px; color: #666;">Età: ${eta} anni</div>
+                                    <div style="font-size: 10px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                                </div>
+                                <div style="font-size: 16px;">${operaio.icons || '⚠️'}</div>
+                            </div>
+                            <div style="font-size: 10px; color: #666;">
+                                <strong>Competenze:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna formazione registrata'}
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            ` : `
+            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center; color: #856404;">
+                <div style="font-size: 18px; margin-bottom: 10px;">👷</div>
+                <div>Nessun operaio assegnato a questo cantiere</div>
+            </div>
+            `}
+            
+            ${automezziTotali > 0 ? `
+            <div style="margin-bottom: 20px;">
+                <h5 style="color: #ffc107; margin-bottom: 15px;">🚛 Automezzi Assegnati (${automezziTotali})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    ${cantiereData.automezzi.map(automezzo => `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; border-left: 4px solid #ffc107;">
+                            <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${automezzo.descrizione}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                                <strong>Targa:</strong> <span style="font-family: monospace; font-weight: bold;">${automezzo.targa}</span>
+                            </div>
+                            <div style="font-size: 10px; color: #888;">
+                                Assegnato: ${new Date(automezzo.data_assegnazione).toLocaleDateString('it-IT')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            ${attrezziTotali > 0 ? `
+            <div style="margin-bottom: 20px;">
+                <h5 style="color: #17a2b8; margin-bottom: 15px;">🔧 Attrezzi Assegnati (${attrezziTotali})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    ${cantiereData.attrezzi.map(attrezzo => `
+                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; border-left: 4px solid #17a2b8;">
+                            <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${attrezzo.descrizione}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                                <strong>Revisione:</strong> ${attrezzo.data_revisione ? new Date(attrezzo.data_revisione).toLocaleDateString('it-IT') : 'Non specificata'}
+                            </div>
+                            <div style="font-size: 10px; color: #888;">
+                                Assegnato: ${new Date(attrezzo.data_assegnazione).toLocaleDateString('it-IT')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            <div style="margin-top: 20px; text-align: center;">
+                <button onclick="closeCantiereWorkersModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                    Chiudi
+                </button>
+                ${(operaiTotali > 0 || automezziTotali > 0 || attrezziTotali > 0) ? `
+                <button onclick="alert('Funzionalità in sviluppo: gestione dettagliata risorse cantiere')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    📝 Gestisci Risorse
+                </button>
+                ` : ''}
+            </div>
+        `;
+    }, 300);
 }
 
 function loadCantiereDetailsData(cantiereId) {
@@ -2988,7 +3588,7 @@ function exportTableToCSV() {
 function generateClientSideCSV() {
     var headers = [
         'ID Richiesta', 'Ragione Sociale', 'Email', 'P.IVA', 'DVR', 'RCT', 
-        'POS', 'Mezzi', 'Personale', 'Conformità', 'Stato Abilitazione HSA', 
+        'Personale', 'Stato Richiesta HSE', 
         'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai'
     ];
     
@@ -3097,10 +3697,10 @@ function performSearch() {
 }
 
 function shouldRowBeVisible(row) {
-    var selectedHsaStatuses = [];
-    var hsaCheckboxes = document.querySelectorAll("input[id^=hsa_]:checked");
-    hsaCheckboxes.forEach(function(checkbox) {
-        selectedHsaStatuses.push(checkbox.id.replace("hsa_", ""));
+    var selectedHseStatuses = [];
+    var hseCheckboxes = document.querySelectorAll("input[id^=hse_]:checked");
+    hseCheckboxes.forEach(function(checkbox) {
+        selectedHseStatuses.push(checkbox.id.replace("hse_", ""));
     });
     
     var abilitatoFilter = document.getElementById("filter_abilitato");
@@ -3108,13 +3708,13 @@ function shouldRowBeVisible(row) {
     var showAbilitato = abilitatoFilter && abilitatoFilter.checked;
     var showDisabilitato = disabilitatoFilter && disabilitatoFilter.checked;
     
-    if (selectedHsaStatuses.length === 0 && !showAbilitato && !showDisabilitato) {
+    if (selectedHseStatuses.length === 0 && !showAbilitato && !showDisabilitato) {
         return true;
     }
     
-    if (selectedHsaStatuses.length > 0) {
-        var rowHsaStatus = row.getAttribute("data-hsa-status");
-        if (selectedHsaStatuses.indexOf(rowHsaStatus) === -1) {
+    if (selectedHseStatuses.length > 0) {
+        var rowHseStatus = row.getAttribute("data-hse-status");
+        if (selectedHseStatuses.indexOf(rowHseStatus) === -1) {
             return false;
         }
     }
@@ -3192,10 +3792,10 @@ function clearAllFilters() {
 }
 
 function updateActiveFiltersDisplay(visibleCount) {
-    var selectedHsaStatuses = [];
-    var hsaCheckboxes = document.querySelectorAll("input[id^=hsa_]:checked");
-    hsaCheckboxes.forEach(function(checkbox) {
-        selectedHsaStatuses.push(checkbox.id.replace("hsa_", ""));
+    var selectedHseStatuses = [];
+    var hseCheckboxes = document.querySelectorAll("input[id^=hse_]:checked");
+    hseCheckboxes.forEach(function(checkbox) {
+        selectedHseStatuses.push(checkbox.id.replace("hse_", ""));
     });
     
     var abilitatoFilter = document.getElementById("filter_abilitato");
@@ -3207,8 +3807,8 @@ function updateActiveFiltersDisplay(visibleCount) {
     var filterList = document.getElementById("filter-list");
     var filters = [];
     
-    if (selectedHsaStatuses.length > 0) {
-        filters.push("Stati HSA: " + selectedHsaStatuses.join(", "));
+    if (selectedHseStatuses.length > 0) {
+        filters.push("Stati HSE: " + selectedHseStatuses.join(", "));
     }
     
     if (showAbilitato && showDisabilitato) {
@@ -3373,6 +3973,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 closeEditCantiereModal();
             } else if (document.getElementById('delete-cantiere-modal').style.display === 'block') {
                 closeDeleteCantiereModal();
+            } else if (document.getElementById('status-details-modal') && document.getElementById('status-details-modal').style.display === 'block') {
+                closeStatusDetailsModal();
+            } else if (document.getElementById('cantiere-workers-modal') && document.getElementById('cantiere-workers-modal').style.display === 'block') {
+                closeCantiereWorkersModal();
             }
         }
     });
@@ -3511,6 +4115,16 @@ document.addEventListener("DOMContentLoaded", function() {
         cantiereDetailsModal.addEventListener('click', function(e) {
             if (e.target === this) {
                 closeCantiereDetailsModal();
+            }
+        });
+    }
+    
+    // 🆕 NUOVO: Event listener per modal assegnazioni
+    const assignmentModal = document.getElementById('assignment-modal');
+    if (assignmentModal) {
+        assignmentModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAssignmentModal();
             }
         });
     }
