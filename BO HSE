@@ -921,8 +921,12 @@ function determineAccessoCantiere($abilita_cantiere) {
 
 function determineStatoHSE($richiesta, $personale = null) {
     // Verifica se non ha mai iniziato la compilazione
+    // Controlla RCT da user meta invece che da file caricato
+    $user_id = $richiesta['user_id'];
+    $rct_from_user_meta = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    
     $documenti_base_mancanti = (empty($richiesta['dvr_file']) && 
-                               empty($richiesta['rct_file']) && 
+                               empty($rct_from_user_meta) && 
                                $richiesta['numero_personale'] == 0);
     
     if ($documenti_base_mancanti) {
@@ -934,9 +938,9 @@ function determineStatoHSE($richiesta, $personale = null) {
         ];
     }
     
-    // Verifica completamento Parte A (DVR, RCT, operai inseriti)
+    // Verifica completamento Parte A (DVR, RCT da user meta, operai inseriti)
     $dvr_presente = !empty($richiesta['dvr_file']);
-    $rct_presente = !empty($richiesta['rct_file']);
+    $rct_presente = !empty($rct_from_user_meta);
     $operai_inseriti = $richiesta['numero_personale'] > 0;
     
     if ($personale === null) {
@@ -1410,10 +1414,16 @@ foreach ($richieste as $richiesta) {
     }
     echo '</td>';
     
-    // File RCT
+    // File RCT (da user meta)
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    if ($richiesta['rct_file']) {
-        echo '<a href="' . esc_url($richiesta['rct_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT">🛡️ ✓</a>';
+    $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    if (!empty($rct_file_id)) {
+        $rct_file_url = wp_get_attachment_url($rct_file_id);
+        if ($rct_file_url) {
+            echo '<a href="' . esc_url($rct_file_url) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT da iscrizione">🛡️ ✓</a>';
+        } else {
+            echo '<span style="color: #dc3545;">✗</span>';
+        }
     } else {
         echo '<span style="color: #dc3545;">✗</span>';
     }
@@ -1735,7 +1745,15 @@ foreach ($richieste as $richiesta) {
     echo 'user_id: ' . $user_id . ',';
     echo 'azienda_nome: "' . addslashes($rag_soc ?: $user->display_name) . '",';
     echo 'dvr_file: "' . addslashes($richiesta['dvr_file']) . '",';
-    echo 'rct_file: "' . addslashes($richiesta['rct_file']) . '",';
+    
+    // RCT da user meta
+    $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    $rct_file_url = '';
+    if (!empty($rct_file_id)) {
+        $rct_file_url = wp_get_attachment_url($rct_file_id);
+    }
+    echo 'rct_file: "' . addslashes($rct_file_url) . '",';
+    
     echo 'numero_personale: ' . intval($richiesta['numero_personale']) . ',';
     echo 'personale_inserito: ' . count($personale) . ',';
     echo 'automezzi_count: ' . count(hse_getAutomezziByRichiestaId($richiesta['id'])) . ',';
