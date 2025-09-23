@@ -3938,31 +3938,53 @@ function hse_validateAgeImmediately(input) {
     }
     
     if (age < 18) {
-        // Mostra popup di errore immediatamente
-        alert(`⚠️ ERRORE: Il lavoratore deve essere maggiorenne\n\nEtà calcolata: ${age} anni\nEtà minima richiesta: 18 anni\n\nRicontrolla la data di nascita inserita.`);
+        // Rimuovi eventuali messaggi di errore precedenti
+        const existingWarning = input.parentNode.querySelector('.hse_age_warning');
+        if (existingWarning) {
+            existingWarning.remove();
+        }
+        
+        // Crea messaggio di avviso sotto il campo
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'hse_age_warning';
+        warningDiv.style.cssText = `
+            margin-top: 5px;
+            padding: 8px 12px;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            color: #721c24;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: hse_shake 0.5s ease-in-out;
+        `;
+        warningDiv.innerHTML = `
+            <span style="font-size: 16px;">⚠️</span>
+            <div>
+                <div style="font-weight: bold;">Il lavoratore deve essere maggiorenne</div>
+                <div style="font-size: 11px; margin-top: 2px;">Età calcolata: ${age} anni - Età minima richiesta: 18 anni</div>
+            </div>
+        `;
+        
+        // Inserisci il messaggio dopo il campo input
+        input.parentNode.insertBefore(warningDiv, input.nextSibling);
         
         // Evidenzia il campo con errore
         input.style.borderColor = '#dc3545';
         input.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
         input.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.3)';
         
-        // Focus sul campo
-        input.focus();
-        
-        // Rimuovi evidenziazione dopo 5 secondi se il valore viene corretto
-        setTimeout(() => {
-            if (input.value) {
-                const newAge = hse_calculateAge(input.value);
-                if (newAge >= 18) {
-                    input.style.borderColor = '#28a745';
-                    input.style.backgroundColor = 'rgba(40, 167, 69, 0.05)';
-                    input.style.boxShadow = '0 0 0 3px rgba(40, 167, 69, 0.2)';
-                }
-            }
-        }, 1000);
-        
         return false;
     } else {
+        // Rimuovi eventuali messaggi di errore precedenti
+        const existingWarning = input.parentNode.querySelector('.hse_age_warning');
+        if (existingWarning) {
+            existingWarning.remove();
+        }
+        
         // Maggiorenne: stile di successo
         input.style.borderColor = '#28a745';
         input.style.backgroundColor = 'rgba(40, 167, 69, 0.05)';
@@ -4044,7 +4066,7 @@ function hse_validateMandatoryFieldsForAddPerson() {
     const hse_personaIndex = hse_lastRow.getAttribute('data-index');
     const hse_fileUnilav = hse_lastRow.querySelector(`input[name="hse_unilav_file_${hse_personaIndex}"]`);
     const hse_hasUnilavFile = hse_fileUnilav && (hse_fileUnilav.files.length > 0 || 
-        hse_lastRow.querySelector('.hse_file_success_unilav'));
+        hse_lastRow.querySelector('.hse_unilav_file_success'));
     if (!hse_hasUnilavFile) {
         hse_missingFields.push('File UNILAV');
     }
@@ -4058,7 +4080,7 @@ function hse_validateMandatoryFieldsForAddPerson() {
     // 7. Controllo File Idoneità Sanitaria - correzione nome campo dinamico
     const hse_fileIdoneita = hse_lastRow.querySelector(`input[name="hse_idoneita_file_${hse_personaIndex}"]`);
     const hse_hasIdoneitaFile = hse_fileIdoneita && (hse_fileIdoneita.files.length > 0 || 
-        hse_lastRow.querySelector('.hse_file_success_idoneita_sanitaria'));
+        hse_lastRow.querySelector('.hse_idoneita_file_success'));
     if (!hse_hasIdoneitaFile) {
         hse_missingFields.push('File Idoneità Sanitaria');
     }
@@ -6062,6 +6084,13 @@ html {
 @keyframes hse_progressFill {
     from { width: 0% !important; }
     to { width: var(--hse-progress-width, 0%); }
+}
+
+/* Animation for age warning shake */
+@keyframes hse_shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+    20%, 40%, 60%, 80% { transform: translateX(2px); }
 }
 
 /* Micro-animazioni */

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test HSE Fixes</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 20px; margin: 20px 0; }
+        input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 5px; width: 200px; }
+        button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .success { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .error { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        
+        /* Include the shake animation from FRONT HSE */
+        @keyframes hse_shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+            20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test HSE Validation Fixes</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Age Validation (Inline Warning)</h2>
+        <p>Inserisci una data di nascita per testare il nuovo avviso inline:</p>
+        <div style="margin: 10px 0;">
+            <label>Data di Nascita:</label><br>
+            <input type="date" id="testBirthDate" onchange="testAgeValidation(this)" style="margin-top: 5px;">
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: File Validation with Correct Classes</h2>
+        <p>Simula la validazione dei file con le classi corrette:</p>
+        
+        <div class="hse_personale_row" data-index="0" style="border: 1px solid #ccc; padding: 15px; margin: 10px 0;">
+            <h4>Test con File Salvati</h4>
+            
+            <!-- Simula file UNILAV già caricato -->
+            <div style="margin: 10px 0;">
+                <label>File UNILAV (con classe corretta):</label><br>
+                <div class="hse_unilav_file_success" style="background: #d4edda; padding: 8px; border-radius: 4px; margin-top: 5px;">
+                    ✓ File UNILAV già caricato
+                </div>
+                <input type="file" name="hse_unilav_file_0" style="display: none;">
+            </div>
+            
+            <!-- Simula file Idoneità già caricato -->
+            <div style="margin: 10px 0;">
+                <label>File Idoneità (con classe corretta):</label><br>
+                <div class="hse_idoneita_file_success" style="background: #d4edda; padding: 8px; border-radius: 4px; margin-top: 5px;">
+                    ✓ File Idoneità già caricato
+                </div>
+                <input type="file" name="hse_idoneita_file_0" style="display: none;">
+            </div>
+            
+            <!-- Altri campi per il test -->
+            <input type="text" name="hse_personale_nome[]" value="Mario" placeholder="Nome" style="display: block; margin: 5px 0;">
+            <input type="text" name="hse_personale_cognome[]" value="Rossi" placeholder="Cognome" style="display: block; margin: 5px 0;">
+            <input type="date" name="hse_personale_data_nascita[]" value="1990-01-01" style="display: block; margin: 5px 0;">
+            <input type="date" name="hse_personale_unilav_emissione[]" value="2024-01-01" style="display: block; margin: 5px 0;">
+            <input type="date" name="hse_personale_idoneita_scadenza[]" value="2025-12-31" style="display: block; margin: 5px 0;">
+        </div>
+        
+        <button onclick="testFileValidation()">Test Validazione File Corretti</button>
+        <div id="fileValidationResult"></div>
+    </div>
+
+    <script>
+        // Funzioni copiate dal FRONT HSE con le correzioni
+        function hse_showToast(message, type, duration) {
+            console.log(`Toast ${type}: ${message}`);
+            const div = document.createElement('div');
+            div.textContent = message;
+            div.className = type === 'success' ? 'success' : 'error';
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), duration || 5000);
+        }
+        
+        function hse_calculateAge(birthDateString) {
+            const today = new Date();
+            const birthDate = new Date(birthDateString);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            
+            return age;
+        }
+        
+        function hse_validateAgeImmediately(input) {
+            if (!input.value) {
+                return;
+            }
+            
+            const today = new Date();
+            const birthDate = new Date(input.value);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            
+            if (age < 18) {
+                // Rimuovi eventuali messaggi di errore precedenti
+                const existingWarning = input.parentNode.querySelector('.hse_age_warning');
+                if (existingWarning) {
+                    existingWarning.remove();
+                }
+                
+                // Crea messaggio di avviso sotto il campo
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'hse_age_warning';
+                warningDiv.style.cssText = `
+                    margin-top: 5px;
+                    padding: 8px 12px;
+                    background-color: #f8d7da;
+                    border: 1px solid #f5c6cb;
+                    border-radius: 4px;
+                    color: #721c24;
+                    font-size: 12px;
+                    font-weight: bold;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    animation: hse_shake 0.5s ease-in-out;
+                `;
+                warningDiv.innerHTML = `
+                    <span style="font-size: 16px;">⚠️</span>
+                    <div>
+                        <div style="font-weight: bold;">Il lavoratore deve essere maggiorenne</div>
+                        <div style="font-size: 11px; margin-top: 2px;">Età calcolata: ${age} anni - Età minima richiesta: 18 anni</div>
+                    </div>
+                `;
+                
+                // Inserisci il messaggio dopo il campo input
+                input.parentNode.insertBefore(warningDiv, input.nextSibling);
+                
+                // Evidenzia il campo con errore
+                input.style.borderColor = '#dc3545';
+                input.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
+                input.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.3)';
+                
+                return false;
+            } else {
+                // Rimuovi eventuali messaggi di errore precedenti
+                const existingWarning = input.parentNode.querySelector('.hse_age_warning');
+                if (existingWarning) {
+                    existingWarning.remove();
+                }
+                
+                // Maggiorenne: stile di successo
+                input.style.borderColor = '#28a745';
+                input.style.backgroundColor = 'rgba(40, 167, 69, 0.05)';
+                input.style.boxShadow = '0 0 0 3px rgba(40, 167, 69, 0.2)';
+                
+                // Mostra toast di conferma
+                hse_showToast(`✅ Età verificata: ${age} anni (maggiorenne)`, 'success', 3000);
+                
+                return true;
+            }
+        }
+        
+        function hse_validateMandatoryFieldsForAddPerson() {
+            const hse_container = document.querySelector('.hse_personale_row');
+            const hse_lastRow = hse_container;
+            
+            if (!hse_lastRow) {
+                return true;
+            }
+            
+            const hse_missingFields = [];
+            
+            // Controllo Nome
+            const hse_nome = hse_lastRow.querySelector('input[name="hse_personale_nome[]"]');
+            if (!hse_nome || !hse_nome.value.trim()) {
+                hse_missingFields.push('Nome');
+            }
+            
+            // Controllo Cognome
+            const hse_cognome = hse_lastRow.querySelector('input[name="hse_personale_cognome[]"]');
+            if (!hse_cognome || !hse_cognome.value.trim()) {
+                hse_missingFields.push('Cognome');
+            }
+            
+            // Controllo Data di Nascita + Età
+            const hse_dataNascita = hse_lastRow.querySelector('input[name="hse_personale_data_nascita[]"]');
+            if (!hse_dataNascita || !hse_dataNascita.value) {
+                hse_missingFields.push('Data di Nascita');
+            } else {
+                const age = hse_calculateAge(hse_dataNascita.value);
+                if (age < 18) {
+                    hse_showToast('⚠️ Il lavoratore deve essere maggiorenne (almeno 18 anni)', 'error', 6000);
+                    return false;
+                }
+            }
+            
+            // Controllo Data Emissione UNILAV
+            const hse_dataEmissioneUnilav = hse_lastRow.querySelector('input[name="hse_personale_unilav_emissione[]"]');
+            if (!hse_dataEmissioneUnilav || !hse_dataEmissioneUnilav.value) {
+                hse_missingFields.push('Data Emissione UNILAV');
+            }
+            
+            // Controllo File UNILAV (con classe corretta)
+            const hse_personaIndex = hse_lastRow.getAttribute('data-index');
+            const hse_fileUnilav = hse_lastRow.querySelector(`input[name="hse_unilav_file_${hse_personaIndex}"]`);
+            const hse_hasUnilavFile = hse_fileUnilav && (hse_fileUnilav.files.length > 0 || 
+                hse_lastRow.querySelector('.hse_unilav_file_success'));
+            if (!hse_hasUnilavFile) {
+                hse_missingFields.push('File UNILAV');
+            }
+            
+            // Controllo Scadenza Idoneità Sanitaria
+            const hse_scadenzaIdoneita = hse_lastRow.querySelector('input[name="hse_personale_idoneita_scadenza[]"]');
+            if (!hse_scadenzaIdoneita || !hse_scadenzaIdoneita.value) {
+                hse_missingFields.push('Scadenza Idoneità Sanitaria');
+            }
+            
+            // Controllo File Idoneità Sanitaria (con classe corretta)
+            const hse_fileIdoneita = hse_lastRow.querySelector(`input[name="hse_idoneita_file_${hse_personaIndex}"]`);
+            const hse_hasIdoneitaFile = hse_fileIdoneita && (hse_fileIdoneita.files.length > 0 || 
+                hse_lastRow.querySelector('.hse_idoneita_file_success'));
+            if (!hse_hasIdoneitaFile) {
+                hse_missingFields.push('File Idoneità Sanitaria');
+            }
+            
+            // Se ci sono campi mancanti, mostra errore
+            if (hse_missingFields.length > 0) {
+                let errorMessage = '⚠️ Per aggiungere un nuovo operaio, completa prima i campi obbligatori:\n\n';
+                errorMessage += '📋 Campi mancanti: ' + hse_missingFields.join(', ');
+                
+                hse_showToast(errorMessage, 'error', 8000);
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Funzioni di test
+        function testAgeValidation(input) {
+            hse_validateAgeImmediately(input);
+        }
+        
+        function testFileValidation() {
+            const result = document.getElementById('fileValidationResult');
+            const isValid = hse_validateMandatoryFieldsForAddPerson();
+            
+            result.innerHTML = `
+                <div class="${isValid ? 'success' : 'error'}" style="margin-top: 10px;">
+                    <strong>Validazione con file salvati:</strong> ${isValid ? 'PASSATA ✅' : 'FALLITA ❌'}<br>
+                    <strong>Note:</strong> ${isValid ? 'I file salvati sono stati riconosciuti correttamente' : 'I file salvati non sono stati riconosciuti'}
+                </div>
+            `;
+        }
+        
+        console.log('🧪 Test delle correzioni caricato');
+        console.log('1. Test età: inserisci una data per una persona sotto i 18 anni per vedere l\'avviso inline');
+        console.log('2. Test file: clicca "Test Validazione File Corretti" per verificare che i file salvati vengano riconosciuti');
+    </script>
+</body>
+</html>
