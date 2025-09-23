@@ -1555,7 +1555,7 @@ echo '</div>';
 
 // Elenco Personale Dinamico con formazioni + UNILAV + Idoneità Sanitaria
 echo '<div class="hse_form_group hse_personale_group" style="margin-bottom: 20px;">';
-$hse_numero_personale_value = $hse_existing_data ? count($hse_existing_data['personale']) : 1;
+$hse_numero_personale_value = ($hse_existing_data && isset($hse_existing_data['personale']) && is_array($hse_existing_data['personale'])) ? count($hse_existing_data['personale']) : 1;
 echo '<label class="hse_personale_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">📋 Elenco Personale + Documenti Formazione + UNILAV + Idoneità Sanitaria <span id="hse_personale_count" class="hse_personale_count" style="background: #0066a2; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_personale_value . ' persone)</span></label>';
 
 echo '<input type="hidden" name="hse_numero_personale" id="hse_numero_personale" value="' . $hse_numero_personale_value . '">';
