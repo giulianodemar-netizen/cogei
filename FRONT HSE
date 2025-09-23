@@ -1650,7 +1650,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '</div>';
         echo '<div class="hse_data_nascita_field">';
         echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>';
-        echo '<input type="date" name="hse_personale_data_nascita[]" value="' . esc_attr($hse_persona['data_nascita']) . '" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '<input type="date" name="hse_personale_data_nascita[]" value="' . esc_attr($hse_persona['data_nascita']) . '" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">';
         echo '</div>';
         echo '</div>'; // Fine hse_dati_personali_grid
         echo '</div>'; // Fine hse_dati_personali
@@ -1942,7 +1942,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '</div>';
     echo '<div class="hse_data_nascita_field">';
     echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>';
-    echo '<input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '<input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">';
     echo '</div>';
     echo '</div>'; // Fine hse_dati_personali_grid
     echo '</div>'; // Fine hse_dati_personali
@@ -3922,6 +3922,73 @@ function hse_toggleCantiereAccordion(cantiereId) {
     }
 }
 
+// Validazione immediata età al cambio data di nascita
+function hse_validateAgeImmediately(input) {
+    if (!input.value) {
+        return; // Se non c'è data, non fare nulla
+    }
+    
+    const today = new Date();
+    const birthDate = new Date(input.value);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    
+    if (age < 18) {
+        // Mostra popup di errore immediatamente
+        alert(`⚠️ ERRORE: Il lavoratore deve essere maggiorenne\n\nEtà calcolata: ${age} anni\nEtà minima richiesta: 18 anni\n\nRicontrolla la data di nascita inserita.`);
+        
+        // Evidenzia il campo con errore
+        input.style.borderColor = '#dc3545';
+        input.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
+        input.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.3)';
+        
+        // Focus sul campo
+        input.focus();
+        
+        // Rimuovi evidenziazione dopo 5 secondi se il valore viene corretto
+        setTimeout(() => {
+            if (input.value) {
+                const newAge = hse_calculateAge(input.value);
+                if (newAge >= 18) {
+                    input.style.borderColor = '#28a745';
+                    input.style.backgroundColor = 'rgba(40, 167, 69, 0.05)';
+                    input.style.boxShadow = '0 0 0 3px rgba(40, 167, 69, 0.2)';
+                }
+            }
+        }, 1000);
+        
+        return false;
+    } else {
+        // Maggiorenne: stile di successo
+        input.style.borderColor = '#28a745';
+        input.style.backgroundColor = 'rgba(40, 167, 69, 0.05)';
+        input.style.boxShadow = '0 0 0 3px rgba(40, 167, 69, 0.2)';
+        
+        // Mostra toast di conferma
+        hse_showToast(`✅ Età verificata: ${age} anni (maggiorenne)`, 'success', 3000);
+        
+        return true;
+    }
+}
+
+// Funzione helper per calcolare l'età
+function hse_calculateAge(birthDateString) {
+    const today = new Date();
+    const birthDate = new Date(birthDateString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    
+    return age;
+}
+
 // Validazione campi obbligatori per l'aggiunta di una nuova persona
 function hse_validateMandatoryFieldsForAddPerson() {
     const hse_container = document.getElementById('hse_personale_container');
@@ -3968,13 +4035,14 @@ function hse_validateMandatoryFieldsForAddPerson() {
     }
     
     // 4. Controllo Data Emissione UNILAV
-    const hse_dataEmissioneUnilav = hse_lastRow.querySelector('input[name="hse_personale_data_emissione_unilav[]"]');
+    const hse_dataEmissioneUnilav = hse_lastRow.querySelector('input[name="hse_personale_unilav_emissione[]"]');
     if (!hse_dataEmissioneUnilav || !hse_dataEmissioneUnilav.value) {
         hse_missingFields.push('Data Emissione UNILAV');
     }
     
-    // 5. Controllo File UNILAV
-    const hse_fileUnilav = hse_lastRow.querySelector('input[name="hse_personale_file_unilav[]"]');
+    // 5. Controllo File UNILAV - correzione nome campo dinamico
+    const hse_personaIndex = hse_lastRow.getAttribute('data-index');
+    const hse_fileUnilav = hse_lastRow.querySelector(`input[name="hse_unilav_file_${hse_personaIndex}"]`);
     const hse_hasUnilavFile = hse_fileUnilav && (hse_fileUnilav.files.length > 0 || 
         hse_lastRow.querySelector('.hse_file_success_unilav'));
     if (!hse_hasUnilavFile) {
@@ -3982,13 +4050,13 @@ function hse_validateMandatoryFieldsForAddPerson() {
     }
     
     // 6. Controllo Scadenza Idoneità Sanitaria
-    const hse_scadenzaIdoneita = hse_lastRow.querySelector('input[name="hse_personale_scadenza_idoneita_sanitaria[]"]');
+    const hse_scadenzaIdoneita = hse_lastRow.querySelector('input[name="hse_personale_idoneita_scadenza[]"]');
     if (!hse_scadenzaIdoneita || !hse_scadenzaIdoneita.value) {
         hse_missingFields.push('Scadenza Idoneità Sanitaria');
     }
     
-    // 7. Controllo File Idoneità Sanitaria
-    const hse_fileIdoneita = hse_lastRow.querySelector('input[name="hse_personale_file_idoneita_sanitaria[]"]');
+    // 7. Controllo File Idoneità Sanitaria - correzione nome campo dinamico
+    const hse_fileIdoneita = hse_lastRow.querySelector(`input[name="hse_idoneita_file_${hse_personaIndex}"]`);
     const hse_hasIdoneitaFile = hse_fileIdoneita && (hse_fileIdoneita.files.length > 0 || 
         hse_lastRow.querySelector('.hse_file_success_idoneita_sanitaria'));
     if (!hse_hasIdoneitaFile) {
@@ -4016,16 +4084,16 @@ function hse_validateMandatoryFieldsForAddPerson() {
                     fieldSelector = 'input[name="hse_personale_data_nascita[]"]';
                     break;
                 case 'Data Emissione UNILAV':
-                    fieldSelector = 'input[name="hse_personale_data_emissione_unilav[]"]';
+                    fieldSelector = 'input[name="hse_personale_unilav_emissione[]"]';
                     break;
                 case 'File UNILAV':
-                    fieldSelector = 'input[name="hse_personale_file_unilav[]"]';
+                    fieldSelector = `input[name="hse_unilav_file_${hse_personaIndex}"]`;
                     break;
                 case 'Scadenza Idoneità Sanitaria':
-                    fieldSelector = 'input[name="hse_personale_scadenza_idoneita_sanitaria[]"]';
+                    fieldSelector = 'input[name="hse_personale_idoneita_scadenza[]"]';
                     break;
                 case 'File Idoneità Sanitaria':
-                    fieldSelector = 'input[name="hse_personale_file_idoneita_sanitaria[]"]';
+                    fieldSelector = `input[name="hse_idoneita_file_${hse_personaIndex}"]`;
                     break;
             }
             
@@ -4089,7 +4157,7 @@ function hse_addPersona() {
                     </div>
                     <div class="hse_data_nascita_field">
                         <label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita:</label>
-                        <input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">
                     </div>
                 </div>
             </div>
@@ -5030,6 +5098,10 @@ if (typeof window !== 'undefined') {
     
     // Utility
     window.hse_showToast = hse_showToast;
+    
+    // NUOVO: Validazione età
+    window.hse_validateAgeImmediately = hse_validateAgeImmediately;
+    window.hse_calculateAge = hse_calculateAge;
     
     // NUOVE FUNZIONI DI DEBUG E TESTING
     window.hse_testAjaxConnection = hse_testAjaxConnection;

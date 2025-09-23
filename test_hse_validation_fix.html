@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test HSE Validation Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 20px; margin: 20px 0; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 5px; }
+        button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test HSE Validation Fix</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Age Validation (Immediate)</h2>
+        <p>Testa la validazione immediata dell'età inserendo una data di nascita:</p>
+        <input type="date" id="testBirthDate" onchange="testAgeValidation(this)">
+        <div id="ageResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: Field Name Validation</h2>
+        <p>Simula la validazione dei campi obbligatori con i nomi corretti:</p>
+        
+        <!-- Simula struttura HTML del form -->
+        <div class="hse_personale_row" data-index="0" style="border: 1px solid #ccc; padding: 15px; margin: 10px 0;">
+            <h4>Operaio di Test</h4>
+            
+            <label>Nome:</label>
+            <input type="text" name="hse_personale_nome[]" placeholder="Nome"><br>
+            
+            <label>Cognome:</label>
+            <input type="text" name="hse_personale_cognome[]" placeholder="Cognome"><br>
+            
+            <label>Data di Nascita:</label>
+            <input type="date" name="hse_personale_data_nascita[]" onchange="testAgeValidation(this)"><br>
+            
+            <label>Data Emissione UNILAV:</label>
+            <input type="date" name="hse_personale_unilav_emissione[]"><br>
+            
+            <label>File UNILAV:</label>
+            <input type="file" name="hse_unilav_file_0" accept=".pdf"><br>
+            
+            <label>Scadenza Idoneità Sanitaria:</label>
+            <input type="date" name="hse_personale_idoneita_scadenza[]"><br>
+            
+            <label>File Idoneità Sanitaria:</label>
+            <input type="file" name="hse_idoneita_file_0" accept=".pdf"><br>
+        </div>
+        
+        <button onclick="testFieldValidation()">Test Validazione Campi</button>
+        <div id="fieldValidationResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Scenario Completo</h2>
+        <p>Test con tutti i campi compilati per verificare che la validazione passi:</p>
+        <button onclick="fillAllFields()">Riempi Tutti i Campi</button>
+        <button onclick="testCompletedFormValidation()">Test Form Completo</button>
+        <div id="completeTestResult"></div>
+    </div>
+
+    <script>
+        // Simula le funzioni HSE per il test
+        function hse_showToast(message, type, duration) {
+            console.log(`Toast ${type}: ${message}`);
+            
+            const div = document.createElement('div');
+            div.textContent = message;
+            div.className = 'test-result ' + (type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning');
+            document.body.appendChild(div);
+            
+            setTimeout(() => div.remove(), duration || 5000);
+        }
+        
+        // Copia delle funzioni di validazione dal FRONT HSE
+        function hse_calculateAge(birthDateString) {
+            const today = new Date();
+            const birthDate = new Date(birthDateString);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            
+            return age;
+        }
+        
+        function hse_validateAgeImmediately(input) {
+            if (!input.value) {
+                return;
+            }
+            
+            const age = hse_calculateAge(input.value);
+            
+            if (age < 18) {
+                alert(`⚠️ ERRORE: Il lavoratore deve essere maggiorenne\n\nEtà calcolata: ${age} anni\nEtà minima richiesta: 18 anni`);
+                
+                input.style.borderColor = '#dc3545';
+                input.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
+                
+                return false;
+            } else {
+                input.style.borderColor = '#28a745';
+                input.style.backgroundColor = 'rgba(40, 167, 69, 0.05)';
+                
+                hse_showToast(`✅ Età verificata: ${age} anni (maggiorenne)`, 'success', 3000);
+                
+                return true;
+            }
+        }
+        
+        function hse_validateMandatoryFieldsForAddPerson() {
+            const hse_container = document.querySelector('.hse_personale_row');
+            const hse_lastRow = hse_container;
+            
+            if (!hse_lastRow) {
+                return true;
+            }
+            
+            const hse_missingFields = [];
+            
+            // Controllo Nome
+            const hse_nome = hse_lastRow.querySelector('input[name="hse_personale_nome[]"]');
+            if (!hse_nome || !hse_nome.value.trim()) {
+                hse_missingFields.push('Nome');
+            }
+            
+            // Controllo Cognome
+            const hse_cognome = hse_lastRow.querySelector('input[name="hse_personale_cognome[]"]');
+            if (!hse_cognome || !hse_cognome.value.trim()) {
+                hse_missingFields.push('Cognome');
+            }
+            
+            // Controllo Data di Nascita + Età
+            const hse_dataNascita = hse_lastRow.querySelector('input[name="hse_personale_data_nascita[]"]');
+            if (!hse_dataNascita || !hse_dataNascita.value) {
+                hse_missingFields.push('Data di Nascita');
+            } else {
+                const age = hse_calculateAge(hse_dataNascita.value);
+                if (age < 18) {
+                    hse_showToast('⚠️ Il lavoratore deve essere maggiorenne (almeno 18 anni)', 'error', 6000);
+                    return false;
+                }
+            }
+            
+            // Controllo Data Emissione UNILAV (nome campo corretto)
+            const hse_dataEmissioneUnilav = hse_lastRow.querySelector('input[name="hse_personale_unilav_emissione[]"]');
+            if (!hse_dataEmissioneUnilav || !hse_dataEmissioneUnilav.value) {
+                hse_missingFields.push('Data Emissione UNILAV');
+            }
+            
+            // Controllo File UNILAV (nome campo corretto)
+            const hse_personaIndex = hse_lastRow.getAttribute('data-index');
+            const hse_fileUnilav = hse_lastRow.querySelector(`input[name="hse_unilav_file_${hse_personaIndex}"]`);
+            const hse_hasUnilavFile = hse_fileUnilav && hse_fileUnilav.files.length > 0;
+            if (!hse_hasUnilavFile) {
+                hse_missingFields.push('File UNILAV');
+            }
+            
+            // Controllo Scadenza Idoneità Sanitaria (nome campo corretto)
+            const hse_scadenzaIdoneita = hse_lastRow.querySelector('input[name="hse_personale_idoneita_scadenza[]"]');
+            if (!hse_scadenzaIdoneita || !hse_scadenzaIdoneita.value) {
+                hse_missingFields.push('Scadenza Idoneità Sanitaria');
+            }
+            
+            // Controllo File Idoneità Sanitaria (nome campo corretto)
+            const hse_fileIdoneita = hse_lastRow.querySelector(`input[name="hse_idoneita_file_${hse_personaIndex}"]`);
+            const hse_hasIdoneitaFile = hse_fileIdoneita && hse_fileIdoneita.files.length > 0;
+            if (!hse_hasIdoneitaFile) {
+                hse_missingFields.push('File Idoneità Sanitaria');
+            }
+            
+            // Se ci sono campi mancanti, mostra errore
+            if (hse_missingFields.length > 0) {
+                let errorMessage = '⚠️ Per aggiungere un nuovo operaio, completa prima i campi obbligatori:\n\n';
+                errorMessage += '📋 Campi mancanti: ' + hse_missingFields.join(', ');
+                
+                hse_showToast(errorMessage, 'error', 8000);
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Funzioni di test
+        function testAgeValidation(input) {
+            const result = document.getElementById('ageResult');
+            if (input.value) {
+                const age = hse_calculateAge(input.value);
+                const isValid = hse_validateAgeImmediately(input);
+                
+                result.innerHTML = `
+                    <div class="test-result ${isValid ? 'success' : 'error'}">
+                        <strong>Età calcolata:</strong> ${age} anni<br>
+                        <strong>Validazione:</strong> ${isValid ? 'PASSATA ✅' : 'FALLITA ❌'}<br>
+                        <strong>Maggiorenne:</strong> ${age >= 18 ? 'Sì' : 'No'}
+                    </div>
+                `;
+            }
+        }
+        
+        function testFieldValidation() {
+            const result = document.getElementById('fieldValidationResult');
+            const isValid = hse_validateMandatoryFieldsForAddPerson();
+            
+            result.innerHTML = `
+                <div class="test-result ${isValid ? 'success' : 'error'}">
+                    <strong>Validazione campi obbligatori:</strong> ${isValid ? 'PASSATA ✅' : 'FALLITA ❌'}<br>
+                    <strong>Note:</strong> ${isValid ? 'Tutti i campi obbligatori sono compilati correttamente' : 'Alcuni campi obbligatori mancano o non sono validi'}
+                </div>
+            `;
+        }
+        
+        function fillAllFields() {
+            // Riempi tutti i campi con dati validi
+            document.querySelector('input[name="hse_personale_nome[]"]').value = 'Mario';
+            document.querySelector('input[name="hse_personale_cognome[]"]').value = 'Rossi';
+            document.querySelector('input[name="hse_personale_data_nascita[]"]').value = '1990-01-01';
+            document.querySelector('input[name="hse_personale_unilav_emissione[]"]').value = '2024-01-01';
+            document.querySelector('input[name="hse_personale_idoneita_scadenza[]"]').value = '2025-12-31';
+            
+            // Simula file caricati
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => {
+                // Crea un file fittizio per il test
+                const dt = new DataTransfer();
+                const file = new File(['test'], 'test.pdf', { type: 'application/pdf' });
+                dt.items.add(file);
+                input.files = dt.files;
+            });
+            
+            hse_showToast('✅ Tutti i campi sono stati riempiti con dati validi', 'success');
+        }
+        
+        function testCompletedFormValidation() {
+            const result = document.getElementById('completeTestResult');
+            const isValid = hse_validateMandatoryFieldsForAddPerson();
+            
+            result.innerHTML = `
+                <div class="test-result ${isValid ? 'success' : 'error'}">
+                    <strong>Test form completo:</strong> ${isValid ? 'SUCCESSO ✅' : 'FALLIMENTO ❌'}<br>
+                    <strong>Significato:</strong> ${isValid ? 'Un nuovo operaio può essere aggiunto' : 'Validazione blocca aggiunta nuovo operaio'}
+                </div>
+            `;
+        }
+        
+        // Test automatico all'avvio
+        window.onload = function() {
+            console.log('🧪 Test HSE Validation Fix caricato');
+            console.log('📝 Istruzioni:');
+            console.log('1. Test età: inserisci una data di nascita per testare la validazione immediata');
+            console.log('2. Test campi: compila i campi e clicca "Test Validazione Campi"');
+            console.log('3. Test completo: clicca "Riempi Tutti i Campi" poi "Test Form Completo"');
+        };
+    </script>
+</body>
+</html>
