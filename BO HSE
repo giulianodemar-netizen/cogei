@@ -1408,7 +1408,17 @@ foreach ($richieste as $richiesta) {
     // File DVR
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
     if ($richiesta['dvr_file']) {
+        echo '<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">';
         echo '<a href="' . esc_url($richiesta['dvr_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza DVR">📄 ✓</a>';
+        
+        if (!empty($richiesta['dvr_data_emissione'])) {
+            $dvr_date = DateTime::createFromFormat('Y-m-d', $richiesta['dvr_data_emissione']);
+            if ($dvr_date !== false) {
+                $dvr_formatted = $dvr_date->format('d/m/Y');
+                echo '<span style="color: #666; font-size: 10px; font-weight: bold;">' . $dvr_formatted . '</span>';
+            }
+        }
+        echo '</div>';
     } else {
         echo '<span style="color: #dc3545;">✗</span>';
     }
@@ -1417,10 +1427,42 @@ foreach ($richieste as $richiesta) {
     // File RCT (da user meta)
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
     $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    $rct_scadenza = get_user_meta($user_id, 'user_registration_scad_rct_rco', true);
+    
     if (!empty($rct_file_id)) {
         $rct_file_url = wp_get_attachment_url($rct_file_id);
         if ($rct_file_url) {
+            echo '<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">';
             echo '<a href="' . esc_url($rct_file_url) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza RCT da iscrizione">🛡️ ✓</a>';
+            
+            if (!empty($rct_scadenza)) {
+                // Parse date from user meta format (dd/mm/yyyy)
+                $scadenza_datetime = DateTime::createFromFormat('d/m/Y', $rct_scadenza);
+                if ($scadenza_datetime === false) {
+                    $scadenza_datetime = DateTime::createFromFormat('Y-m-d', $rct_scadenza);
+                }
+                
+                if ($scadenza_datetime !== false) {
+                    $scadenza_formatted = $scadenza_datetime->format('d/m/Y');
+                    $oggi = new DateTime();
+                    $giorni_alla_scadenza = $oggi->diff($scadenza_datetime)->days;
+                    $is_scaduto = $oggi > $scadenza_datetime;
+                    
+                    if ($is_scaduto) {
+                        $date_color = '#dc3545';
+                        $date_text = $scadenza_formatted;
+                    } elseif ($giorni_alla_scadenza <= 30) {
+                        $date_color = '#ffc107';
+                        $date_text = $scadenza_formatted;
+                    } else {
+                        $date_color = '#28a745';
+                        $date_text = $scadenza_formatted;
+                    }
+                    
+                    echo '<span style="color: ' . $date_color . '; font-size: 10px; font-weight: bold;">' . $date_text . '</span>';
+                }
+            }
+            echo '</div>';
         } else {
             echo '<span style="color: #dc3545;">✗</span>';
         }
@@ -1745,14 +1787,17 @@ foreach ($richieste as $richiesta) {
     echo 'user_id: ' . $user_id . ',';
     echo 'azienda_nome: "' . addslashes($rag_soc ?: $user->display_name) . '",';
     echo 'dvr_file: "' . addslashes($richiesta['dvr_file']) . '",';
+    echo 'dvr_data_emissione: "' . addslashes($richiesta['dvr_data_emissione']) . '",';
     
     // RCT da user meta
     $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
+    $rct_scadenza = get_user_meta($user_id, 'user_registration_scad_rct_rco', true);
     $rct_file_url = '';
     if (!empty($rct_file_id)) {
         $rct_file_url = wp_get_attachment_url($rct_file_id);
     }
     echo 'rct_file: "' . addslashes($rct_file_url) . '",';
+    echo 'rct_scadenza: "' . addslashes($rct_scadenza) . '",';
     
     echo 'numero_personale: ' . intval($richiesta['numero_personale']) . ',';
     echo 'personale_inserito: ' . count($personale) . ',';
@@ -2801,9 +2846,11 @@ function loadStatusDetails(richiestaId) {
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
                     <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${dvr_completo ? '#28a745' : '#dc3545'};">
                         <strong>📄 DVR:</strong> <span style="color: ${dvr_completo ? '#28a745' : '#dc3545'};">${dvr_completo ? '✅ Caricato' : '❌ Mancante'}</span>
+                        ${richiestaData.dvr_data_emissione ? '<br><small style="color: #666;">📅 Emissione: ' + richiestaData.dvr_data_emissione.split('-').reverse().join('/') + '</small>' : ''}
                     </div>
                     <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${rct_completo ? '#28a745' : '#dc3545'};">
                         <strong>🛡️ RCT:</strong> <span style="color: ${rct_completo ? '#28a745' : '#dc3545'};">${rct_completo ? '✅ Caricato' : '❌ Mancante'}</span>
+                        ${richiestaData.rct_scadenza ? '<br><small style="color: #666;">⏰ Scadenza: ' + richiestaData.rct_scadenza + '</small>' : ''}
                     </div>
                     <div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid ${operai_inseriti ? '#28a745' : '#dc3545'};">
                         <strong>👥 Operai nel Sistema:</strong> <span style="color: ${operai_inseriti ? '#28a745' : '#dc3545'};">${operai_inseriti ? '✅ ' + richiestaData.personale_inserito + ' inseriti' : '❌ Nessuno inserito'}</span>

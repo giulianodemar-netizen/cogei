@@ -1483,9 +1483,22 @@ if ($rct_has_data) {
     echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 8px;">🛡️ RCT Caricata dall\'Iscrizione</div>';
     
     if (!empty($rct_scadenza)) {
-        $scadenza_timestamp = strtotime($rct_scadenza);
-        $scadenza_formatted = date('d/m/Y', $scadenza_timestamp);
-        $giorni_alla_scadenza = ceil(($scadenza_timestamp - time()) / (60 * 60 * 24));
+        // Parse date from user meta format (dd/mm/yyyy)
+        $scadenza_datetime = DateTime::createFromFormat('d/m/Y', $rct_scadenza);
+        if ($scadenza_datetime === false) {
+            // Try alternative format Y-m-d
+            $scadenza_datetime = DateTime::createFromFormat('Y-m-d', $rct_scadenza);
+        }
+        
+        if ($scadenza_datetime !== false) {
+            $scadenza_timestamp = $scadenza_datetime->getTimestamp();
+            $scadenza_formatted = $scadenza_datetime->format('d/m/Y');
+            $giorni_alla_scadenza = ceil(($scadenza_timestamp - time()) / (60 * 60 * 24));
+        } else {
+            // Fallback for invalid date
+            $scadenza_formatted = $rct_scadenza;
+            $giorni_alla_scadenza = -999;
+        }
         
         if ($giorni_alla_scadenza > 30) {
             $scadenza_color = '#28a745'; // Verde
