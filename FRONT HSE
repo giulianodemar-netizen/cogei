@@ -3922,8 +3922,141 @@ function hse_toggleCantiereAccordion(cantiereId) {
     }
 }
 
+// Validazione campi obbligatori per l'aggiunta di una nuova persona
+function hse_validateMandatoryFieldsForAddPerson() {
+    const hse_container = document.getElementById('hse_personale_container');
+    const hse_currentRows = hse_container.querySelectorAll('.hse_personale_row');
+    
+    if (hse_currentRows.length === 0) {
+        return true; // Nessun operaio esistente, può aggiungere il primo
+    }
+    
+    // Controlla l'ultimo operaio aggiunto
+    const hse_lastRow = hse_currentRows[hse_currentRows.length - 1];
+    const hse_missingFields = [];
+    
+    // 1. Controllo Nome
+    const hse_nome = hse_lastRow.querySelector('input[name="hse_personale_nome[]"]');
+    if (!hse_nome || !hse_nome.value.trim()) {
+        hse_missingFields.push('Nome');
+    }
+    
+    // 2. Controllo Cognome
+    const hse_cognome = hse_lastRow.querySelector('input[name="hse_personale_cognome[]"]');
+    if (!hse_cognome || !hse_cognome.value.trim()) {
+        hse_missingFields.push('Cognome');
+    }
+    
+    // 3. Controllo Data di Nascita + Età minima 18 anni
+    const hse_dataNascita = hse_lastRow.querySelector('input[name="hse_personale_data_nascita[]"]');
+    if (!hse_dataNascita || !hse_dataNascita.value) {
+        hse_missingFields.push('Data di Nascita');
+    } else {
+        // Verifica età minima 18 anni
+        const today = new Date();
+        const birthDate = new Date(hse_dataNascita.value);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        
+        if (age < 18) {
+            hse_showToast('⚠️ Il lavoratore deve essere maggiorenne (almeno 18 anni)', 'error', 6000);
+            return false;
+        }
+    }
+    
+    // 4. Controllo Data Emissione UNILAV
+    const hse_dataEmissioneUnilav = hse_lastRow.querySelector('input[name="hse_personale_data_emissione_unilav[]"]');
+    if (!hse_dataEmissioneUnilav || !hse_dataEmissioneUnilav.value) {
+        hse_missingFields.push('Data Emissione UNILAV');
+    }
+    
+    // 5. Controllo File UNILAV
+    const hse_fileUnilav = hse_lastRow.querySelector('input[name="hse_personale_file_unilav[]"]');
+    const hse_hasUnilavFile = hse_fileUnilav && (hse_fileUnilav.files.length > 0 || 
+        hse_lastRow.querySelector('.hse_file_success_unilav'));
+    if (!hse_hasUnilavFile) {
+        hse_missingFields.push('File UNILAV');
+    }
+    
+    // 6. Controllo Scadenza Idoneità Sanitaria
+    const hse_scadenzaIdoneita = hse_lastRow.querySelector('input[name="hse_personale_scadenza_idoneita_sanitaria[]"]');
+    if (!hse_scadenzaIdoneita || !hse_scadenzaIdoneita.value) {
+        hse_missingFields.push('Scadenza Idoneità Sanitaria');
+    }
+    
+    // 7. Controllo File Idoneità Sanitaria
+    const hse_fileIdoneita = hse_lastRow.querySelector('input[name="hse_personale_file_idoneita_sanitaria[]"]');
+    const hse_hasIdoneitaFile = hse_fileIdoneita && (hse_fileIdoneita.files.length > 0 || 
+        hse_lastRow.querySelector('.hse_file_success_idoneita_sanitaria'));
+    if (!hse_hasIdoneitaFile) {
+        hse_missingFields.push('File Idoneità Sanitaria');
+    }
+    
+    // Se ci sono campi mancanti, mostra errore
+    if (hse_missingFields.length > 0) {
+        let errorMessage = '⚠️ Per aggiungere un nuovo operaio, completa prima i campi obbligatori per l\'operaio corrente:\n\n';
+        errorMessage += '📋 Campi mancanti: ' + hse_missingFields.join(', ');
+        
+        hse_showToast(errorMessage, 'error', 8000);
+        
+        // Evidenzia i campi mancanti
+        hse_missingFields.forEach(field => {
+            let fieldSelector = '';
+            switch(field) {
+                case 'Nome':
+                    fieldSelector = 'input[name="hse_personale_nome[]"]';
+                    break;
+                case 'Cognome':
+                    fieldSelector = 'input[name="hse_personale_cognome[]"]';
+                    break;
+                case 'Data di Nascita':
+                    fieldSelector = 'input[name="hse_personale_data_nascita[]"]';
+                    break;
+                case 'Data Emissione UNILAV':
+                    fieldSelector = 'input[name="hse_personale_data_emissione_unilav[]"]';
+                    break;
+                case 'File UNILAV':
+                    fieldSelector = 'input[name="hse_personale_file_unilav[]"]';
+                    break;
+                case 'Scadenza Idoneità Sanitaria':
+                    fieldSelector = 'input[name="hse_personale_scadenza_idoneita_sanitaria[]"]';
+                    break;
+                case 'File Idoneità Sanitaria':
+                    fieldSelector = 'input[name="hse_personale_file_idoneita_sanitaria[]"]';
+                    break;
+            }
+            
+            const fieldElement = hse_lastRow.querySelector(fieldSelector);
+            if (fieldElement) {
+                fieldElement.style.borderColor = '#dc3545';
+                fieldElement.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
+                fieldElement.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.3)';
+                
+                // Rimuovi evidenziazione dopo 5 secondi
+                setTimeout(() => {
+                    fieldElement.style.borderColor = '#ddd';
+                    fieldElement.style.backgroundColor = 'white';
+                    fieldElement.style.boxShadow = 'none';
+                }, 5000);
+            }
+        });
+        
+        return false;
+    }
+    
+    return true;
+}
+
 // Gestione personale dinamico con formazioni + nuovi campi + controllo assegnazioni
 function hse_addPersona() {
+    // Validazione campi obbligatori prima di aggiungere nuova persona
+    if (!hse_validateMandatoryFieldsForAddPerson()) {
+        return; // Blocca l'aggiunta se la validazione fallisce
+    }
+    
     const hse_container = document.getElementById('hse_personale_container');
     const hse_currentRows = hse_container.querySelectorAll('.hse_personale_row');
     const hse_newIndex = hse_currentRows.length;
