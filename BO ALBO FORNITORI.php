@@ -1,0 +1,1175 @@
+<?php
+
+/**
+ * Plugin Snippet WordPress - Sistema Gestione Fornitori
+ * Versione base con logica stati corretta
+ * 
+ * REGOLE STATI:
+ * - SOA NON è fondamentale per NESSUNO
+ * - RCT-RCO NON serve per: FORNITURE, CONSULENZA, POLIZZE
+ * - RCT-RCO serve per: LAVORO, SERVIZI, SUBAPPALTO, NOLI
+ */
+
+// Verifica che sia WordPress
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+global $wpdb;
+date_default_timezone_set('Europe/Rome');
+
+// ================== CONFIGURAZIONE EMAIL ==================
+$inviamail = false; // Cambia a true per attivare l'invio email, false per solo log
+
+// ================== GESTIONE EXPORT CSV ==================
+
+if (isset($_GET['csv_export']) && $_GET['csv_export'] === '1') {
+    if (ob_get_contents()) ob_clean();
+    
+    header('Content-Type: application/csv');
+    header('Content-Disposition: attachment; filename="fornitori_' . date('Y-m-d_H-i-s') . '.csv"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    
+    echo "\xEF\xBB\xBF";
+    echo "ID,Tipo,Ragione Sociale,Email,P.IVA,RCT-RCO,CCIAA,White List,SOA,DURC,Altre Scadenze,Stato\n";
+    
+    $suppliers = get_users(['role' => 'subscriber']);
+    foreach ($suppliers as $user) {
+        $user_id = $user->ID;
+        $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+        $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+        
+        $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
+        $rct_rco = get_user_meta($user_id, $rct_rco_field, true);
+        
+        $ccia = get_user_meta($user_id, 'user_registration_scad_CCIAA', true);
+        $white_list = get_user_meta($user_id, 'user_registration_scad_wit', true);
+        $soa = get_user_meta($user_id, 'user_registration_scad_soa', true);
+        $durc = get_user_meta($user_id, 'user_registration_scad_durc', true);
+        $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
+        
+        $status = determineSupplierStatus($user_id);
+        
+        $row = [
+            $user_id,
+            $tipo ?: '',
+            '"' . str_replace('"', '""', $rag_soc ?: '') . '"',
+            '"' . str_replace('"', '""', $user->user_email) . '"',
+            '"' . str_replace('"', '""', $user->display_name) . '"',
+            '"' . str_replace('"', '""', $rct_rco ?: '') . '"',
+            '"' . str_replace('"', '""', $ccia ?: '') . '"',
+            '"' . str_replace('"', '""', $white_list ?: '') . '"',
+            '"' . str_replace('"', '""', $soa ?: '') . '"',
+            '"' . str_replace('"', '""', $durc ?: '') . '"',
+            '"' . str_replace('"', '""', $altre ?: '') . '"',
+            '"' . str_replace('"', '""', $status) . '"'
+        ];
+        
+        echo implode(',', $row) . "\n";
+    }
+    
+    exit;
+}
+
+// ================== FUNZIONI EMAIL ==================
+
+function sendActivationEmail($user_id) {
+    global $inviamail;
+    
+    $user = get_userdata($user_id);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $email = $user->user_email;
+    
+    $log_file = ABSPATH . 'attiva_disattiva_utente_manuale.txt';
+    $timestamp = date('d/m/Y H:i:s');
+    
+    if ($inviamail) {
+        $to = $email;
+        $subject = "Il tuo account su Cogei.net è stato attivato";
+        $body = "<html>
+<head>
+<title>Account attivato</title>
+</head>
+<body>
+<div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'><img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' /></div>
+Salve,".$rag_soc."<br>ti informaimo che la tua richiesta di qualifica è stata accettata. ti invitiamo a mantenere sempre aggiornata la documentazione della tua area privata.<br><br>
+Cordiali Saluti,<br>
+Cogei S.r.l.
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 20px;'>
+<div class='rigainfofo primariga'><a style='color: white; text-decoration: none;' href='#' target='_blank' rel='noopener'>Via Francesco Lomonaco, 3 - 80121 Napoli</a></div>
+<div class='rigainfofo'><a style='color: white; text-decoration: none;' href='tel:+390812303782'>TEL: +39 081.230.37.82</a></div>
+<div class='rigainfofo primariga'><a style='color: white; text-decoration: none;' href='mailto:cogei@pec.cogei.net'>PEC: cogei@pec.cogei.net</a></div>
+<div style='margin-top: 40px; text-align: center; color: white; font-size: 12px !important;'>COGEI SRL - P.IVA: IT06569020636 - Copyright © 2023 Cogei. All Rights Reserved.</div>
+</div>
+</body>
+</html>";
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+        $headers .= 'Cc:' . "\r\n";
+        
+        $email_sent = mail($to, $subject, $body, $headers);
+        $log_entry = "[{$timestamp}] ATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
+    } else {
+        $log_entry = "[{$timestamp}] ATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email NON INVIATA (inviamail=false)\n";
+    }
+    
+    if (!file_exists($log_file)) {
+        $header = "LOG ATTIVAZIONI/DISATTIVAZIONI MANUALI - " . date('Y') . "\n";
+        $header .= str_repeat("=", 80) . "\n\n";
+        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
+    }
+    
+    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+}
+
+function sendDeactivationEmail($user_id) {
+    global $inviamail;
+    
+    $user = get_userdata($user_id);
+    $user_rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $user_email = $user->user_email;
+    
+    $log_file = ABSPATH . 'attiva_disattiva_utente_manuale.txt';
+    $timestamp = date('d/m/Y H:i:s');
+    
+    if ($inviamail) {
+        $to = $user_email;
+        $subject = "Il tuo account su Cogei.net è stato disattivato";
+        $body = "<html>
+<head>
+<title>Account disattivato</title>
+</head>
+<body>
+<div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'><img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' /></div>
+Gentile ".$user_rag_soc." la informiamo che la sua iscrizione è decaduta a causa del mancato aggiornamento della documentazione.<br><br>
+Per maggiori informazioni contattare <a href='mailto:ufficio_qualita@cogei.net'>ufficio_qualita@cogei.net</a>
+Cordiali Saluti,<br>
+Cogei SRL.
+<br><br>
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 20px;'>
+<div class='rigainfofo primariga'><a style='color: white; text-decoration: none;' href='#' target='_blank' rel='noopener'>Via Francesco Lomonaco, 3 - 80121 Napoli</a></div>
+<div class='rigainfofo'><a style='color: white; text-decoration: none;' href='tel:+390812303782'>TEL: +39 081.230.37.82</a></div>
+<div class='rigainfofo primariga'><a style='color: white; text-decoration: none;' href='mailto:cogei@pec.cogei.net'>PEC: cogei@pec.cogei.net</a></div>
+<div style='margin-top: 40px; text-align: center; color: white; font-size: 12px !important;'>COGEI SRL - P.IVA: IT06569020636 - Copyright © 2023 Cogei. All Rights Reserved.</div>
+</div>
+</body>
+</html>";
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+        $headers .= 'Cc:' . "\r\n";
+        
+        $email_sent = mail($to, $subject, $body, $headers);
+        $log_entry = "[{$timestamp}] DISATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$user_email} | Ragione Sociale: {$user_rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
+    } else {
+        $log_entry = "[{$timestamp}] DISATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$user_email} | Ragione Sociale: {$user_rag_soc} | Email NON INVIATA (inviamail=false)\n";
+    }
+    
+    if (!file_exists($log_file)) {
+        $header = "LOG ATTIVAZIONI/DISATTIVAZIONI MANUALI - " . date('Y') . "\n";
+        $header .= str_repeat("=", 80) . "\n\n";
+        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
+    }
+    
+    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+}
+
+// ================== FUNZIONI HELPER ==================
+
+function createSuppliersCopyTable() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'suppliers_copy';
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        user_id int(11) NOT NULL,
+        tipo varchar(100),
+        ragione_sociale varchar(255),
+        email varchar(255),
+        piva varchar(50),
+        rct_rco varchar(20),
+        cciaa varchar(20),
+        white_list varchar(20),
+        soa varchar(20),
+        durc varchar(20),
+        altre_scadenze varchar(20),
+        stato varchar(50),
+        richiesta_documenti tinyint(1) DEFAULT 0,
+        last_updated datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql);
+    
+    $wpdb->query("ALTER TABLE $table_name ADD COLUMN IF NOT EXISTS richiesta_documenti tinyint(1) DEFAULT 0");
+}
+
+function getSupplierCopyData($user_id) {
+    global $wpdb;
+    $result = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}suppliers_copy WHERE user_id = %d",
+        $user_id
+    ), ARRAY_A);
+    return $result;
+}
+
+function updateSupplierCopyData($user_id, $data) {
+    global $wpdb;
+    
+    $table_name = $wpdb->prefix . 'suppliers_copy';
+    
+    $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$table_name}'");
+    if (!$table_exists) {
+        createSuppliersCopyTable();
+    }
+    
+    $clean_data = $data;
+    unset($clean_data['id']);
+    unset($clean_data['last_updated']);
+    
+    if (!isset($clean_data['richiesta_documenti'])) {
+        $clean_data['richiesta_documenti'] = 0;
+    }
+    
+    $merge_data = array_merge(['user_id' => $user_id], $clean_data);
+    
+    $formats = ['%d'];
+    foreach ($clean_data as $key => $value) {
+        if ($key === 'richiesta_documenti') {
+            $formats[] = '%d';
+        } else {
+            $formats[] = '%s';
+        }
+    }
+    
+    $result = $wpdb->replace(
+        $table_name,
+        $merge_data,
+        $formats
+    );
+    
+    return $result;
+}
+
+function hasDocuments($user_id) {
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    
+    $document_fields = [
+        'user_registration_scad_CCIAA', 
+        'user_registration_scad_wit', 
+        'user_registration_scad_durc',
+        'user_registration_scadenza_altre_scadenze'
+    ];
+    
+    // NUOVA LOGICA: RCT-RCO serve solo per LAVORO, SERVIZI, SUBAPPALTO, NOLI
+    // NON serve per: FORNITURE, CONSULENZA, POLIZZE
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
+        if ($tipo === 'Forniture') {
+            $document_fields[] = 'user_registration_scad_rct_rco_forni';
+        } else {
+            $document_fields[] = 'user_registration_scad_rct_rco';
+        }
+    }
+    
+    // SOA NON è mai fondamentale (rimosso completamente)
+    
+    foreach ($document_fields as $field) {
+        if (!empty(get_user_meta($user_id, $field, true))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function determineSupplierStatus($user_id) {
+    // Controlla se c'è uno stato forzato manualmente
+    $forced_status = get_user_meta($user_id, 'forced_supplier_status', true);
+    if (!empty($forced_status)) {
+        return $forced_status;
+    }
+    
+    // Calcola stato dinamico con NUOVA LOGICA
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    
+    // DOCUMENTI SEMPRE FONDAMENTALI
+    $documenti_fondamentali = [
+        'user_registration_scad_CCIAA', 
+        'user_registration_scad_wit',
+        'user_registration_scad_durc',
+        'user_registration_scadenza_altre_scadenze'
+    ];
+    
+    // NUOVA LOGICA RCT-RCO: serve solo per LAVORO, SERVIZI, SUBAPPALTO, NOLI
+    // NON serve per: FORNITURE, CONSULENZA, POLIZZE
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
+        if ($tipo === 'Forniture') {
+            $documenti_fondamentali[] = 'user_registration_scad_rct_rco_forni';
+        } else {
+            $documenti_fondamentali[] = 'user_registration_scad_rct_rco';
+        }
+    }
+    
+    // SOA NON è mai fondamentale (completamente rimosso)
+    
+    $documenti_caricati = 0;
+    $documenti_totali = count($documenti_fondamentali);
+    $has_expired = false;
+    $expired_docs = [];
+    $has_any_document = false;
+    
+    foreach ($documenti_fondamentali as $field) {
+        $date = get_user_meta($user_id, $field, true);
+        if (!empty($date)) {
+            $documenti_caricati++;
+            $has_any_document = true;
+            
+            $converted_date = str_replace("/", "-", $date);
+            try {
+                $now = new DateTime("now");
+                $expiry_date = new DateTime($converted_date . ' 23:59:59');
+                $interval = $now->diff($expiry_date);
+                $days = (int)$interval->format('%r%a');
+                
+                if ($days < 0) {
+                    $has_expired = true;
+                }
+                
+                if ($days <= -15) {
+                    $expired_docs[] = [
+                        'field' => $field,
+                        'days' => abs($days),
+                        'date' => $date
+                    ];
+                }
+            } catch (Exception $e) {
+                // Ignora errori di data
+            }
+        }
+    }
+    
+    if (!empty($expired_docs)) {
+        global $disattivazione_info;
+        $disattivazione_info = $expired_docs;
+        $stato_base = 'Disattivo';
+    } elseif ($documenti_caricati === $documenti_totali && !$has_expired) {
+        $stato_base = 'Attivo';
+    } elseif ($has_expired) {
+        $stato_base = 'Scaduto';
+    } elseif (!$has_any_document) {
+        $stato_base = 'Solo_Registrato';
+    } else {
+        $stato_base = 'Solo_Registrato';
+    }
+    
+    $is_waiting_integration = ($documenti_caricati > 0 && $documenti_caricati < $documenti_totali);
+    
+    if ($stato_base === 'Disattivo' && $is_waiting_integration) {
+        return 'Disattivo_In_Attesa';
+    } elseif ($stato_base === 'Solo_Registrato' && $is_waiting_integration) {
+        return 'Solo_Registrato_In_Attesa';
+    } else {
+        return $stato_base;
+    }
+}
+
+function renderExpiryCell($date) {
+    if (empty($date)) {
+        return "<span style='color:gray; font-style:italic;'>Non caricato</span>";
+    }
+    
+    $converted_date = str_replace("/", "-", $date);
+    try {
+        $now = new DateTime("now");
+        $expiry_date = new DateTime($converted_date . ' 23:59:59');
+        $interval = $now->diff($expiry_date);
+        
+        $days = (int)$interval->format('%r%a');
+        $hours = (int)$interval->format('%r%h');
+        $minutes = (int)$interval->format('%r%i');
+        
+        $output = $date;
+        
+        if ($days < 0) {
+            $abs_days = abs($days);
+            $abs_hours = abs($hours);
+            
+            if ($abs_days > 0) {
+                $time_text = $abs_days . " giorni";
+                if ($abs_hours > 0) {
+                    $time_text .= " e " . $abs_hours . " ore";
+                }
+            } else {
+                $time_text = $abs_hours . " ore";
+            }
+            
+            $output .= "<br><span style='color:red; font-weight:bold;'>Scaduto da: {$time_text}</span>";
+            
+        } elseif ($days === 0) {
+            if ($hours <= 0) {
+                $output .= "<br><span style='color:red; font-weight:bold;'>Scade oggi</span>";
+            } else {
+                $time_text = $hours . " ore";
+                if ($minutes > 0) {
+                    $time_text .= " e " . $minutes . " minuti";
+                }
+                $output .= "<br><span style='color:orange; font-weight:bold;'>Scade oggi tra: {$time_text}</span>";
+            }
+            
+        } else {
+            if ($days === 1) {
+                $time_text = "1 giorno";
+                if ($hours > 0 && $days <= 15) {
+                    $time_text .= " e " . $hours . " ore";
+                }
+            } else {
+                $time_text = $days . " giorni";
+                if ($hours > 0 && $days <= 15) {
+                    $time_text .= " e " . $hours . " ore";
+                }
+            }
+            
+            if ($days <= 15) {
+                $output .= "<br><span style='color:orange; font-weight:bold;'>Scade tra: {$time_text}</span>";
+            } else {
+                $output .= "<br><span style='color:green;'>Scade tra: {$days} giorni</span>";
+            }
+        }
+        
+        return $output;
+        
+    } catch (Exception $e) {
+        return $date;
+    }
+}
+
+// ================== GESTIONE AZIONI ==================
+
+if (isset($_GET['action']) && isset($_GET['user_id'])) {
+    $user_id = intval($_GET['user_id']);
+    $action = sanitize_text_field($_GET['action']);
+    $success = false;
+    $success_info = array();
+    
+    createSuppliersCopyTable();
+    
+    switch ($action) {
+        case 'toggle_user_status':
+            if (isset($_GET['new_status'])) {
+                $new_status = sanitize_text_field($_GET['new_status']);
+                $old_status = determineSupplierStatus($user_id);
+                
+                // Forza stato nel user_meta
+                update_user_meta($user_id, 'forced_supplier_status', $new_status);
+                
+                // Sincronizza tabella copia
+                $user = get_userdata($user_id);
+                $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+                $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
+                $rct_rco = get_user_meta($user_id, $rct_rco_field, true);
+                $ccia = get_user_meta($user_id, 'user_registration_scad_CCIAA', true);
+                $white_list = get_user_meta($user_id, 'user_registration_scad_wit', true);
+                $soa = get_user_meta($user_id, 'user_registration_scad_soa', true);
+                $durc = get_user_meta($user_id, 'user_registration_scad_durc', true);
+                $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
+                
+                $copy_data = getSupplierCopyData($user_id);
+                $richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti'])) ? $copy_data['richiesta_documenti'] : 0;
+                
+                $sync_data = [
+                    'tipo' => $tipo ?: '',
+                    'ragione_sociale' => $rag_soc ?: '',
+                    'email' => $user->user_email,
+                    'piva' => $user->display_name,
+                    'rct_rco' => $rct_rco ?: '',
+                    'cciaa' => $ccia ?: '',
+                    'white_list' => $white_list ?: '',
+                    'soa' => $soa ?: '',
+                    'durc' => $durc ?: '',
+                    'altre_scadenze' => $altre ?: '',
+                    'stato' => $new_status,
+                    'richiesta_documenti' => $richiesta_documenti
+                ];
+                
+                updateSupplierCopyData($user_id, $sync_data);
+                
+                // Invia email
+                if ($new_status === 'Attivo' && $old_status !== 'Attivo') {
+                    sendActivationEmail($user_id);
+                } elseif ($new_status === 'Disattivo' && $old_status !== 'Disattivo') {
+                    sendDeactivationEmail($user_id);
+                }
+                
+                $success = true;
+                $success_info = array(
+                    'action_type' => 'status_change',
+                    'new_status' => $new_status,
+                    'user_email' => $user->user_email,
+                    'user_name' => $rag_soc ?: $user->display_name
+                );
+            }
+            break;
+            
+        case 'request_new_documents':
+            $copy_data = getSupplierCopyData($user_id);
+            if ($copy_data) {
+                unset($copy_data['id']);
+                unset($copy_data['last_updated']);
+                $copy_data['richiesta_documenti'] = 1;
+                updateSupplierCopyData($user_id, $copy_data);
+                
+                $user = get_userdata($user_id);
+                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+                
+                $success = true;
+                $success_info = array(
+                    'action_type' => 'request_documents',
+                    'user_email' => $user->user_email,
+                    'user_name' => $rag_soc ?: $user->display_name
+                );
+            }
+            break;
+            
+        case 'remove_request_status':
+            $copy_data = getSupplierCopyData($user_id);
+            if ($copy_data) {
+                $dynamic_status = determineSupplierStatus($user_id);
+                unset($copy_data['id']);
+                unset($copy_data['last_updated']);
+                $copy_data['stato'] = $dynamic_status;
+                $copy_data['richiesta_documenti'] = 0;
+                updateSupplierCopyData($user_id, $copy_data);
+                
+                $user = get_userdata($user_id);
+                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+                
+                $success = true;
+                $success_info = array(
+                    'action_type' => 'remove_request',
+                    'user_email' => $user->user_email,
+                    'user_name' => $rag_soc ?: $user->display_name
+                );
+            }
+            break;
+    }
+    
+    // Redirect
+    $current_url = $_SERVER['REQUEST_URI'];
+    $redirect_url = remove_query_arg(['action', 'user_id', 'new_status', 'msg', 'action_type', 'target_user_id', 'user_email', 'user_name'], $current_url);
+    
+    if ($success && !empty($success_info)) {
+        $redirect_params = array(
+            'msg' => 'success',
+            'action_type' => $success_info['action_type'],
+            'target_user_id' => $user_id,
+            'user_email' => rawurlencode($success_info['user_email']),
+            'user_name' => rawurlencode($success_info['user_name'])
+        );
+        
+        if (isset($success_info['new_status'])) {
+            $redirect_params['new_status'] = $success_info['new_status'];
+        }
+        
+        $redirect_url = add_query_arg($redirect_params, $redirect_url);
+    } elseif ($success) {
+        $redirect_url = add_query_arg('msg', 'success', $redirect_url);
+    } else {
+        $redirect_url = add_query_arg('msg', 'error', $redirect_url);
+    }
+    
+    // Decodifica entità HTML per evitare problemi con &#038;
+    $redirect_url = html_entity_decode($redirect_url, ENT_QUOTES, 'UTF-8');
+    
+    if (!headers_sent()) {
+        header("Location: " . $redirect_url);
+        exit;
+    } else {
+        echo '<script>window.location.href = "' . addslashes($redirect_url) . '";</script>';
+        exit;
+    }
+}
+
+// ================== CONFIGURAZIONE ==================
+
+$supplier_statuses = [
+    'Attivo' => [
+        'color' => '#28a745', 
+        'label' => 'Attivo',
+        'tooltip' => 'Tutti i documenti richiesti sono caricati e validi. Il fornitore può partecipare a gare e commesse.'
+    ],
+    'Disattivo' => [
+        'color' => '#dc3545', 
+        'label' => 'Disattivo',
+        'tooltip' => 'Ha documenti scaduti da più di 15 giorni. Il fornitore non può partecipare a gare fino all\'aggiornamento dei documenti.'
+    ],
+    'Solo_Registrato' => [
+        'color' => '#ffc107', 
+        'label' => 'Solo Registrato',
+        'tooltip' => 'Non ha caricato tutti i documenti richiesti. Deve completare la documentazione per diventare attivo.'
+    ],
+    'Scaduto' => [
+        'color' => '#fd7e14', 
+        'label' => 'Documenti Scaduti',
+        'tooltip' => 'Ha documenti scaduti ma non ancora da 15 giorni. Deve rinnovare i documenti al più presto.'
+    ],
+    'Disattivo_In_Attesa' => [
+        'color' => '#6f42c1', 
+        'label' => 'Disattivo + In Attesa Documenti',
+        'tooltip' => 'È disattivato per documenti scaduti da più di 15 giorni, ma ha caricato alcuni documenti (documentazione incompleta).'
+    ],
+    'Solo_Registrato_In_Attesa' => [
+        'color' => '#20c997', 
+        'label' => 'Registrato + In Attesa Documenti',
+        'tooltip' => 'Ha caricato alcuni documenti ma non tutti quelli richiesti. Deve completare la documentazione.'
+    ],
+    'Richiesti_nuovi_documenti' => [
+        'color' => '#e83e8c', 
+        'label' => 'Richiesti Documenti',
+        'tooltip' => 'È stato richiesto al fornitore di caricare nuovi documenti. In attesa di risposta.'
+    ],
+    'Richiesti_Documenti' => [
+        'color' => '#e83e8c', 
+        'label' => 'Richiesti Documenti',
+        'tooltip' => 'È stato richiesto al fornitore di caricare nuovi documenti. In attesa di risposta.'
+    ]
+];
+
+createSuppliersCopyTable();
+
+// ================== OUTPUT HTML ==================
+
+echo '<div style="margin: 20px; font-family: Arial, sans-serif;">';
+echo '<h2>Gestione Fornitori</h2>';
+
+// STATO EMAIL
+global $inviamail;
+echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamail ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($inviamail ? '#28a745' : '#ffc107') . ';">';
+echo '<strong>Stato Email:</strong> ' . ($inviamail ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
+echo '</div>';
+
+// CONTROLLI
+echo '<div style="margin-bottom: 15px;">';
+echo '<button onclick="exportTableToCSV()" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Esporta CSV</button>';
+echo '<span style="margin-left: 10px; font-size: 12px; color: #666;">Esporta la tabella come visualizzata (con filtri applicati)</span>';
+echo '</div>';
+
+// CAMPO DI RICERCA
+echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">';
+echo '<strong>Cerca in tutti i campi:</strong><br>';
+echo '<input type="text" id="searchInput" placeholder="Scrivi per cercare..." style="width: 100%; max-width: 400px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;" onkeyup="performSearch()">';
+echo '<small style="display: block; margin-top: 5px; color: #666;">Cerca per ID, tipo, ragione sociale, email, P.IVA, stato o qualsiasi altro campo</small>';
+echo '</div>';
+
+// FILTRI STATI
+echo '<div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">';
+echo '<strong>Filtra per Stati (seleziona multipli):</strong><br>';
+echo '<button onclick="clearAllFilters()" style="background: #6c757d; color: white; padding: 4px 8px; border: none; border-radius: 8px; font-size: 11px; margin: 2px; cursor: pointer;">Pulisci Tutti</button><br><br>';
+
+foreach ($supplier_statuses as $key => $config) {
+    if ($key === 'Richiesti_Documenti' || $key === 'Richiesti_nuovi_documenti') continue;
+    
+    echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
+    echo '<input type="checkbox" id="status_' . $key . '" onchange="updateFilters()" style="margin-right: 5px;">';
+    echo '<span style="background: ' . $config['color'] . '; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;" title="' . htmlspecialchars($config['tooltip']) . '">' . $config['label'] . '</span>';
+    echo '</label> ';
+}
+
+echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
+echo '<input type="checkbox" id="filter_richiesti_documenti" onchange="updateFilters()" style="margin-right: 5px;">';
+echo '<span style="background: #e83e8c; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;" title="È stato richiesto al fornitore di caricare nuovi documenti. In attesa di risposta.">Richiesti Documenti</span>';
+echo '</label> ';
+echo '</div>';
+
+// FILTRI TIPOLOGIE
+echo '<div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 5px;">';
+echo '<strong>Filtra per Tipologie (seleziona multipli):</strong><br>';
+$user_types = ['Lavoro', 'Servizi', 'Forniture', 'Subappalto', 'Noli', 'Consulenze', 'Polizze'];
+echo '<button onclick="clearAllFilters()" style="background: #6c757d; color: white; padding: 4px 8px; border: none; border-radius: 8px; font-size: 11px; margin: 2px; cursor: pointer;">Pulisci Tutti</button><br><br>';
+
+foreach ($user_types as $type) {
+    echo '<label style="display: inline-block; margin: 2px; cursor: pointer;">';
+    echo '<input type="checkbox" id="type_' . $type . '" onchange="updateFilters()" style="margin-right: 5px;">';
+    echo '<span style="background: #2196f3; color: white; padding: 4px 8px; border-radius: 8px; font-size: 11px;">' . $type . '</span>';
+    echo '</label> ';
+}
+echo '</div>';
+
+// FILTRI ATTIVI
+echo '<div id="active-filters" style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107; display: none;">';
+echo '<strong>Filtri Attivi:</strong> <span id="filter-list"></span>';
+echo '<button onclick="clearAllFilters()" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px; cursor: pointer;">Rimuovi Tutti</button>';
+echo '</div>';
+
+// MESSAGGI DI FEEDBACK
+if (isset($_GET['msg'])) {
+    $msg_type = $_GET['msg'] === 'success' ? 'success' : 'error';
+    $msg_color = $msg_type === 'success' ? '#d4edda' : '#f8d7da';
+    $msg_text_color = $msg_type === 'success' ? '#155724' : '#721c24';
+    $msg_icon = $msg_type === 'success' ? '✅' : '❌';
+    
+    $msg_text = $msg_icon . ' Operazione completata con successo!';
+    
+    if ($msg_type === 'success' && isset($_GET['action_type'])) {
+        $action_type = sanitize_text_field($_GET['action_type']);
+        $target_user_id = isset($_GET['target_user_id']) ? intval($_GET['target_user_id']) : 0;
+        $user_email = isset($_GET['user_email']) ? rawurldecode(sanitize_email($_GET['user_email'])) : '';
+        $user_name = isset($_GET['user_name']) ? rawurldecode(sanitize_text_field($_GET['user_name'])) : '';
+        $new_status = isset($_GET['new_status']) ? sanitize_text_field($_GET['new_status']) : '';
+        
+        switch ($action_type) {
+            case 'status_change':
+                if ($new_status === 'Attivo') {
+                    $msg_text = "🟢 <strong>FORNITORE ATTIVATO</strong><br>";
+                    $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                    $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                    $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                    $msg_text .= "• <strong>Nuovo Stato:</strong> ATTIVO";
+                } elseif ($new_status === 'Disattivo') {
+                    $msg_text = "🔴 <strong>FORNITORE DISATTIVATO</strong><br>";
+                    $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                    $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                    $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                    $msg_text .= "• <strong>Nuovo Stato:</strong> DISATTIVO";
+                } else {
+                    $msg_text = "📝 <strong>STATO FORNITORE MODIFICATO</strong><br>";
+                    $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                    $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                    $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                    $msg_text .= "• <strong>Nuovo Stato:</strong> {$new_status}";
+                }
+                break;
+                
+            case 'request_documents':
+                $msg_text = "📋 <strong>RICHIESTI NUOVI DOCUMENTI</strong><br>";
+                $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                $msg_text .= "• <strong>Azione:</strong> Contrassegnato come 'Richiesti Documenti'";
+                break;
+                
+            case 'remove_request':
+                $msg_text = "🗑️ <strong>RIMOSSA RICHIESTA DOCUMENTI</strong><br>";
+                $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                $msg_text .= "• <strong>Azione:</strong> Rimosso flag 'Richiesti Documenti'";
+                break;
+        }
+    }
+    
+    if ($msg_type === 'error') {
+        $msg_text = $msg_icon . ' Errore durante l\'operazione';
+    }
+    
+    echo '<div id="feedback-message" style="margin-bottom: 15px; padding: 15px; background: ' . $msg_color . '; color: ' . $msg_text_color . '; border-radius: 8px; border-left: 5px solid ' . ($msg_type === 'success' ? '#28a745' : '#dc3545') . '; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+    echo '<div style="font-size: 14px; line-height: 1.5;">' . $msg_text . '</div>';
+    if ($msg_type === 'success') {
+        echo '<div id="countdown-text" style="font-size: 11px; color: #6c757d; margin-top: 8px; font-style: italic;">Questo messaggio scomparirà automaticamente tra <span id="countdown-seconds">10</span> secondi...</div>';
+    }
+    echo '</div>';
+}
+
+// TABELLA
+echo '<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">';
+echo '<tr style="background: #0066a2 !important; color: white !important;">';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">ID</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Tipo</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Ragione Sociale</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Email</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT-RCO</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">CCIA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">White List</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">SOA</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DURC</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Altre Scadenze</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
+echo '</tr>';
+
+$suppliers = get_users(['role' => 'subscriber']);
+
+foreach ($suppliers as $user) {
+    $user_id = $user->ID;
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    
+    // Calcola dati dinamici
+    $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
+    $rct_rco = get_user_meta($user_id, $rct_rco_field, true);
+    $ccia = get_user_meta($user_id, 'user_registration_scad_CCIAA', true);
+    $white_list = get_user_meta($user_id, 'user_registration_scad_wit', true);
+    $soa = get_user_meta($user_id, 'user_registration_scad_soa', true);
+    $durc = get_user_meta($user_id, 'user_registration_scad_durc', true);
+    $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
+    
+    // Calcola stato dinamico
+    $dynamic_status = determineSupplierStatus($user_id);
+    
+    // Controlla richiesta documenti
+    $copy_data = getSupplierCopyData($user_id);
+    $has_richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti']) && $copy_data['richiesta_documenti'] == 1);
+    
+    $can_activate = hasDocuments($user_id);
+    $status_config = $supplier_statuses[$dynamic_status];
+    
+    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_richiesta_documenti ? '1' : '0') . '">';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->display_name . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . renderExpiryCell($rct_rco) . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . renderExpiryCell($ccia) . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . renderExpiryCell($white_list) . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . renderExpiryCell($soa) . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . renderExpiryCell($durc) . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . renderExpiryCell($altre) . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    
+    // Mostra stato con tooltip
+    echo '<span class="supplier-status" style="background: ' . $status_config['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($status_config['tooltip']) . '">' . $status_config['label'] . '</span>';
+    
+    // Flag richiesta documenti con tooltip
+    if ($has_richiesta_documenti) {
+        echo '<br><span style="background: #e83e8c; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-top: 3px; display: inline-block;" title="È stato richiesto al fornitore di caricare nuovi documenti. In attesa di risposta.">Richiesti Documenti</span>';
+    }
+    
+    echo '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    
+    // Pulsanti azioni
+    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa') {
+        if ($can_activate) {
+            $current_url = $_SERVER['REQUEST_URI'];
+            $base_url = strtok($current_url, '?');
+            $activate_url = $base_url . '?action=toggle_user_status&user_id=' . $user_id . '&new_status=Attivo';
+            echo '<a href="' . esc_url($activate_url) . '" onclick="return confirm(\'Confermi attivazione?\')" style="background: #28a745; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px; text-decoration: none; display: inline-block;">ATTIVA</a>';
+        } else {
+            echo '<span style="background: #ccc; padding: 3px 8px; border-radius: 3px; font-size: 11px; color: #666; margin-right: 5px;" title="Nessun documento caricato">ATTIVA</span>';
+        }
+    } else {
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $deactivate_url = $base_url . '?action=toggle_user_status&user_id=' . $user_id . '&new_status=Disattivo';
+        echo '<a href="' . esc_url($deactivate_url) . '" onclick="return confirm(\'Confermi disattivazione?\')" style="background: #dc3545; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px; text-decoration: none; display: inline-block;">DISATTIVA</a>';
+    }
+    
+    // Pulsanti richiesta documenti
+    if ($has_richiesta_documenti) {
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $remove_url = $base_url . '?action=remove_request_status&user_id=' . $user_id;
+        echo '<a href="' . esc_url($remove_url) . '" onclick="return confirm(\'Vuoi rimuovere la richiesta documenti?\')" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">RIMUOVI RICHIESTA</a>';
+    } elseif ($dynamic_status !== 'Attivo') {
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $request_url = $base_url . '?action=request_new_documents&user_id=' . $user_id;
+        echo '<a href="' . esc_url($request_url) . '" onclick="return confirm(\'Vuoi richiedere nuovi documenti a questo fornitore?\')" style="background: #e83e8c; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">RICHIESTI DOCUMENTI</a>';
+    }
+    
+    echo '</td>';
+    echo '</tr>';
+}
+
+echo '</table>';
+echo '</div>';
+
+// ================== JAVASCRIPT BASE ==================
+?>
+<script>
+function exportTableToCSV() {
+    var table = document.querySelector("table");
+    if (!table) {
+        alert("Tabella non trovata!");
+        return;
+    }
+    
+    var csv = [];
+    var exportedRows = 0;
+    
+    var headerRow = [];
+    var headers = table.querySelectorAll("tr:first-child th");
+    for (var i = 0; i < headers.length; i++) {
+        headerRow.push('"' + headers[i].textContent.trim() + '"');
+    }
+    csv.push(headerRow.join(","));
+    
+    var dataRows = table.querySelectorAll("tr.supplier-row");
+    for (var i = 0; i < dataRows.length; i++) {
+        var row = dataRows[i];
+        var isVisible = window.getComputedStyle(row).display !== "none";
+        
+        if (isVisible) {
+            var csvRow = [];
+            var cols = row.querySelectorAll("td");
+            
+            for (var j = 0; j < cols.length; j++) {
+                var cellText = cols[j].textContent.trim();
+                cellText = cellText.replace(/[\r\n]+/g, " ").replace(/"/g, '""');
+                csvRow.push('"' + cellText + '"');
+            }
+            
+            if (csvRow.length > 0) {
+                csv.push(csvRow.join(","));
+                exportedRows++;
+            }
+        }
+    }
+    
+    var csvContent = "\uFEFF" + csv.join("\n");
+    var blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    
+    var link = document.createElement("a");
+    if (link.download !== undefined) {
+        var url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "fornitori_" + new Date().toISOString().slice(0,19).replace(/:/g, "-") + ".csv");
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        var totalRows = dataRows.length;
+        var message = "File CSV scaricato! " + exportedRows + " fornitori esportati";
+        if (exportedRows < totalRows) {
+            message += " (Filtri applicati: " + (totalRows - exportedRows) + " righe nascoste)";
+        }
+        alert(message);
+    } else {
+        alert("Browser non supporta download automatico");
+    }
+}
+
+function performSearch() {
+    var searchInput = document.getElementById("searchInput");
+    var searchTerm = searchInput ? searchInput.value : "";
+    
+    if (!searchTerm || searchTerm.trim() === "" || searchTerm === "Scrivi per cercare...") {
+        updateFilters();
+        return;
+    }
+    
+    var rows = document.querySelectorAll(".supplier-row");
+    var visibleAfterSearch = 0;
+    
+    rows.forEach(function(row) {
+        var rowText = row.textContent.toLowerCase();
+        var matchesSearch = rowText.includes(searchTerm.toLowerCase());
+        
+        if (matchesSearch && shouldRowBeVisible(row)) {
+            row.style.display = "";
+            visibleAfterSearch++;
+        } else {
+            row.style.display = "none";
+        }
+    });
+    
+    updateActiveFiltersDisplay(visibleAfterSearch);
+}
+
+function shouldRowBeVisible(row) {
+    var selectedStatuses = [];
+    var statusCheckboxes = document.querySelectorAll("input[id^=status_]:checked");
+    statusCheckboxes.forEach(function(checkbox) {
+        selectedStatuses.push(checkbox.id.replace("status_", ""));
+    });
+    
+    var selectedTypes = [];
+    var typeCheckboxes = document.querySelectorAll("input[id^=type_]:checked");
+    typeCheckboxes.forEach(function(checkbox) {
+        selectedTypes.push(checkbox.id.replace("type_", ""));
+    });
+    
+    var richiestiDocumentiFilter = document.getElementById("filter_richiesti_documenti");
+    var showOnlyRichiestiDocumenti = richiestiDocumentiFilter && richiestiDocumentiFilter.checked;
+    
+    if (selectedStatuses.length === 0 && selectedTypes.length === 0 && !showOnlyRichiestiDocumenti) {
+        return true;
+    }
+    
+    if (selectedStatuses.length > 0) {
+        var rowStatus = row.getAttribute("data-status");
+        if (selectedStatuses.indexOf(rowStatus) === -1) {
+            return false;
+        }
+    }
+    
+    if (selectedTypes.length > 0) {
+        var rowType = row.getAttribute("data-type");
+        if (selectedTypes.indexOf(rowType) === -1) {
+            return false;
+        }
+    }
+    
+    if (showOnlyRichiestiDocumenti) {
+        var hasRichiestaDocumenti = row.getAttribute("data-richiesta-documenti") === "1";
+        if (!hasRichiestaDocumenti) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function updateFilters() {
+    var rows = document.querySelectorAll(".supplier-row");
+    var visibleCount = 0;
+    
+    rows.forEach(function(row) {
+        if (shouldRowBeVisible(row)) {
+            row.style.display = "";
+            visibleCount++;
+        } else {
+            row.style.display = "none";
+        }
+    });
+    
+    var searchInput = document.getElementById("searchInput");
+    var searchTerm = searchInput ? searchInput.value : "";
+    
+    if (searchTerm && searchTerm.trim() !== "" && searchTerm !== "Scrivi per cercare...") {
+        performSearch();
+    } else {
+        updateActiveFiltersDisplay(visibleCount);
+    }
+}
+
+function clearAllFilters() {
+    var allCheckboxes = document.querySelectorAll("input[type=checkbox]");
+    allCheckboxes.forEach(function(checkbox) {
+        checkbox.checked = false;
+    });
+    
+    var searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.value = "";
+    }
+    
+    var rows = document.querySelectorAll(".supplier-row");
+    rows.forEach(function(row) {
+        row.style.display = "";
+    });
+    
+    var activeFiltersDiv = document.getElementById("active-filters");
+    if (activeFiltersDiv) {
+        activeFiltersDiv.style.display = "none";
+    }
+}
+
+function updateActiveFiltersDisplay(visibleCount) {
+    var selectedStatuses = [];
+    var statusCheckboxes = document.querySelectorAll("input[id^=status_]:checked");
+    statusCheckboxes.forEach(function(checkbox) {
+        selectedStatuses.push(checkbox.id.replace("status_", ""));
+    });
+    
+    var selectedTypes = [];
+    var typeCheckboxes = document.querySelectorAll("input[id^=type_]:checked");
+    typeCheckboxes.forEach(function(checkbox) {
+        selectedTypes.push(checkbox.id.replace("type_", ""));
+    });
+    
+    var richiestiDocumentiFilter = document.getElementById("filter_richiesti_documenti");
+    var showOnlyRichiestiDocumenti = richiestiDocumentiFilter && richiestiDocumentiFilter.checked;
+    
+    var activeFiltersDiv = document.getElementById("active-filters");
+    var filterList = document.getElementById("filter-list");
+    var filters = [];
+    
+    if (selectedStatuses.length > 0) {
+        filters.push("Stati: " + selectedStatuses.join(", "));
+    }
+    
+    if (selectedTypes.length > 0) {
+        filters.push("Tipi: " + selectedTypes.join(", "));
+    }
+    
+    if (showOnlyRichiestiDocumenti) {
+        filters.push("Richiesti Documenti: Si");
+    }
+    
+    var searchInput = document.getElementById("searchInput");
+    var searchTerm = searchInput ? searchInput.value : "";
+    
+    if (searchTerm && searchTerm.trim() !== "" && searchTerm !== "Scrivi per cercare...") {
+        filters.push('Ricerca: "' + searchTerm + '"');
+    }
+    
+    if (filters.length > 0) {
+        activeFiltersDiv.style.display = "block";
+        filterList.textContent = filters.join(" | ") + " (" + visibleCount + " risultati)";
+    } else {
+        activeFiltersDiv.style.display = "none";
+    }
+}
+
+// Auto-hide messaggi feedback con countdown
+function hideFeedbackMessage() {
+    var feedbackMessage = document.getElementById('feedback-message');
+    var countdownElement = document.getElementById('countdown-seconds');
+    
+    if (feedbackMessage) {
+        var secondsLeft = 10;
+        
+        // Aggiorna il countdown ogni secondo
+        var countdownInterval = setInterval(function() {
+            secondsLeft--;
+            if (countdownElement) {
+                countdownElement.textContent = secondsLeft;
+            }
+            
+            if (secondsLeft <= 0) {
+                clearInterval(countdownInterval);
+                
+                // Fade out
+                feedbackMessage.style.transition = 'opacity 0.5s ease';
+                feedbackMessage.style.opacity = '0';
+                
+                setTimeout(function() {
+                    feedbackMessage.style.display = 'none';
+                    
+                    // Pulisci URL dai parametri del messaggio
+                    var currentUrl = new URL(window.location);
+                    var urlChanged = false;
+                    
+                    var paramsToRemove = ['msg', 'action_type', 'target_user_id', 'user_email', 'user_name', 'new_status'];
+                    paramsToRemove.forEach(function(param) {
+                        if (currentUrl.searchParams.has(param)) {
+                            currentUrl.searchParams.delete(param);
+                            urlChanged = true;
+                        }
+                    });
+                    
+                    if (urlChanged) {
+                        window.history.replaceState({}, document.title, currentUrl.toString());
+                    }
+                }, 500);
+            }
+        }, 1000);
+    }
+}
+
+// Inizializzazione
+document.addEventListener("DOMContentLoaded", function() {
+    var rows = document.querySelectorAll(".supplier-row");
+    rows.forEach(function(row) {
+        row.style.display = "";
+    });
+    
+    var activeFiltersDiv = document.getElementById("active-filters");
+    if (activeFiltersDiv) {
+        activeFiltersDiv.style.display = "none";
+    }
+    
+    var searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.value = "";
+    }
+    
+    hideFeedbackMessage();
+});
+</script>
+<?php
+?>
