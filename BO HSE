@@ -153,7 +153,22 @@ function createCantieriTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_attrezzi_assegnazioni);
     
-    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni");
+    // 📄 NUOVA TABELLA: RICHIESTE DOCUMENTI
+    $table_document_requests = $wpdb->prefix . 'document_requests';
+    $sql_document_requests = "CREATE TABLE IF NOT EXISTS $table_document_requests (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        user_id int(11) NOT NULL,
+        richiesta_note text NOT NULL,
+        data_richiesta datetime DEFAULT CURRENT_TIMESTAMP,
+        richiesto_da int(11) NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY user_id (user_id),
+        KEY user_id (user_id),
+        KEY richiesto_da (richiesto_da)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_document_requests);
+    
+    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni, $table_document_requests");
 }
 
 // Esegui creazione tabelle
@@ -1194,6 +1209,108 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
     }
 }
 
+// ================== GESTIONE RICHIESTE DOCUMENTI ==================
+
+if (isset($_POST['document_action'])) {
+    $action = sanitize_text_field($_POST['document_action']);
+    $user_id = intval($_POST['user_id']);
+    $current_user_id = get_current_user_id();
+    
+    switch ($action) {
+        case 'request_documents':
+            $richiesta_note = sanitize_textarea_field($_POST['richiesta_note']);
+            
+            if (!empty($richiesta_note) && !empty($user_id)) {
+                global $wpdb;
+                
+                // Inserisci o aggiorna la richiesta documenti
+                $result = $wpdb->replace(
+                    $wpdb->prefix . 'document_requests',
+                    array(
+                        'user_id' => $user_id,
+                        'richiesta_note' => $richiesta_note,
+                        'richiesto_da' => $current_user_id
+                    )
+                );
+                
+                if ($result) {
+                    // Invia email all'azienda
+                    $user = get_userdata($user_id);
+                    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
+                    $admin_user = get_userdata($current_user_id);
+                    
+                    if ($inviamail) {
+                        $subject = "Richiesta Documenti - Cogei.net";
+                        $body = "<html>
+<head>
+<title>Richiesta Documenti</title>
+</head>
+<body>
+<div style='background: #0066a2; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>Richiesta Documenti</h2>
+</div>
+Gentile {$rag_soc},<br><br>
+hai ricevuto una richiesta di documenti dal pannello di amministrazione:<br><br>
+<div style='background: #f8f9fa; padding: 15px; border-left: 4px solid #0066a2; margin: 20px 0;'>
+<strong>Richiesta:</strong><br>
+{$richiesta_note}
+</div>
+<strong>Richiesto da:</strong> {$admin_user->display_name}<br>
+<strong>Data richiesta:</strong> " . date('d/m/Y H:i') . "<br><br>
+Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br>
+<a href='" . home_url() . "' style='background: #0066a2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;'>Accedi al Pannello</a>
+</body>
+</html>";
+                        
+                        wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                    }
+                    
+                    $success = true;
+                    $success_info = [
+                        'action_type' => 'document_request',
+                        'user_name' => $rag_soc,
+                        'message' => 'Richiesta documenti inviata'
+                    ];
+                }
+            }
+            break;
+            
+        case 'cancel_request':
+            global $wpdb;
+            
+            $result = $wpdb->delete(
+                $wpdb->prefix . 'document_requests',
+                array('user_id' => $user_id)
+            );
+            
+            if ($result) {
+                $user = get_userdata($user_id);
+                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
+                
+                $success = true;
+                $success_info = [
+                    'action_type' => 'cancel_request',
+                    'user_name' => $rag_soc,
+                    'message' => 'Richiesta documenti cancellata'
+                ];
+            }
+            break;
+    }
+    
+    if ($success) {
+        $redirect_url = remove_query_arg(['document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
+        $redirect_url = add_query_arg([
+            'msg' => 'success',
+            'action_type' => $success_info['action_type'],
+            'user_name' => rawurlencode($success_info['user_name']),
+            'message' => rawurlencode($success_info['message'])
+        ], $redirect_url);
+        
+        wp_redirect($redirect_url);
+        exit;
+    }
+}
+
 // ================== OUTPUT HTML ESTESO ==================
 
 echo '<div style="margin: 20px; font-family: Arial, sans-serif;">';
@@ -1286,6 +1403,24 @@ if (isset($_GET['msg'])) {
                 $msg_text .= "• <strong>Cantiere:</strong> {$cantiere_nome}<br>";
                 $msg_text .= "• <strong>Azienda:</strong> {$azienda_nome}";
                 break;
+                
+            // 📄 NUOVI MESSAGGI: Richieste documenti
+            case 'document_request':
+                $user_name = isset($_GET['user_name']) ? rawurldecode(sanitize_text_field($_GET['user_name'])) : '';
+                $message = isset($_GET['message']) ? rawurldecode(sanitize_text_field($_GET['message'])) : '';
+                $msg_text = "📄 <strong>RICHIESTA DOCUMENTI INVIATA</strong><br>";
+                $msg_text .= "• <strong>Azienda:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Stato:</strong> {$message}<br>";
+                $msg_text .= "• <strong>Email:</strong> Inviata automaticamente all'azienda";
+                break;
+                
+            case 'cancel_request':
+                $user_name = isset($_GET['user_name']) ? rawurldecode(sanitize_text_field($_GET['user_name'])) : '';
+                $message = isset($_GET['message']) ? rawurldecode(sanitize_text_field($_GET['message'])) : '';
+                $msg_text = "🗑️ <strong>RICHIESTA DOCUMENTI CANCELLATA</strong><br>";
+                $msg_text .= "• <strong>Azienda:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Stato:</strong> {$message}";
+                break;
         }
     }
     
@@ -1366,6 +1501,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Accesso al Cantiere</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🏗️ Cantieri Assegnati</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 Assegnazioni Operai</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">📄 Nota richiesta documenti</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
 echo '</tr>';
 
@@ -1398,6 +1534,13 @@ foreach ($richieste as $richiesta) {
     // 🔧 NUOVO: Assegnazioni attrezzi
     $attrezzi_assegnazioni = getAttrezziAssegnazioniByUser($user_id);
     $attrezzi_grouped = groupAttrezziAssegnazioniByAttrezzo($attrezzi_assegnazioni);
+    
+    // 📄 NUOVO: Richiesta documenti
+    global $wpdb;
+    $document_request = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}document_requests WHERE user_id = %d",
+        $user_id
+    ), ARRAY_A);
     
     echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hse-status="' . $stato_hse['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $richiesta['id'] . '</td>';
@@ -1564,6 +1707,21 @@ foreach ($richieste as $richiesta) {
     }
     echo '</td>';
     
+    // 📄 NUOVO: Nota richiesta documenti
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    if ($document_request) {
+        echo '<div style="background: #fff3cd; color: #856404; padding: 8px; border-radius: 4px; border-left: 3px solid #ffc107; font-size: 11px;">';
+        echo '<strong>📄 Richiesta attiva</strong><br>';
+        echo '<div style="margin-top: 4px; font-size: 10px;">';
+        echo '<strong>Nota:</strong> ' . htmlspecialchars($document_request['richiesta_note']) . '<br>';
+        echo '<strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($document_request['data_richiesta']));
+        echo '</div>';
+        echo '</div>';
+    } else {
+        echo '<span style="color: #6c757d; font-style: italic; font-size: 11px;">Nessuna richiesta</span>';
+    }
+    echo '</td>';
+    
     // Azioni
     echo '<td style="padding: 8px; border: 1px solid #ddd;">';
     
@@ -1571,12 +1729,21 @@ foreach ($richieste as $richiesta) {
         $current_url = $_SERVER['REQUEST_URI'];
         $base_url = strtok($current_url, '?');
         $disabilita_url = $base_url . '?action=disabilita_cantiere&user_id=' . $user_id;
-        echo '<a href="' . esc_url($disabilita_url) . '" onclick="return confirm(\'Confermi disabilitazione cantiere?\')" style="background: #dc3545; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">🚫 DISABILITA</a>';
+        echo '<a href="' . esc_url($disabilita_url) . '" onclick="return confirm(\'Confermi disabilitazione accesso cantiere?\')" style="background: #dc3545; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; text-decoration: none; display: inline-block; margin-bottom: 2px;">🚫 DISABILITA ACCESSO CANTIERE</a>';
     } else {
         $current_url = $_SERVER['REQUEST_URI'];
         $base_url = strtok($current_url, '?');
         $abilita_url = $base_url . '?action=abilita_cantiere&user_id=' . $user_id;
-        echo '<a href="' . esc_url($abilita_url) . '" onclick="return confirm(\'Confermi abilitazione cantiere?\')" style="background: #28a745; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">✅ ABILITA</a>';
+        echo '<a href="' . esc_url($abilita_url) . '" onclick="return confirm(\'Confermi abilitazione accesso cantiere?\')" style="background: #28a745; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; text-decoration: none; display: inline-block; margin-bottom: 2px;">✅ ABILITA ACCESSO CANTIERE</a>';
+    }
+    
+    echo '<br>';
+    
+    // Pulsante richiesta documenti
+    if ($document_request) {
+        echo '<button onclick="cancelDocumentRequest(' . $user_id . ', \'' . htmlspecialchars($rag_soc ?: $user->display_name, ENT_QUOTES) . '\')" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; display: inline-block;">🗑️ CANCELLA RICHIESTA DOCUMENTI</button>';
+    } else {
+        echo '<button onclick="openDocumentRequestModal(' . $user_id . ', \'' . htmlspecialchars($rag_soc ?: $user->display_name, ENT_QUOTES) . '\')" style="background: #17a2b8; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; display: inline-block;">📄 RICHIEDI DOCUMENTI</button>';
     }
     
     echo '</td>';
@@ -1584,7 +1751,7 @@ foreach ($richieste as $richiesta) {
     
     // 🚀 RIGA DETTAGLI PERSONALE MIGLIORATA (CON ASSEGNAZIONI CANTIERI)
     echo '<tr id="personale-details-' . $richiesta['id'] . '" style="display: none; background: #f8f9fa;">';
-    echo '<td colspan="15" style="padding: 15px; border: 1px solid #ddd;">';
+    echo '<td colspan="16" style="padding: 15px; border: 1px solid #ddd;">';
     echo '<h4 style="margin: 0 0 10px 0; color: #0066a2;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
     
     if (!empty($personale)) {
@@ -2350,6 +2517,47 @@ echo '</form>';
 
 echo '</div>';
 echo '</div>';
+
+// ================== MODAL RICHIESTE DOCUMENTI ==================
+
+echo '<div id="document-request-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001;">';
+echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 500px;">';
+
+// Header modal richieste
+echo '<div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '<h4 style="margin: 0;">📄 Richiesta Documenti</h4>';
+echo '<button onclick="closeDocumentRequestModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '</div>';
+echo '<p style="margin: 8px 0 0 0; opacity: 0.9;">Azienda: <span id="document-azienda-name"></span></p>';
+echo '</div>';
+
+// Body modal richieste
+echo '<form id="document-request-form" method="POST" style="padding: 20px;">';
+echo '<input type="hidden" id="document-user-id" name="user_id" value="">';
+echo '<input type="hidden" name="document_action" value="request_documents">';
+
+echo '<div style="margin-bottom: 15px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px;">📝 Descrizione richiesta:</label>';
+echo '<textarea id="document-richiesta-note" name="richiesta_note" rows="4" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;" placeholder="Inserisci i dettagli della richiesta documenti..."></textarea>';
+echo '</div>';
+
+echo '<div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">';
+echo '<div style="font-size: 12px; color: #6c757d;">';
+echo '<strong>📧 Nota:</strong> La richiesta verrà inviata via email all\'azienda insieme alle informazioni di accesso al pannello.<br>';
+echo '<strong>📋 Esempio:</strong> "Si richiede l\'aggiornamento del DVR e dei certificati di formazione antincendio per tutto il personale."';
+echo '</div>';
+echo '</div>';
+
+echo '<div style="display: flex; gap: 10px; justify-content: flex-end;">';
+echo '<button type="button" onclick="closeDocumentRequestModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Annulla</button>';
+echo '<button type="button" onclick="submitDocumentRequest()" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">📤 Invia Richiesta</button>';
+echo '</div>';
+
+echo '</form>';
+echo '</div>';
+echo '</div>';
+
 // ================== JAVASCRIPT ESTESO ==================
 ?>
 <script>
@@ -4142,6 +4350,73 @@ if (typeof console !== 'undefined') {
     console.log('✏️ Modifica cantieri: IMPLEMENTATA');
     console.log('🗑️ Cancellazione cantieri: IMPLEMENTATA');
     console.log('🔗 Gestione assegnazioni migliorata: IMPLEMENTATA');
+    console.log('📄 Sistema richieste documenti: IMPLEMENTATO');
+}
+
+// ================== FUNZIONI RICHIESTE DOCUMENTI ==================
+
+function openDocumentRequestModal(userId, aziendaName) {
+    const modal = document.getElementById('document-request-modal');
+    const userIdInput = document.getElementById('document-user-id');
+    const aziendaNameSpan = document.getElementById('document-azienda-name');
+    const notesTextarea = document.getElementById('document-richiesta-note');
+    
+    userIdInput.value = userId;
+    aziendaNameSpan.textContent = aziendaName;
+    notesTextarea.value = '';
+    notesTextarea.focus();
+    
+    modal.style.display = 'block';
+}
+
+function closeDocumentRequestModal() {
+    const modal = document.getElementById('document-request-modal');
+    modal.style.display = 'none';
+}
+
+function submitDocumentRequest() {
+    const form = document.getElementById('document-request-form');
+    const notes = document.getElementById('document-richiesta-note').value.trim();
+    
+    if (!notes) {
+        alert('⚠️ Inserisci una nota per la richiesta documenti');
+        document.getElementById('document-richiesta-note').focus();
+        return;
+    }
+    
+    if (notes.length < 10) {
+        alert('⚠️ La richiesta deve contenere almeno 10 caratteri');
+        document.getElementById('document-richiesta-note').focus();
+        return;
+    }
+    
+    if (confirm('Confermi l\'invio della richiesta documenti all\'azienda?')) {
+        form.submit();
+    }
+}
+
+function cancelDocumentRequest(userId, aziendaName) {
+    if (confirm(`Confermi la cancellazione della richiesta documenti per ${aziendaName}?\n\nQuesta azione rimuoverà definitivamente la nota richiesta.`)) {
+        // Crea un form temporaneo per l'invio
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'document_action';
+        actionInput.value = 'cancel_request';
+        
+        const userIdInput = document.createElement('input');
+        userIdInput.type = 'hidden';
+        userIdInput.name = 'user_id';
+        userIdInput.value = userId;
+        
+        form.appendChild(actionInput);
+        form.appendChild(userIdInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 </script>
 <style>
