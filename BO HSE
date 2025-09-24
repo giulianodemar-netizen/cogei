@@ -1216,12 +1216,37 @@ if (isset($_POST['document_action'])) {
     $user_id = intval($_POST['user_id']);
     $current_user_id = get_current_user_id();
     
+    // Debug logging per POST
+    error_log("=== DOCUMENT ACTION RECEIVED ===");
+    error_log("Action: " . $action);
+    error_log("User ID: " . $user_id);
+    error_log("Current User ID: " . $current_user_id);
+    error_log("POST data: " . print_r($_POST, true));
+    
     switch ($action) {
         case 'request_documents':
             $richiesta_note = sanitize_textarea_field($_POST['richiesta_note']);
             
             if (!empty($richiesta_note) && !empty($user_id)) {
                 global $wpdb;
+                
+                // Debug logging
+                error_log("=== DOCUMENT REQUEST DEBUG ===");
+                error_log("User ID: " . $user_id);
+                error_log("Current User ID: " . $current_user_id);
+                error_log("Richiesta Note: " . $richiesta_note);
+                error_log("Table name: " . $wpdb->prefix . 'document_requests');
+                
+                // Verifica se la tabella esiste
+                $table_exists = $wpdb->get_var($wpdb->prepare(
+                    "SHOW TABLES LIKE %s", 
+                    $wpdb->prefix . 'document_requests'
+                ));
+                
+                if (!$table_exists) {
+                    error_log("ERRORE: Tabella document_requests non esiste!");
+                    createCantieriTablesIfNotExists(); // Ricrea le tabelle
+                }
                 
                 // Inserisci o aggiorna la richiesta documenti
                 $result = $wpdb->replace(
@@ -1230,8 +1255,22 @@ if (isset($_POST['document_action'])) {
                         'user_id' => $user_id,
                         'richiesta_note' => $richiesta_note,
                         'richiesto_da' => $current_user_id
+                    ),
+                    array(
+                        '%d',
+                        '%s', 
+                        '%d'
                     )
                 );
+                
+                // Debug del risultato
+                if ($result === false) {
+                    error_log("ERRORE database replace: " . $wpdb->last_error);
+                    error_log("Query: " . $wpdb->last_query);
+                } else {
+                    error_log("SUCCESS: Righe interessate: " . $result);
+                    error_log("Query: " . $wpdb->last_query);
+                }
                 
                 if ($result) {
                     // Invia email all'azienda
@@ -1271,17 +1310,46 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
                         'user_name' => $rag_soc,
                         'message' => 'Richiesta documenti inviata'
                     ];
+                } else {
+                    // Operazione fallita - debug
+                    error_log("FAILED: Database operation failed for user_id: " . $user_id);
+                    error_log("wpdb error: " . $wpdb->last_error);
+                    
+                    // Aggiungi messaggio di errore visibile
+                    $success = false;
+                    $error_message = "Errore nel salvare la richiesta documenti.";
                 }
+            } else {
+                error_log("VALIDATION FAILED: richiesta_note empty or user_id empty");
+                error_log("richiesta_note: '" . $richiesta_note . "'");
+                error_log("user_id: " . $user_id);
+                $success = false;
+                $error_message = "Dati mancanti per la richiesta documenti.";
             }
             break;
             
         case 'cancel_request':
             global $wpdb;
             
+            // Debug logging per cancellazione
+            error_log("=== DOCUMENT REQUEST CANCEL DEBUG ===");
+            error_log("User ID to delete: " . $user_id);
+            error_log("Table name: " . $wpdb->prefix . 'document_requests');
+            
             $result = $wpdb->delete(
                 $wpdb->prefix . 'document_requests',
-                array('user_id' => $user_id)
+                array('user_id' => $user_id),
+                array('%d')
             );
+            
+            // Debug del risultato cancellazione
+            if ($result === false) {
+                error_log("ERRORE database delete: " . $wpdb->last_error);
+                error_log("Query: " . $wpdb->last_query);
+            } else {
+                error_log("DELETE SUCCESS: Righe cancellate: " . $result);
+                error_log("Query: " . $wpdb->last_query);
+            }
             
             if ($result) {
                 $user = get_userdata($user_id);
@@ -1306,8 +1374,22 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
             'message' => rawurlencode($success_info['message'])
         ], $redirect_url);
         
+        error_log("SUCCESS REDIRECT: " . $redirect_url);
         wp_redirect($redirect_url);
         exit;
+    } else {
+        // Gestione errore - redirect con messaggio di errore
+        if (isset($error_message)) {
+            $redirect_url = remove_query_arg(['document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
+            $redirect_url = add_query_arg([
+                'msg' => 'error',
+                'error_message' => rawurlencode($error_message)
+            ], $redirect_url);
+            
+            error_log("ERROR REDIRECT: " . $redirect_url);
+            wp_redirect($redirect_url);
+            exit;
+        }
     }
 }
 
