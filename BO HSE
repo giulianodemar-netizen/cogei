@@ -1374,8 +1374,20 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
         ], $redirect_url);
         
         error_log("SUCCESS REDIRECT: " . $redirect_url);
-        wp_redirect($redirect_url);
-        exit;
+        
+        // Flush any output buffer before redirect
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Use header redirect instead of wp_redirect to avoid WordPress processing
+        if (!headers_sent()) {
+            header("Location: " . $redirect_url, true, 302);
+            exit();
+        } else {
+            echo '<script>window.location.href = "' . addslashes($redirect_url) . '";</script>';
+            exit();
+        }
     } else {
         // Gestione errore - redirect con messaggio di errore
         if (isset($error_message)) {
@@ -1386,8 +1398,20 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
             ], $redirect_url);
             
             error_log("ERROR REDIRECT: " . $redirect_url);
-            wp_redirect($redirect_url);
-            exit;
+            
+            // Flush any output buffer before redirect
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
+            // Use header redirect instead of wp_redirect to avoid WordPress processing
+            if (!headers_sent()) {
+                header("Location: " . $redirect_url, true, 302);
+                exit();
+            } else {
+                echo '<script>window.location.href = "' . addslashes($redirect_url) . '";</script>';
+                exit();
+            }
         }
     }
 }
