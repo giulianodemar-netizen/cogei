@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test HSE Accordion Structure</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 20px; margin: 20px 0; }
+        
+        /* Accordion styles from FRONT HSE */
+        .hse_accordion_header {
+            padding: 20px 25px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            margin-bottom: 5px;
+        }
+        
+        .hse_documenti_accordion_header {
+            background: rgba(0, 102, 162, 0.1);
+        }
+        
+        .hse_personale_accordion_header_main {
+            background: rgba(0, 102, 162, 0.1);
+        }
+        
+        .hse_automezzi_accordion_header {
+            background: rgba(255, 193, 7, 0.1);
+        }
+        
+        .hse_attrezzi_accordion_header {
+            background: rgba(33, 150, 243, 0.1);
+        }
+        
+        .hse_accordion_content {
+            display: none;
+            padding: 25px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        
+        .hse_accordion_arrow {
+            font-size: 18px;
+            font-weight: bold;
+            transition: transform 0.3s ease;
+        }
+        
+        .hse_title_icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        h3 {
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test HSE Accordion Structure</h1>
+    
+    <div class="test-section">
+        <h2>New Accordion Structure Preview</h2>
+        <p>This shows how the new accordion structure will look:</p>
+        
+        <!-- Documents Accordion -->
+        <div class="hse_documenti_group" style="margin-bottom: 20px; background: #f8f9fa; border-radius: 10px; border-left: 5px solid #0066a2; overflow: hidden;">
+            <div class="hse_accordion_header hse_documenti_accordion_header" onclick="toggleAccordion('documenti')" style="background: rgba(0, 102, 162, 0.1);">
+                <h3 style="color: #0066a2;">
+                    <span class="hse_title_icon" style="background: #0066a2;">📄</span>
+                    Documenti Aziendali
+                </h3>
+                <span class="hse_accordion_arrow" id="arrow_documenti" style="color: #0066a2;">▼</span>
+            </div>
+            <div class="hse_accordion_content" id="content_documenti" style="display: block;">
+                <p><strong>DVR (Documento Valutazione Rischi)</strong></p>
+                <p>• File upload DVR</p>
+                <p>• Data emissione</p>
+                <p><strong>RCT (Responsabilità Civile Terzi)</strong></p>
+                <p>• Gestione automatica da profilo fornitore</p>
+                <p><em>Questa sezione conterrà tutti i documenti aziendali.</em></p>
+            </div>
+        </div>
+        
+        <!-- Personnel Accordion -->
+        <div class="hse_personale_accordion_group" style="margin-bottom: 20px; background: #e8f4fd; border-radius: 10px; border-left: 5px solid #0066a2; overflow: hidden;">
+            <div class="hse_accordion_header hse_personale_accordion_header_main" onclick="toggleAccordion('personale')" style="background: rgba(0, 102, 162, 0.1);">
+                <h3 style="color: #0066a2;">
+                    <span class="hse_title_icon" style="background: #0066a2;">👥</span>
+                    Elenco Personale + Documenti Formazione + UNILAV + Idoneità Sanitaria 
+                    <span style="background: #0066a2; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(3 persone)</span>
+                </h3>
+                <span class="hse_accordion_arrow" id="arrow_personale" style="color: #0066a2;">▼</span>
+            </div>
+            <div class="hse_accordion_content" id="content_personale" style="display: block;">
+                <p><strong>Gestione Personale Completa</strong></p>
+                <p>• Nome, cognome, data di nascita</p>
+                <p>• UNILAV (data emissione, scadenza, file)</p>
+                <p>• Idoneità sanitaria (scadenza, file)</p>
+                <p>• Documenti formazione (antincendio, primo soccorso, preposti, ecc.)</p>
+                <p>• Validazione età (controllo maggiorenne)</p>
+                <p><em>Ogni operaio ha il proprio sotto-accordion individuale come prima.</em></p>
+            </div>
+        </div>
+        
+        <!-- Existing Automezzi Accordion (unchanged) -->
+        <div class="hse_automezzi_group" style="margin-bottom: 20px; background: #fff3cd; border-radius: 10px; border-left: 5px solid #ffc107; overflow: hidden;">
+            <div class="hse_accordion_header hse_automezzi_accordion_header" onclick="toggleAccordion('automezzi')" style="background: rgba(255, 193, 7, 0.1);">
+                <h3 style="color: #856404;">
+                    <span class="hse_title_icon" style="background: #ffc107; color: #000;">🚛</span>
+                    Elenco Automezzi 
+                    <span style="background: #856404; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(2 automezzi)</span>
+                </h3>
+                <span class="hse_accordion_arrow" id="arrow_automezzi" style="color: #856404;">▼</span>
+            </div>
+            <div class="hse_accordion_content" id="content_automezzi">
+                <p><strong>Gestione Automezzi</strong></p>
+                <p>• Descrizione automezzo</p>
+                <p>• Targa italiana (formato AA123BB)</p>
+                <p><em>Questa sezione rimane invariata.</em></p>
+            </div>
+        </div>
+        
+        <!-- Existing Attrezzi Accordion (unchanged) -->
+        <div class="hse_attrezzi_group" style="margin-bottom: 20px; background: #e3f2fd; border-radius: 10px; border-left: 5px solid #2196f3; overflow: hidden;">
+            <div class="hse_accordion_header hse_attrezzi_accordion_header" onclick="toggleAccordion('attrezzi')" style="background: rgba(33, 150, 243, 0.1);">
+                <h3 style="color: #1565c0;">
+                    <span class="hse_title_icon" style="background: #2196f3;">🔧</span>
+                    Elenco Attrezzi 
+                    <span style="background: #1565c0; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(5 attrezzi)</span>
+                </h3>
+                <span class="hse_accordion_arrow" id="arrow_attrezzi" style="color: #1565c0;">▼</span>
+            </div>
+            <div class="hse_accordion_content" id="content_attrezzi">
+                <p><strong>Gestione Attrezzi</strong></p>
+                <p>• Descrizione attrezzo</p>
+                <p>• Data revisione</p>
+                <p><em>Questa sezione rimane invariata.</em></p>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        function toggleAccordion(sectionId) {
+            const content = document.getElementById('content_' + sectionId);
+            const arrow = document.getElementById('arrow_' + sectionId);
+            
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                arrow.style.transform = 'rotate(180deg)';
+                arrow.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                arrow.style.transform = 'rotate(0deg)';
+                arrow.textContent = '▼';
+            }
+        }
+        
+        console.log('🧪 HSE Accordion structure test loaded');
+        console.log('📄 Documents accordion: Contains DVR and RCT sections');
+        console.log('👥 Personnel accordion: Contains all personnel management');
+        console.log('🚛 Vehicle accordion: Unchanged');
+        console.log('🔧 Tools accordion: Unchanged');
+    </script>
+</body>
+</html>
