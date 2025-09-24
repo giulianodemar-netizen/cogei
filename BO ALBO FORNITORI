@@ -32,9 +32,13 @@ if (isset($_GET['csv_export']) && $_GET['csv_export'] === '1') {
     header('Expires: 0');
     
     echo "\xEF\xBB\xBF";
-    echo "ID,Tipo,Ragione Sociale,Email,P.IVA,RCT-RCO,CCIAA,White List,SOA,DURC,Altre Scadenze,Stato\n";
+    echo "ID,Tipo,Ragione Sociale,Email,P.IVA,RCT-RCO,CCIAA,White List,SOA,DURC,Altre Scadenze,Stato,Richiesta Documenti\n";
     
-    $suppliers = get_users(['role' => 'subscriber']);
+    $suppliers = get_users([
+        'role' => 'subscriber',
+        'orderby' => 'ID',
+        'order' => 'DESC'
+    ]);
     foreach ($suppliers as $user) {
         $user_id = $user->ID;
         $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
@@ -50,6 +54,8 @@ if (isset($_GET['csv_export']) && $_GET['csv_export'] === '1') {
         $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
         
         $status = determineSupplierStatus($user_id);
+        $document_request = getDocumentRequest($user_id);
+        $doc_request_text = $document_request ? 'Richiesta attiva: ' . substr($document_request['richiesta_note'], 0, 50) . '...' : 'Nessuna richiesta';
         
         $row = [
             $user_id,
@@ -63,7 +69,8 @@ if (isset($_GET['csv_export']) && $_GET['csv_export'] === '1') {
             '"' . str_replace('"', '""', $soa ?: '') . '"',
             '"' . str_replace('"', '""', $durc ?: '') . '"',
             '"' . str_replace('"', '""', $altre ?: '') . '"',
-            '"' . str_replace('"', '""', $status) . '"'
+            '"' . str_replace('"', '""', $status) . '"',
+            '"' . str_replace('"', '""', $doc_request_text) . '"'
         ];
         
         echo implode(',', $row) . "\n";
@@ -443,6 +450,155 @@ function renderExpiryCell($date) {
     }
 }
 
+// Function to get document request for user
+function getDocumentRequest($user_id) {
+    global $wpdb;
+    return $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}document_requests WHERE user_id = %d",
+        $user_id
+    ), ARRAY_A);
+}
+
+// ================== GESTIONE RICHIESTE DOCUMENTI ==================
+
+// Create document_requests table if not exists
+function createDocumentRequestsTable() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'document_requests';
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        user_id int(11) NOT NULL,
+        richiesta_note text NOT NULL,
+        data_richiesta datetime DEFAULT CURRENT_TIMESTAMP,
+        richiesto_da int(11) NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY unique_user_id (user_id),
+        KEY richiesto_da (richiesto_da)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql);
+}
+
+// Handle document request actions
+if (isset($_POST['document_action'])) {
+    $action = sanitize_text_field($_POST['document_action']);
+    $user_id = intval($_POST['user_id']);
+    $current_user_id = get_current_user_id();
+    
+    createDocumentRequestsTable();
+    
+    switch ($action) {
+        case 'request_documents':
+            $richiesta_note = sanitize_textarea_field($_POST['richiesta_note']);
+            
+            if (!empty($richiesta_note) && !empty($user_id)) {
+                global $wpdb;
+                
+                // Insert or update document request
+                $result = $wpdb->replace(
+                    $wpdb->prefix . 'document_requests',
+                    array(
+                        'user_id' => $user_id,
+                        'richiesta_note' => $richiesta_note,
+                        'richiesto_da' => $current_user_id
+                    ),
+                    array('%d', '%s', '%d')
+                );
+                
+                if ($result) {
+                    // Send email to company
+                    $user = get_userdata($user_id);
+                    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
+                    $admin_user = get_userdata($current_user_id);
+                    
+                    if ($inviamail) {
+                        $subject = "Richiesta Documenti - Cogei.net";
+                        $body = "<html>
+<head>
+<title>Richiesta Documenti</title>
+</head>
+<body>
+<div style='background: #0066a2; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>Richiesta Documenti</h2>
+</div>
+Gentile {$rag_soc},<br><br>
+hai ricevuto una richiesta di documenti dal pannello di amministrazione:<br><br>
+<div style='background: #f8f9fa; padding: 15px; border-left: 4px solid #0066a2; margin: 20px 0;'>
+<strong>Richiesta:</strong><br>
+{$richiesta_note}
+</div>
+<strong>Richiesto da:</strong> {$admin_user->display_name}<br>
+<strong>Data richiesta:</strong> " . date('d/m/Y H:i') . "<br><br>
+Ti preghiamo di aggiornare i documenti richiesti nel tuo profilo fornitore.<br><br>
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 20px;'>
+<div style='margin-top: 40px; text-align: center; color: white; font-size: 12px !important;'>COGEI SRL - P.IVA: IT06569020636 - Copyright © 2023 Cogei. All Rights Reserved.</div>
+</div>
+</body>
+</html>";
+                        
+                        $headers = "MIME-Version: 1.0" . "\r\n";
+                        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+                        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+                        
+                        mail($user->user_email, $subject, $body, $headers);
+                    }
+                    
+                    $success = true;
+                    $success_info = [
+                        'action_type' => 'document_request',
+                        'user_name' => $rag_soc,
+                        'message' => 'Richiesta documenti inviata'
+                    ];
+                }
+            }
+            break;
+            
+        case 'cancel_request':
+            global $wpdb;
+            
+            $result = $wpdb->delete(
+                $wpdb->prefix . 'document_requests',
+                array('user_id' => $user_id),
+                array('%d')
+            );
+            
+            if ($result !== false) {
+                $user = get_userdata($user_id);
+                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
+                
+                $success = true;
+                $success_info = [
+                    'action_type' => 'document_request_cancelled',
+                    'user_name' => $rag_soc,
+                    'message' => 'Richiesta documenti rimossa'
+                ];
+            }
+            break;
+    }
+    
+    // Redirect after action
+    $current_url = $_SERVER['REQUEST_URI'];
+    $redirect_url = remove_query_arg(['msg', 'action_type', 'user_name', 'message'], $current_url);
+    
+    if ($success && !empty($success_info)) {
+        $redirect_params = array_merge(['msg' => 'success'], $success_info);
+        $redirect_url = add_query_arg($redirect_params, $redirect_url);
+    } elseif ($success) {
+        $redirect_url = add_query_arg('msg', 'success', $redirect_url);
+    } else {
+        $redirect_url = add_query_arg('msg', 'error', $redirect_url);
+    }
+    
+    $redirect_url = html_entity_decode($redirect_url, ENT_QUOTES, 'UTF-8');
+    
+    if (!headers_sent()) {
+        header("Location: " . $redirect_url);
+        exit;
+    } else {
+        echo '<script>window.location.href = "' . addslashes($redirect_url) . '";</script>';
+        exit;
+    }
+}
+
 // ================== GESTIONE AZIONI ==================
 
 if (isset($_GET['action']) && isset($_GET['user_id'])) {
@@ -505,48 +661,6 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                 $success_info = array(
                     'action_type' => 'status_change',
                     'new_status' => $new_status,
-                    'user_email' => $user->user_email,
-                    'user_name' => $rag_soc ?: $user->display_name
-                );
-            }
-            break;
-            
-        case 'request_new_documents':
-            $copy_data = getSupplierCopyData($user_id);
-            if ($copy_data) {
-                unset($copy_data['id']);
-                unset($copy_data['last_updated']);
-                $copy_data['richiesta_documenti'] = 1;
-                updateSupplierCopyData($user_id, $copy_data);
-                
-                $user = get_userdata($user_id);
-                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
-                
-                $success = true;
-                $success_info = array(
-                    'action_type' => 'request_documents',
-                    'user_email' => $user->user_email,
-                    'user_name' => $rag_soc ?: $user->display_name
-                );
-            }
-            break;
-            
-        case 'remove_request_status':
-            $copy_data = getSupplierCopyData($user_id);
-            if ($copy_data) {
-                $dynamic_status = determineSupplierStatus($user_id);
-                unset($copy_data['id']);
-                unset($copy_data['last_updated']);
-                $copy_data['stato'] = $dynamic_status;
-                $copy_data['richiesta_documenti'] = 0;
-                updateSupplierCopyData($user_id, $copy_data);
-                
-                $user = get_userdata($user_id);
-                $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
-                
-                $success = true;
-                $success_info = array(
-                    'action_type' => 'remove_request',
                     'user_email' => $user->user_email,
                     'user_name' => $rag_soc ?: $user->display_name
                 );
@@ -785,10 +899,15 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DURC</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Altre Scadenze</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">📄 Nota richiesta documenti</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
 echo '</tr>';
 
-$suppliers = get_users(['role' => 'subscriber']);
+$suppliers = get_users([
+    'role' => 'subscriber',
+    'orderby' => 'ID',
+    'order' => 'DESC'
+]);
 
 foreach ($suppliers as $user) {
     $user_id = $user->ID;
@@ -807,14 +926,14 @@ foreach ($suppliers as $user) {
     // Calcola stato dinamico
     $dynamic_status = determineSupplierStatus($user_id);
     
-    // Controlla richiesta documenti
-    $copy_data = getSupplierCopyData($user_id);
-    $has_richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti']) && $copy_data['richiesta_documenti'] == 1);
+    // Controlla richiesta documenti (nuovo sistema)
+    $document_request = getDocumentRequest($user_id);
+    $has_document_request = !empty($document_request);
     
     $can_activate = hasDocuments($user_id);
     $status_config = $supplier_statuses[$dynamic_status];
     
-    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_richiesta_documenti ? '1' : '0') . '">';
+    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
@@ -831,12 +950,24 @@ foreach ($suppliers as $user) {
     // Mostra stato con tooltip
     echo '<span class="supplier-status" style="background: ' . $status_config['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($status_config['tooltip']) . '">' . $status_config['label'] . '</span>';
     
-    // Flag richiesta documenti con tooltip
-    if ($has_richiesta_documenti) {
-        echo '<br><span style="background: #e83e8c; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-top: 3px; display: inline-block;" title="È stato richiesto al fornitore di caricare nuovi documenti. In attesa di risposta.">Richiesti Documenti</span>';
-    }
-    
     echo '</td>';
+    
+    // Nuova colonna: Nota richiesta documenti
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    if ($has_document_request) {
+        echo '<div style="background: #fff3cd; color: #856404; padding: 8px; border-radius: 4px; border-left: 3px solid #ffc107; font-size: 11px;">';
+        echo '<strong>📄 Richiesta attiva</strong><br>';
+        echo '<div style="margin-top: 4px; font-size: 10px;">';
+        echo '<strong>Nota:</strong> ' . htmlspecialchars(substr($document_request['richiesta_note'], 0, 100)) . (strlen($document_request['richiesta_note']) > 100 ? '...' : '') . '<br>';
+        echo '<strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($document_request['data_richiesta']));
+        echo '</div>';
+        echo '</div>';
+    } else {
+        echo '<span style="color: #6c757d; font-style: italic; font-size: 11px;">Nessuna richiesta</span>';
+    }
+    echo '</td>';
+    
+    // Actions column
     echo '<td style="padding: 8px; border: 1px solid #ddd;">';
     
     // Pulsanti azioni
@@ -856,17 +987,15 @@ foreach ($suppliers as $user) {
         echo '<a href="' . esc_url($deactivate_url) . '" onclick="return confirm(\'Confermi disattivazione?\')" style="background: #dc3545; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px; text-decoration: none; display: inline-block;">DISATTIVA</a>';
     }
     
-    // Pulsanti richiesta documenti
-    if ($has_richiesta_documenti) {
-        $current_url = $_SERVER['REQUEST_URI'];
-        $base_url = strtok($current_url, '?');
-        $remove_url = $base_url . '?action=remove_request_status&user_id=' . $user_id;
-        echo '<a href="' . esc_url($remove_url) . '" onclick="return confirm(\'Vuoi rimuovere la richiesta documenti?\')" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">RIMUOVI RICHIESTA</a>';
-    } elseif ($dynamic_status !== 'Attivo') {
-        $current_url = $_SERVER['REQUEST_URI'];
-        $base_url = strtok($current_url, '?');
-        $request_url = $base_url . '?action=request_new_documents&user_id=' . $user_id;
-        echo '<a href="' . esc_url($request_url) . '" onclick="return confirm(\'Vuoi richiedere nuovi documenti a questo fornitore?\')" style="background: #e83e8c; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block;">RICHIESTI DOCUMENTI</a>';
+    // Document request buttons (BO HSE style)
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
+    
+    if ($has_document_request) {
+        // Show cancel button if there's an active request
+        echo '<br><button onclick="cancelDocumentRequest(' . $user_id . ', \'' . addslashes($rag_soc) . '\')" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block; margin-top: 2px;">🗑️ CANCELLA RICHIESTA DOCUMENTI</button>';
+    } else {
+        // Show request button if no active request
+        echo '<br><button onclick="openDocumentRequestModal(' . $user_id . ', \'' . addslashes($rag_soc) . '\')" style="background: #17a2b8; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block; margin-top: 2px;">📄 RICHIEDI DOCUMENTI</button>';
     }
     
     echo '</td>';
@@ -874,6 +1003,40 @@ foreach ($suppliers as $user) {
 }
 
 echo '</table>';
+
+// Document Request Modal
+echo '<div id="document-request-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">';
+echo '<div style="background-color: #fefefe; margin: 5% auto; padding: 0; border: none; border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">';
+echo '<div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 20px; margin: 0; border-radius: 8px 8px 0 0;">';
+echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '<h4 style="margin: 0;">📄 Richiesta Documenti</h4>';
+echo '<button onclick="closeDocumentRequestModal()" style="background: transparent; color: white; border: none; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">×</button>';
+echo '</div>';
+echo '<p style="margin: 8px 0 0 0; opacity: 0.9;">Azienda: <span id="document-azienda-name"></span></p>';
+echo '</div>';
+echo '<form id="document-request-form" method="POST" style="padding: 20px;">';
+echo '<input type="hidden" name="document_action" value="request_documents">';
+echo '<input type="hidden" name="user_id" id="document-user-id" value="">';
+echo '<div style="margin-bottom: 20px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">📝 Descrizione richiesta documenti:</label>';
+echo '<textarea name="richiesta_note" id="document-richiesta-note" rows="4" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;" placeholder="Inserisci i dettagli della richiesta documenti..."></textarea>';
+echo '</div>';
+echo '<div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">';
+echo '<p style="margin: 0; font-size: 14px; color: #495057;"><strong>ℹ️ Informazioni:</strong></p>';
+echo '<ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px; color: #6c757d;">';
+echo '<li>Verrà inviata una email automatica all\'azienda</li>';
+echo '<li>La richiesta verrà registrata nel sistema</li>';
+echo '<li>Puoi cancellare la richiesta in qualsiasi momento</li>';
+echo '</ul>';
+echo '</div>';
+echo '<div style="text-align: right;">';
+echo '<button type="button" onclick="closeDocumentRequestModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Annulla</button>';
+echo '<button type="button" onclick="submitDocumentRequest()" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">📄 Invia Richiesta</button>';
+echo '</div>';
+echo '</form>';
+echo '</div>';
+echo '</div>';
+
 echo '</div>';
 
 // ================== JAVASCRIPT BASE ==================
@@ -1170,6 +1333,80 @@ document.addEventListener("DOMContentLoaded", function() {
     
     hideFeedbackMessage();
 });
+
+// ================== DOCUMENT REQUEST FUNCTIONS ==================
+
+function openDocumentRequestModal(userId, aziendaName) {
+    const modal = document.getElementById('document-request-modal');
+    const userIdInput = document.getElementById('document-user-id');
+    const aziendaNameSpan = document.getElementById('document-azienda-name');
+    const notesTextarea = document.getElementById('document-richiesta-note');
+    
+    userIdInput.value = userId;
+    aziendaNameSpan.textContent = aziendaName;
+    notesTextarea.value = '';
+    notesTextarea.focus();
+    
+    modal.style.display = 'block';
+}
+
+function closeDocumentRequestModal() {
+    const modal = document.getElementById('document-request-modal');
+    modal.style.display = 'none';
+}
+
+function submitDocumentRequest() {
+    const form = document.getElementById('document-request-form');
+    const notes = document.getElementById('document-richiesta-note').value.trim();
+    
+    if (!notes) {
+        alert('⚠️ Inserisci una nota per la richiesta documenti');
+        document.getElementById('document-richiesta-note').focus();
+        return;
+    }
+    
+    if (notes.length < 10) {
+        alert('⚠️ La richiesta deve contenere almeno 10 caratteri');
+        document.getElementById('document-richiesta-note').focus();
+        return;
+    }
+    
+    if (confirm('Confermi l\'invio della richiesta documenti all\'azienda?')) {
+        form.submit();
+    }
+}
+
+function cancelDocumentRequest(userId, aziendaName) {
+    if (confirm(`Confermi la cancellazione della richiesta documenti per ${aziendaName}?\n\nQuesta azione rimuoverà definitivamente la nota richiesta.`)) {
+        // Create temporary form for submission
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'document_action';
+        actionInput.value = 'cancel_request';
+        
+        const userIdInput = document.createElement('input');
+        userIdInput.type = 'hidden';
+        userIdInput.name = 'user_id';
+        userIdInput.value = userId;
+        
+        form.appendChild(actionInput);
+        form.appendChild(userIdInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('document-request-modal');
+    if (event.target === modal) {
+        closeDocumentRequestModal();
+    }
+}
 </script>
 <?php
 ?>
