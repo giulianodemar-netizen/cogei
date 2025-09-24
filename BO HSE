@@ -2465,7 +2465,7 @@ if (!empty($aziende_albo)) {
         echo '<div>';
         echo '<strong style="color: ' . ($is_attiva ? '#155724' : '#6c757d') . ';">' . htmlspecialchars($rag_soc) . '</strong>';
         echo '<div style="font-size: 11px; color: #666; margin-top: 2px;">';
-        echo '📧 ' . $azienda['user_email'] . ' | 🏷️ ' . ($azienda['tipo'] ?: 'N/A');
+        echo '📧 ' . $azienda['user_email'] . ' | 🏷️ ' . ($azienda['display_name'] ?: 'N/A');
         echo '</div>';
         echo '</div>';
         echo '</div>';
