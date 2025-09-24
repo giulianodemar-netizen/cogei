@@ -162,8 +162,7 @@ function createCantieriTablesIfNotExists() {
         data_richiesta datetime DEFAULT CURRENT_TIMESTAMP,
         richiesto_da int(11) NOT NULL,
         PRIMARY KEY (id),
-        UNIQUE KEY user_id (user_id),
-        KEY user_id (user_id),
+        UNIQUE KEY unique_user_id (user_id),
         KEY richiesto_da (richiesto_da)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_document_requests);
