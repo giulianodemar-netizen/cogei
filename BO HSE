@@ -2429,6 +2429,33 @@ echo '</label>';
 echo '<div style="font-size: 11px; color: #1565c0; margin-top: 3px; margin-left: 20px;">Le aziende attive sono sempre visualizzate per prime</div>';
 echo '</div>';
 
+// ================== NUOVA SEZIONE: FILTRI PER TIPOLOGIA AZIENDA ==================
+echo '<div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; border-left: 3px solid #ffc107;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #856404;">🏢 Filtra per Tipologia Azienda</label>';
+echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">';
+
+$company_types = ['Lavoro', 'Subappalto', 'Nolo', 'Servizi', 'Forniture'];
+foreach ($company_types as $tipo) {
+    $tipo_id = 'filter-tipo-' . strtolower($tipo);
+    echo '<label style="display: flex; align-items: center; cursor: pointer; font-size: 12px; padding: 4px 8px; background: rgba(255, 255, 255, 0.7); border-radius: 4px; transition: all 0.2s ease;">';
+    echo '<input type="checkbox" id="' . $tipo_id . '" onchange="toggleFiltroTipologie()" style="margin-right: 6px;" checked>';
+    echo '<span style="font-weight: 500;">📋 ' . $tipo . '</span>';
+    echo '</label>';
+}
+echo '</div>';
+echo '<div style="font-size: 11px; color: #856404; margin-top: 8px;">Deseleziona le tipologie che non vuoi visualizzare nella lista</div>';
+echo '</div>';
+
+// ================== NUOVA SEZIONE: RICERCA AZIENDE ==================
+echo '<div style="margin-bottom: 15px; padding: 12px; background: #e8f5e8; border-radius: 6px; border-left: 3px solid #28a745;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #155724;">🔍 Cerca Aziende</label>';
+echo '<div style="position: relative;">';
+echo '<input type="text" id="search-assignments-input" placeholder="Cerca per Partita IVA, Email, Nome società o Tipologia..." style="width: 100%; padding: 10px 40px 10px 12px; border: 2px solid #c3e6cb; border-radius: 6px; font-size: 14px; background: white;" onkeyup="searchAssignments()" oninput="searchAssignments()">';
+echo '<button type="button" onclick="clearAssignmentSearch()" id="clear-search-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: #dc3545; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 12px; display: none;">✕</button>';
+echo '</div>';
+echo '<div id="search-results-info" style="font-size: 12px; color: #666; margin-top: 5px; display: none;"></div>';
+echo '</div>';
+
 echo '<div style="background: #f8f9fa; padding: 10px; border-radius: 6px; max-height: 350px; overflow-y: auto;" id="aziende-selection-container">';
 
 $aziende_albo = getAziendeAlboFornitori();
@@ -2444,7 +2471,7 @@ if (!empty($aziende_albo)) {
             'background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%); border: 1px solid #c3e6cb;' : 
             'background: #f8f9fa; border: 1px solid #e9ecef; opacity: 0.7;';
         
-        $data_attributes = 'data-attiva="' . ($is_attiva ? '1' : '0') . '" data-user-id="' . $azienda['ID'] . '"';
+        $data_attributes = 'data-attiva="' . ($is_attiva ? '1' : '0') . '" data-user-id="' . $azienda['ID'] . '" data-tipo="' . ($azienda['tipo'] ?: 'N/A') . '"';
         
         echo '<label class="azienda-option" ' . $data_attributes . ' style="display: block; margin-bottom: 8px; cursor: pointer; padding: 10px; border-radius: 4px; ' . $container_style . ' transition: all 0.2s ease;">';
         echo '<div style="display: flex; align-items: center; justify-content: space-between;">';
@@ -2455,7 +2482,7 @@ if (!empty($aziende_albo)) {
         echo '<div>';
         echo '<strong style="color: ' . ($is_attiva ? '#155724' : '#6c757d') . ';">' . htmlspecialchars($rag_soc) . '</strong>';
         echo '<div style="font-size: 11px; color: #666; margin-top: 2px;">';
-        echo '📧 ' . $azienda['user_email'] . ' | 🏷️ ' . ($azienda['tipo'] ?: 'N/A');
+        echo '📧 ' . $azienda['user_email'] . ' | 🏷️ ' . ($azienda['display_name'] ?: 'N/A') . ' | 📋 ' . ($azienda['tipo'] ?: 'N/A');
         echo '</div>';
         echo '</div>';
         echo '</div>';
@@ -3002,6 +3029,296 @@ function toggleFiltroAttive() {
     updateSubmitButtonCounter();
 }
 
+// ================== NUOVA FUNZIONE: FILTRO PER TIPOLOGIA AZIENDA ==================
+
+// Funzione per il filtro tipologie azienda
+function toggleFiltroTipologie() {
+    // Applica tutti i filtri insieme
+    applyAllFilters();
+}
+
+// Funzione unificata per applicare tutti i filtri
+function applyAllFilters() {
+    const soloAttive = document.getElementById('filter-solo-attive').checked;
+    const aziendeOptions = document.querySelectorAll('.azienda-option');
+    
+    // Get selected company types
+    const selectedTypes = [];
+    const typeCheckboxes = document.querySelectorAll('[id^="filter-tipo-"]');
+    typeCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            const tipo = checkbox.id.replace('filter-tipo-', '');
+            selectedTypes.push(tipo.charAt(0).toUpperCase() + tipo.slice(1)); // Capitalize first letter
+        }
+    });
+    
+    console.log('🏢 Filtro tipologie attive:', selectedTypes);
+    console.log('🔍 Filtro abilitate:', soloAttive ? 'ATTIVO' : 'DISATTIVO');
+    
+    let visibili = 0;
+    let nascoste = 0;
+    let nascostePerTipologia = 0;
+    
+    // Get assigned companies (always hide)
+    const cantiereId = document.getElementById('modal-cantiere-id').value;
+    const allCantieri = <?php 
+        $cantieri_with_assignments = [];
+        foreach (getAllCantieri() as $c) {
+            $aziende = getAziendeAssegnateCantiare($c['id']);
+            $cantieri_with_assignments[$c['id']] = $aziende;
+        }
+        echo json_encode($cantieri_with_assignments);
+    ?>;
+    
+    const aziendeAssegnate = allCantieri[cantiereId] || [];
+    const assignedUserIds = aziendeAssegnate.map(a => a.ID.toString());
+    
+    aziendeOptions.forEach(function(option) {
+        const isAttiva = option.getAttribute('data-attiva') === '1';
+        const userId = option.getAttribute('data-user-id');
+        const companyType = option.getAttribute('data-tipo') || 'N/A';
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        
+        // If already assigned, always hide
+        if (assignedUserIds.includes(userId)) {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+            nascoste++;
+            return;
+        }
+        
+        // Apply enabled filter
+        if (soloAttive && !isAttiva) {
+            option.style.display = 'none';
+            nascoste++;
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        // Apply company type filter
+        if (selectedTypes.length > 0 && !selectedTypes.includes(companyType)) {
+            option.style.display = 'none';
+            nascostePerTipologia++;
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        // Show if passes all filters
+        option.style.display = 'block';
+        visibili++;
+    });
+    
+    console.log('📊 Risultato filtri - Visibili:', visibili, 'Nascoste:', nascoste, 'Per tipologia:', nascostePerTipologia);
+    
+    // Update info display
+    updateFilterInfo(visibili, nascoste, nascostePerTipologia, assignedUserIds.length, soloAttive, selectedTypes);
+    
+    // Update submit button
+    updateSubmitButtonCounter();
+}
+
+// Update filter information display
+function updateFilterInfo(visibili, nascoste, nascostePerTipologia, aziendeGiaAssegnate, soloAttive, selectedTypes) {
+    const container = document.getElementById('aziende-selection-container');
+    let infoDiv = container.querySelector('.filtro-info');
+    
+    if (!infoDiv) {
+        infoDiv = document.createElement('div');
+        infoDiv.className = 'filtro-info';
+        infoDiv.style.cssText = 'background: #e7f3ff; padding: 8px; margin-bottom: 10px; border-radius: 4px; font-size: 11px; color: #0c5460; border-left: 3px solid #bee5eb;';
+        container.insertBefore(infoDiv, container.firstChild);
+    }
+    
+    let infoText = `🔍 <strong>Filtri attivi:</strong> `;
+    
+    if (aziendeGiaAssegnate > 0) {
+        infoText += `${aziendeGiaAssegnate} già assegnate (nascoste), `;
+    }
+    
+    infoText += `${visibili} disponibili`;
+    
+    if (soloAttive) {
+        const nascostePerAbilitazione = nascoste - aziendeGiaAssegnate - nascostePerTipologia;
+        if (nascostePerAbilitazione > 0) {
+            infoText += `, ${nascostePerAbilitazione} non abilitate`;
+        }
+    }
+    
+    if (nascostePerTipologia > 0) {
+        infoText += `, ${nascostePerTipologia} per tipologia`;
+    }
+    
+    if (selectedTypes.length > 0 && selectedTypes.length < 5) {
+        infoText += ` | Tipologie: ${selectedTypes.join(', ')}`;
+    }
+    
+    infoDiv.innerHTML = infoText;
+    infoDiv.style.display = 'block';
+}
+
+// Update the original toggleFiltroAttive to use unified filtering
+function toggleFiltroAttive() {
+    applyAllFilters();
+}
+
+// ================== NUOVE FUNZIONI: RICERCA ASSEGNAZIONI ==================
+
+// Funzione principale per la ricerca delle assegnazioni (AGGIORNATA per tipologie)
+function searchAssignments() {
+    const searchInput = document.getElementById('search-assignments-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    const resultsInfo = document.getElementById('search-results-info');
+    const aziendeOptions = document.querySelectorAll('.azienda-option');
+    
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    
+    // Mostra/nascondi pulsante clear
+    if (searchTerm.length > 0) {
+        clearBtn.style.display = 'block';
+    } else {
+        clearBtn.style.display = 'none';
+        resultsInfo.style.display = 'none';
+    }
+    
+    let visibleCount = 0;
+    let totalCount = 0;
+    let matchingCount = 0;
+    
+    // Get all active filters
+    const soloAttive = document.getElementById('filter-solo-attive').checked;
+    const selectedTypes = [];
+    const typeCheckboxes = document.querySelectorAll('[id^="filter-tipo-"]');
+    typeCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            const tipo = checkbox.id.replace('filter-tipo-', '');
+            selectedTypes.push(tipo.charAt(0).toUpperCase() + tipo.slice(1));
+        }
+    });
+    
+    const cantiereId = document.getElementById('modal-cantiere-id').value;
+    const allCantieri = <?php 
+        $cantieri_with_assignments = [];
+        foreach (getAllCantieri() as $c) {
+            $aziende = getAziendeAssegnateCantiare($c['id']);
+            $cantieri_with_assignments[$c['id']] = $aziende;
+        }
+        echo json_encode($cantieri_with_assignments);
+    ?>;
+    
+    const aziendeAssegnate = allCantieri[cantiereId] || [];
+    const assignedUserIds = aziendeAssegnate.map(a => a.ID.toString());
+    
+    aziendeOptions.forEach(function(option) {
+        const userId = option.getAttribute('data-user-id');
+        const isAttiva = option.getAttribute('data-attiva') === '1';
+        const companyType = option.getAttribute('data-tipo') || 'N/A';
+        const checkbox = option.querySelector('input[type="checkbox"]');
+        
+        totalCount++;
+        
+        // If already assigned, always hide
+        if (assignedUserIds.includes(userId)) {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        // Apply enabled filter
+        if (soloAttive && !isAttiva) {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        // Apply company type filter
+        if (selectedTypes.length > 0 && !selectedTypes.includes(companyType)) {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        // If no search term, show all (that pass base filters)
+        if (searchTerm.length === 0) {
+            option.style.display = 'block';
+            visibleCount++;
+            return;
+        }
+        
+        // Extract company data for search
+        const labelElement = option.querySelector('strong');
+        const emailElement = option.querySelector('div[style*="font-size: 11px"]');
+        
+        const companyName = labelElement ? labelElement.textContent.toLowerCase() : '';
+        const emailText = emailElement ? emailElement.textContent.toLowerCase() : '';
+        
+        // Extract email, P.IVA, and company type from text
+        const emailMatch = emailText.match(/📧\s*([^\s|]+)/);
+        const pivaMatch = emailText.match(/🏷️\s*([^\s|]+)/);
+        const tipoMatch = emailText.match(/📋\s*([^\s|]+)/);
+        
+        const email = emailMatch ? emailMatch[1] : '';
+        const piva = pivaMatch ? pivaMatch[1] : '';
+        const tipo = tipoMatch ? tipoMatch[1] : companyType.toLowerCase();
+        
+        // Check if search term matches any field
+        const matchesCompanyName = companyName.includes(searchTerm);
+        const matchesEmail = email.includes(searchTerm);
+        const matchesPiva = piva.includes(searchTerm);
+        const matchesCompanyType = tipo.includes(searchTerm);
+        
+        if (matchesCompanyName || matchesEmail || matchesPiva || matchesCompanyType) {
+            option.style.display = 'block';
+            visibleCount++;
+            matchingCount++;
+        } else {
+            option.style.display = 'none';
+            if (checkbox) checkbox.checked = false;
+        }
+    });
+    
+    // Show search results info
+    if (searchTerm.length > 0) {
+        resultsInfo.style.display = 'block';
+        if (matchingCount === 0) {
+            resultsInfo.innerHTML = `🔍 <strong>Nessun risultato</strong> per "${searchTerm}"`;
+            resultsInfo.style.color = '#dc3545';
+        } else {
+            resultsInfo.innerHTML = `🔍 Trovate <strong>${matchingCount} aziende</strong> per "${searchTerm}"`;
+            resultsInfo.style.color = '#28a745';
+        }
+    }
+    
+    // Update submit button
+    updateSubmitButtonCounter();
+    
+    console.log('🔍 Ricerca eseguita:', {
+        searchTerm: searchTerm,
+        totalCount: totalCount,
+        visibleCount: visibleCount,
+        matchingCount: matchingCount,
+        selectedTypes: selectedTypes
+    });
+}
+
+// Pulisce la ricerca e ripristina la vista normale
+function clearAssignmentSearch() {
+    const searchInput = document.getElementById('search-assignments-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    const resultsInfo = document.getElementById('search-results-info');
+    
+    searchInput.value = '';
+    clearBtn.style.display = 'none';
+    resultsInfo.style.display = 'none';
+    
+    // Riapplica solo i filtri base (senza ricerca)
+    applyAllFilters();
+    
+    // Focus sul campo di ricerca per comodità dell'utente
+    searchInput.focus();
+    
+    console.log('🧹 Ricerca pulita');
+}
+
 // Aggiorna contatore pulsante submit
 function updateSubmitButtonCounter() {
     const selectedCheckboxes = document.querySelectorAll('input[name="user_ids[]"]:checked');
@@ -3029,6 +3346,15 @@ function closeAssignmentModal() {
     // Reset checkboxes
     const checkboxes = document.querySelectorAll('input[name="user_ids[]"]');
     checkboxes.forEach(cb => cb.checked = false);
+    
+    // Reset search functionality
+    const searchInput = document.getElementById('search-assignments-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    const resultsInfo = document.getElementById('search-results-info');
+    
+    if (searchInput) searchInput.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (resultsInfo) resultsInfo.style.display = 'none';
     
     // Reset submit button
     updateSubmitButtonCounter();
@@ -4589,6 +4915,97 @@ function cancelDocumentRequest(userId, aziendaName) {
     position: relative;
     padding-left: 30px !important;
 }
+
+/* ================== STILI RICERCA ASSEGNAZIONI ================== */
+
+/* Campo di ricerca */
+#search-assignments-input {
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.1);
+}
+
+#search-assignments-input:focus {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+    transform: translateY(-1px);
+}
+
+#search-assignments-input:hover {
+    border-color: #20c997;
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.15);
+}
+
+/* Pulsante clear search */
+#clear-search-btn {
+    transition: all 0.2s ease;
+    opacity: 0.8;
+}
+
+#clear-search-btn:hover {
+    background: #c82333 !important;
+    opacity: 1;
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+#clear-search-btn:active {
+    transform: translateY(-50%) scale(0.9);
+}
+
+/* Informazioni risultati ricerca */
+#search-results-info {
+    transition: all 0.3s ease;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.8);
+    border-left: 3px solid currentColor;
+}
+
+/* Animazione per aziende filtrate dalla ricerca */
+.azienda-option[style*="display: none"] {
+    animation: searchHideItem 0.2s ease-in-out forwards;
+}
+
+.azienda-option[style*="display: block"] {
+    animation: searchShowItem 0.3s ease-out forwards;
+}
+
+@keyframes searchHideItem {
+    from { 
+        opacity: 1; 
+        transform: translateX(0) scale(1); 
+        max-height: 100px; 
+    }
+    to { 
+        opacity: 0; 
+        transform: translateX(-10px) scale(0.95); 
+        max-height: 0; 
+    }
+}
+
+@keyframes searchShowItem {
+    from { 
+        opacity: 0; 
+        transform: translateX(-10px) scale(0.95); 
+        max-height: 0; 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateX(0) scale(1); 
+        max-height: 100px; 
+    }
+}
+
+/* Evidenziazione termini di ricerca (futuro miglioramento) */
+.search-highlight {
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+    padding: 1px 3px;
+    border-radius: 2px;
+    font-weight: bold;
+}
+
+/* ================== FINE STILI RICERCA ==================
 
 .azienda-option:hover {
     transform: translateX(3px);
