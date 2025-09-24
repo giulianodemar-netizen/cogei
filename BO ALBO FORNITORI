@@ -459,6 +459,179 @@ function getDocumentRequest($user_id) {
     ), ARRAY_A);
 }
 
+// Function to check for document changes and auto-disable users
+function checkDocumentChangesAndDisableUser($user_id) {
+    global $wpdb, $inviamail;
+    
+    // Get current live data from user_meta
+    $user = get_userdata($user_id);
+    if (!$user) return false;
+    
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    
+    // Document fields to monitor
+    $document_fields = [
+        'user_registration_scad_CCIAA' => 'CCIAA',
+        'user_registration_scad_wit' => 'White List', 
+        'user_registration_scad_durc' => 'DURC',
+        'user_registration_scadenza_altre_scadenze' => 'Altre Scadenze'
+    ];
+    
+    // Add RCT-RCO field based on type
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
+        if ($tipo === 'Forniture') {
+            $document_fields['user_registration_scad_rct_rco_forni'] = 'RCT-RCO (Forniture)';
+        } else {
+            $document_fields['user_registration_scad_rct_rco'] = 'RCT-RCO';
+        }
+    }
+    
+    // Get current live data
+    $live_data = [];
+    foreach ($document_fields as $field => $label) {
+        $live_data[$field] = get_user_meta($user_id, $field, true);
+    }
+    
+    // Get copy table data
+    $copy_data = getSupplierCopyData($user_id);
+    if (!$copy_data) {
+        // No copy data exists yet, create it
+        updateSupplierCopyData($user_id, [
+            'tipo' => $tipo,
+            'ragione_sociale' => $rag_soc,
+            'email' => $user->user_email,
+            'piva' => $user->display_name,
+            'rct_rco' => $live_data['user_registration_scad_rct_rco'] ?? $live_data['user_registration_scad_rct_rco_forni'] ?? '',
+            'cciaa' => $live_data['user_registration_scad_CCIAA'] ?? '',
+            'white_list' => $live_data['user_registration_scad_wit'] ?? '',
+            'soa' => get_user_meta($user_id, 'user_registration_scad_soa', true) ?: '',
+            'durc' => $live_data['user_registration_scad_durc'] ?? '',
+            'altre_scadenze' => $live_data['user_registration_scadenza_altre_scadenze'] ?? '',
+            'stato' => determineSupplierStatus($user_id)
+        ]);
+        return false; // No comparison possible on first run
+    }
+    
+    // Compare document dates
+    $changed_documents = [];
+    
+    // Map copy table fields to live fields
+    $field_mapping = [
+        'cciaa' => 'user_registration_scad_CCIAA',
+        'white_list' => 'user_registration_scad_wit',
+        'durc' => 'user_registration_scad_durc',
+        'altre_scadenze' => 'user_registration_scadenza_altre_scadenze',
+        'rct_rco' => ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco'
+    ];
+    
+    foreach ($field_mapping as $copy_field => $live_field) {
+        $copy_value = $copy_data[$copy_field] ?? '';
+        $live_value = $live_data[$live_field] ?? '';
+        
+        if ($copy_value !== $live_value && !empty($live_value)) {
+            $label = $document_fields[$live_field] ?? $copy_field;
+            $changed_documents[] = [
+                'document' => $label,
+                'old_date' => $copy_value,
+                'new_date' => $live_value
+            ];
+        }
+    }
+    
+    // If changes detected, disable user and send notification
+    if (!empty($changed_documents)) {
+        // Force disable user status
+        update_user_meta($user_id, 'forced_supplier_status', 'Disattivo');
+        
+        // Log the automatic disabling
+        $log_file = ABSPATH . 'auto_disattivazione_documenti.txt';
+        $timestamp = date('d/m/Y H:i:s');
+        $log_entry = "[{$timestamp}] AUTO-DISATTIVAZIONE - ID: {$user_id} | Ragione Sociale: {$rag_soc} | Documenti modificati: " . count($changed_documents) . "\n";
+        
+        if (!file_exists($log_file)) {
+            $header = "LOG AUTO-DISATTIVAZIONI PER MODIFICHE DOCUMENTI - " . date('Y') . "\n";
+            $header .= str_repeat("=", 80) . "\n\n";
+            file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
+        }
+        file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+        
+        // Send notification email to admin
+        sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc);
+        
+        return true; // User was disabled due to changes
+    }
+    
+    return false; // No changes detected
+}
+
+// Function to send admin notification about document changes
+function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc) {
+    global $inviamail;
+    
+    $admin_email = 'ufficio_qualita@cogei.net';
+    
+    if ($inviamail) {
+        $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
+        
+        $documents_list = '';
+        foreach ($changed_documents as $change) {
+            $documents_list .= "- {$change['document']}: da '{$change['old_date']}' a '{$change['new_date']}'<br>";
+        }
+        
+        $body = "<html>
+<head>
+<title>Disattivazione Automatica Fornitore</title>
+</head>
+<body>
+<div style='background: #dc3545; color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>🚨 ALERT - Disattivazione Automatica</h2>
+</div>
+
+<p>Ciao Admin,</p>
+
+<p>Il fornitore <strong>{$rag_soc}</strong> (ID: {$user_id}) è stato <strong>automaticamente disattivato</strong> 
+a causa della modifica della documentazione nel database.</p>
+
+<div style='background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #721c24;'>📄 Documenti modificati:</h3>
+{$documents_list}
+</div>
+
+<div style='background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #856404;'>⚡ Azioni automatiche eseguite:</h3>
+• Fornitore disattivato automaticamente<br>
+• Stato forzato a 'Disattivo' nel sistema<br>
+• Log creato in auto_disattivazione_documenti.txt<br>
+</div>
+
+<p><strong>Data rilevamento:</strong> " . date('d/m/Y H:i:s') . "</p>
+<p><strong>Sistema:</strong> Controllo automatico modifiche documenti</p>
+
+<p>È necessario verificare manualmente le modifiche e decidere se riattivare il fornitore.</p>
+
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 30px; border-radius: 4px;'>
+<div style='text-align: center; color: white; font-size: 12px;'>
+COGEI SRL - Sistema di Controllo Automatico Documenti<br>
+Copyright © 2023 Cogei. All Rights Reserved.
+</div>
+</div>
+</body>
+</html>";
+        
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
+        $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+        
+        $email_sent = mail($admin_email, $subject, $body, $headers);
+        
+        // Log email result
+        $log_entry = "[" . date('d/m/Y H:i:s') . "] ADMIN NOTIFICATION - ID: {$user_id} | Admin Email: {$admin_email} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
+        file_put_contents(ABSPATH . 'auto_disattivazione_documenti.txt', $log_entry, FILE_APPEND | LOCK_EX);
+    }
+}
+
 // ================== GESTIONE RICHIESTE DOCUMENTI ==================
 
 // Create document_requests table if not exists
@@ -923,6 +1096,10 @@ foreach ($suppliers as $user) {
     $durc = get_user_meta($user_id, 'user_registration_scad_durc', true);
     $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
     
+    // 🚨 NUOVO: Controllo automatico modifiche documenti
+    createSuppliersCopyTable(); // Assicura che la tabella copia esista
+    $was_disabled = checkDocumentChangesAndDisableUser($user_id);
+    
     // Calcola stato dinamico
     $dynamic_status = determineSupplierStatus($user_id);
     
@@ -949,6 +1126,11 @@ foreach ($suppliers as $user) {
     
     // Mostra stato con tooltip
     echo '<span class="supplier-status" style="background: ' . $status_config['color'] . '; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px;" title="' . htmlspecialchars($status_config['tooltip']) . '">' . $status_config['label'] . '</span>';
+    
+    // 🚨 Indicatore disattivazione automatica
+    if ($was_disabled) {
+        echo '<br><span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-top: 3px; display: inline-block; animation: pulse 2s infinite;" title="Disattivato automaticamente per modifiche ai documenti">🚨 AUTO-DISATTIVATO</span>';
+    }
     
     echo '</td>';
     
@@ -1408,5 +1590,14 @@ window.onclick = function(event) {
     }
 }
 </script>
+
+<style>
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+</style>
+
 <?php
 ?>
