@@ -382,11 +382,14 @@ function hse_getAutomezzoCantieriAssegnazioni($automezzo_id, $user_id) {
     ", $automezzo_id, $user_id), ARRAY_A);
 }
 
+// FUNZIONE DISABILITATA - Accettati tutti i formati di targa
+/*
 function hse_validateTargaItaliana($targa) {
     // Formato italiano: 2 lettere + 3 numeri + 2 lettere (AA123BB)
     $pattern = '/^[A-Z]{2}[0-9]{3}[A-Z]{2}$/';
     return preg_match($pattern, strtoupper($targa));
 }
+*/
 
 // 🔧 NUOVE FUNZIONI PER ATTREZZI
 
@@ -629,9 +632,8 @@ function hse_validateAutomezziData($automezzi_data) {
         
         if (empty($automezzo['targa'])) {
             $errors[] = "Targa automezzo $automezzo_num è obbligatoria";
-        } elseif (!hse_validateTargaItaliana($automezzo['targa'])) {
-            $errors[] = "Targa automezzo $automezzo_num non valida. Formato richiesto: AA123BB (2 lettere + 3 numeri + 2 lettere)";
         }
+        // NOTA: Validazione formato targa rimossa - accettati tutti i formati
     }
     
     // Controlla targhe duplicate
@@ -2255,7 +2257,7 @@ if ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) {
         echo '<div class="hse_attrezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
         
         echo '<div class="hse_attrezzo_descrizione_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo:</label>';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo *:</label>';
         echo '<input type="text" name="hse_attrezzi_descrizione[]" value="' . esc_attr($hse_attrezzo['descrizione_attrezzo']) . '" placeholder="es. Saldatrice elettrica 220V" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
         echo '</div>';
         
@@ -3312,6 +3314,8 @@ function hse_updateAutomezziCount() {
     }
 }
 
+// FUNZIONE DISABILITATA - Accettati tutti i formati di targa
+/*
 function hse_validateTargaInput(input) {
     const targa = input.value.toUpperCase();
     const feedbackDiv = input.parentNode.querySelector('.hse_targa_validation_feedback');
@@ -3348,6 +3352,7 @@ function hse_validateTargaInput(input) {
     
     input.value = targa; // Forza maiuscole
 }
+*/
 
 function hse_deleteAutomezzo(automezzoId, automezzoInfo, isAssigned) {
     // Controlli preliminari migliorati
@@ -3529,7 +3534,7 @@ function hse_addAttrezzo() {
     newRow.innerHTML = `
         <div class="hse_attrezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
             <div class="hse_attrezzo_descrizione_field">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo:</label>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #1565c0;">🔧 Descrizione Attrezzo *:</label>
                 <input type="text" name="hse_attrezzi_descrizione[]" placeholder="es. Saldatrice elettrica 220V" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
             </div>
             <div class="hse_attrezzo_revisione_field">
@@ -4633,14 +4638,8 @@ function hse_validateFormBeforeSubmit(formType) {
             if (!targa) {
                 hse_errors.push(`Targa automezzo ${automezzoNum} è obbligatoria`);
                 hse_hasErrors = true;
-            } else {
-                // Validazione formato targa italiana AA123BB
-                const targaPattern = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
-                if (!targaPattern.test(targa)) {
-                    hse_errors.push(`Targa automezzo ${automezzoNum} non valida. Formato richiesto: AA123BB`);
-                    hse_hasErrors = true;
-                }
             }
+            // NOTA: Validazione formato targa rimossa - accettati tutti i formati
         }
         
         // Controlla targhe duplicate
@@ -5175,7 +5174,7 @@ if (typeof window !== 'undefined') {
     window.hse_addAutomezzo = hse_addAutomezzo;
     window.hse_removeLastAutomezzo = hse_removeLastAutomezzo;
     window.hse_updateAutomezziCount = hse_updateAutomezziCount;
-    window.hse_validateTargaInput = hse_validateTargaInput;
+    // window.hse_validateTargaInput = hse_validateTargaInput; // DISABILITATO - accettati tutti i formati targa
     window.hse_deleteAutomezzo = hse_deleteAutomezzo;
     
     // 🔧 NUOVO: Funzioni attrezzi
