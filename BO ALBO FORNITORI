@@ -1398,12 +1398,9 @@ function exportTableToCSV() {
     var csv = [];
     var exportedRows = 0;
     
-    var headerRow = [];
-    var headers = table.querySelectorAll("tr:first-child th");
-    for (var i = 0; i < headers.length; i++) {
-        headerRow.push('"' + headers[i].textContent.trim() + '"');
-    }
-    csv.push(headerRow.join(","));
+    // Header semplificato (solo 6 colonne come da richiesta)
+    var headerRow = ["ID", "Ragione Sociale", "Email", "P.IVA", "Stato", "Data Registrazione"];
+    csv.push(headerRow.map(h => '"' + h + '"').join(","));
     
     var dataRows = table.querySelectorAll("tr.supplier-row");
     for (var i = 0; i < dataRows.length; i++) {
@@ -1411,16 +1408,33 @@ function exportTableToCSV() {
         var isVisible = window.getComputedStyle(row).display !== "none";
         
         if (isVisible) {
-            var csvRow = [];
             var cols = row.querySelectorAll("td");
             
-            for (var j = 0; j < cols.length; j++) {
-                var cellText = cols[j].textContent.trim();
-                cellText = cellText.replace(/[\r\n]+/g, " ").replace(/"/g, '""');
-                csvRow.push('"' + cellText + '"');
-            }
-            
-            if (csvRow.length > 0) {
+            // Estrai solo le colonne necessarie: ID(0), Ragione Sociale(2), Email(3), P.IVA(4), Stato(11)
+            if (cols.length > 11) {
+                var id = cols[0].textContent.trim();
+                var ragioneSociale = cols[2].textContent.trim().replace(/[\r\n]+/g, " ").replace(/"/g, '""');
+                var email = cols[3].textContent.trim().replace(/[\r\n]+/g, " ").replace(/"/g, '""');
+                var piva = cols[4].textContent.trim().replace(/[\r\n]+/g, " ").replace(/"/g, '""');
+                
+                // Per lo stato, prendiamo solo il testo del badge stato, non tutto il contenuto della cella
+                var statoCell = cols[11];
+                var statusSpan = statoCell.querySelector('.supplier-status');
+                var stato = statusSpan ? statusSpan.textContent.trim() : statoCell.textContent.trim().split('\n')[0];
+                stato = stato.replace(/[\r\n]+/g, " ").replace(/"/g, '""');
+                
+                // Data registrazione - non disponibile nella tabella, quindi lasciamo vuoto
+                var dataRegistrazione = '';
+                
+                var csvRow = [
+                    '"' + id + '"',
+                    '"' + ragioneSociale + '"', 
+                    '"' + email + '"',
+                    '"' + piva + '"',
+                    '"' + stato + '"',
+                    '"' + dataRegistrazione + '"'
+                ];
+                
                 csv.push(csvRow.join(","));
                 exportedRows++;
             }
@@ -1441,7 +1455,7 @@ function exportTableToCSV() {
         document.body.removeChild(link);
         
         var totalRows = dataRows.length;
-        var message = "File CSV scaricato! " + exportedRows + " fornitori esportati";
+        var message = "File CSV scaricato! " + exportedRows + " fornitori esportati (6 colonne: ID, Ragione Sociale, Email, P.IVA, Stato, Data Registrazione)";
         if (exportedRows < totalRows) {
             message += " (Filtri applicati: " + (totalRows - exportedRows) + " righe nascoste)";
         }
