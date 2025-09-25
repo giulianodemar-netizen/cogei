@@ -1264,7 +1264,13 @@ foreach ($suppliers as $user) {
     $can_activate = hasDocuments($user_id);
     $status_config = $supplier_statuses[$dynamic_status];
     
-    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '">';
+    // Get WordPress registration date for data attribute
+    $registration_date = '';
+    if (!empty($user->user_registered)) {
+        $registration_date = date('d/m/Y H:i', strtotime($user->user_registered));
+    }
+    
+    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
@@ -1423,8 +1429,8 @@ function exportTableToCSV() {
                 var stato = statusSpan ? statusSpan.textContent.trim() : statoCell.textContent.trim().split('\n')[0];
                 stato = stato.replace(/[\r\n]+/g, " ").replace(/"/g, '""');
                 
-                // Data registrazione - non disponibile nella tabella, quindi lasciamo vuoto
-                var dataRegistrazione = '';
+                // Data registrazione - recupera dal data attribute
+                var dataRegistrazione = row.getAttribute('data-registration-date') || '';
                 
                 var csvRow = [
                     '"' + id + '"',
