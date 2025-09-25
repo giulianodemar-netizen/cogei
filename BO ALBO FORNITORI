@@ -559,7 +559,7 @@ function checkDocumentChangesAndDisableUser($user_id) {
         // Send notification email to admin
         sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc);
         
-        return true; // User was disabled due to changes
+        return $changed_documents; // Return array of changed documents
     }
     
     return false; // No changes detected
@@ -1098,7 +1098,8 @@ foreach ($suppliers as $user) {
     
     // 🚨 NUOVO: Controllo automatico modifiche documenti
     createSuppliersCopyTable(); // Assicura che la tabella copia esista
-    $was_disabled = checkDocumentChangesAndDisableUser($user_id);
+    $changed_documents = checkDocumentChangesAndDisableUser($user_id);
+    $was_disabled = is_array($changed_documents) && !empty($changed_documents);
     
     // Calcola stato dinamico
     $dynamic_status = determineSupplierStatus($user_id);
@@ -1130,6 +1131,16 @@ foreach ($suppliers as $user) {
     // 🚨 Indicatore disattivazione automatica
     if ($was_disabled) {
         echo '<br><span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-top: 3px; display: inline-block; animation: pulse 2s infinite;" title="Disattivato automaticamente per modifiche ai documenti">🚨 AUTO-DISATTIVATO</span>';
+        
+        // Mostra i documenti modificati
+        echo '<br><div style="background: #f8d7da; color: #721c24; padding: 6px; border-radius: 4px; font-size: 9px; margin-top: 4px; border-left: 3px solid #dc3545;">';
+        echo '<strong>📄 Documenti modificati:</strong><br>';
+        foreach ($changed_documents as $change) {
+            echo '• <strong>' . $change['document'] . '</strong><br>';
+            echo '&nbsp;&nbsp;da "' . htmlspecialchars($change['old_date']) . '"<br>';
+            echo '&nbsp;&nbsp;a "' . htmlspecialchars($change['new_date']) . '"<br>';
+        }
+        echo '</div>';
     }
     
     echo '</td>';
