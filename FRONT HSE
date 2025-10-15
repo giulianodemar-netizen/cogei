@@ -4827,17 +4827,24 @@ document.addEventListener("DOMContentLoaded", function() {
     const hse_form = document.getElementById('hse_cantiere_form_main');
     if (hse_form) {
         hse_form.addEventListener('submit', function(e) {
+            console.log('🔍 Form submit event triggered');
+            console.log('🔍 Event submitter:', e.submitter);
+            
             hse_saveAccordionStates();
             
             const hse_submitButton = e.submitter;
             
             if (hse_submitButton) {
+                console.log('🔍 Submit button name:', hse_submitButton.name);
+                console.log('🔍 Submit button value:', hse_submitButton.value);
+                
                 if (hse_submitButton.name === 'hse_cantiere_submit_parte_a') {
                     if (!hse_validateFormBeforeSubmit('parte_a')) {
                         e.preventDefault();
                         return false;
                     }
                 } else if (hse_submitButton.name === 'hse_cantiere_submit_parte_b') {
+                    console.log('✅ Processing Parte B submission');
                     const hse_cantiereId = hse_submitButton.value;
                     
                     if (!hse_cantiereId) {
@@ -4965,10 +4972,17 @@ document.addEventListener("DOMContentLoaded", function() {
                         hse_showToast('💾 Salvataggio in corso con avvisi informativi...', 'warning');
                     } else {
                         // Tutto OK, salvataggio normale
+                        console.log('✅ Parte B: No warnings, proceeding with submission');
                         hse_showToast('💾 Salvataggio in corso...', 'info');
                     }
+                    
+                    console.log('✅ Parte B validation complete, form will submit');
                 }
+            } else {
+                console.log('⚠️ No submitter detected - browser compatibility issue?');
             }
+            
+            console.log('✅ Form submit handler complete, form should now submit');
         });
     }
     
@@ -5057,15 +5071,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
     
-    // Previeni che i click sugli accordion headers triggherino quando si clicca sui pulsanti
     document.addEventListener('click', function(e) {
-        // Se il click è su un pulsante submit, permettigli di funzionare normalmente
-        if (e.target.closest('.hse_submit_parte_b_btn') || e.target.closest('.hse_submit_parte_a_btn')) {
-            console.log('✅ Click su pulsante submit registrato, form submission permessa');
-            // Non fare nulla - lascia che il form si sottometta normalmente
-            return;
-        }
-        
         if (e.target.closest('.hse_accordion_header') || 
             e.target.closest('.hse_persona_accordion_header') || 
             e.target.closest('.hse_cantiere_accordion_header')) {
