@@ -2587,7 +2587,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         // Pulsante salva per questo cantiere
         echo '<div class="hse_submit_parte_b_section" style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px solid #e9ecef;">';
         echo '<input type="hidden" name="hse_cantiere_id_' . $hse_cantiere['id'] . '" value="' . $hse_cantiere['id'] . '" class="hse_cantiere_id_input">';
-        echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s;">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
+        echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" id="hse_submit_btn_' . $hse_cantiere['id'] . '" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s; position: relative; z-index: 10;" onmousedown="console.log(\'Button clicked for cantiere ' . $hse_cantiere['id'] . '\');">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
         echo '</div>';
         
         echo '</div>'; // Fine hse_cantiere_accordion_content
@@ -3912,11 +3912,14 @@ function hse_togglePersonaAccordion(personaIndex) {
 
 // Gestione Accordion Cantieri
 function hse_toggleCantiereAccordion(cantiereId) {
+    console.log('🔧 Toggling accordion for cantiere:', cantiereId);
+    
     const content = document.getElementById('hse_content_cantiere_' + cantiereId);
     const arrow = document.getElementById('hse_arrow_cantiere_' + cantiereId);
     const header = content.previousElementSibling;
     
     if (content.style.display === 'none' || content.style.display === '') {
+        console.log('📂 Opening accordion for cantiere:', cantiereId);
         content.style.display = 'block';
         arrow.style.transform = 'rotate(180deg)';
         header.style.background = 'linear-gradient(135deg, #1976d2, #1565c0)';
@@ -3931,9 +3934,11 @@ function hse_toggleCantiereAccordion(cantiereId) {
         setTimeout(() => {
             content.style.maxHeight = 'none';
             content.style.overflow = 'visible';
+            console.log('✅ Accordion opened for cantiere:', cantiereId);
         }, 350);
         
     } else {
+        console.log('📁 Closing accordion for cantiere:', cantiereId);
         content.style.maxHeight = content.scrollHeight + 'px';
         content.style.overflow = 'hidden';
         content.style.transition = 'max-height 0.3s ease-in';
@@ -3946,6 +3951,7 @@ function hse_toggleCantiereAccordion(cantiereId) {
             content.style.display = 'none';
             arrow.style.transform = 'rotate(0deg)';
             header.style.background = 'linear-gradient(135deg, #2196f3, #1976d2)';
+            console.log('✅ Accordion closed for cantiere:', cantiereId);
         }, 350);
     }
 }
@@ -5051,7 +5057,14 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
     
+    // Previeni che i click sui pulsanti submit triggherino l'accordion
     document.addEventListener('click', function(e) {
+        // Se il click è su un pulsante submit, non fare nulla
+        if (e.target.closest('.hse_submit_parte_b_btn') || e.target.closest('.hse_submit_parte_a_btn')) {
+            console.log('✅ Click su pulsante submit registrato:', e.target);
+            return; // Non propagare l'evento
+        }
+        
         if (e.target.closest('.hse_accordion_header') || 
             e.target.closest('.hse_persona_accordion_header') || 
             e.target.closest('.hse_cantiere_accordion_header')) {

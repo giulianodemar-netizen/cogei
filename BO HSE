@@ -1633,10 +1633,25 @@ foreach ($richieste as $richiesta) {
     $operai_grouped = groupAssegnazioniByOperaio($operai_assegnazioni);
     
     // 🚛 NUOVO: Assegnazioni automezzi
+    // 🚛 NUOVO: Recupera TUTTI gli automezzi dell'utente (assegnati e non assegnati)
+    $richiesta = $wpdb->get_row($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d", $user_id
+    ), ARRAY_A);
+    
+    $all_automezzi = array();
+    if ($richiesta) {
+        $all_automezzi = getAutomezziByRichiestaId($richiesta['id']);
+    }
+    
     $automezzi_assegnazioni = getAutomezziAssegnazioniByUser($user_id);
     $automezzi_grouped = groupAutomezziAssegnazioniByAutomezzo($automezzi_assegnazioni);
     
-    // 🔧 NUOVO: Assegnazioni attrezzi
+    // 🔧 NUOVO: Recupera TUTTI gli attrezzi dell'utente (assegnati e non assegnati)
+    $all_attrezzi = array();
+    if ($richiesta) {
+        $all_attrezzi = getAttrezziByRichiestaId($richiesta['id']);
+    }
+    
     $attrezzi_assegnazioni = getAttrezziAssegnazioniByUser($user_id);
     $attrezzi_grouped = groupAttrezziAssegnazioniByAttrezzo($attrezzi_assegnazioni);
     
@@ -1736,29 +1751,56 @@ foreach ($richieste as $richiesta) {
     }
     echo '</td>';
     
-    // 🚛 NUOVO: Automezzi
+    // 🚛 NUOVO: Automezzi (assegnati e non assegnati con distinzione visiva)
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 10px;">';
+    
+    // Mostra automezzi assegnati
     if (!empty($automezzi_grouped)) {
         foreach ($automezzi_grouped as $automezzo) {
             echo '<div style="background: #fff3cd; color: #856404; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #ffc107;">';
-            echo '<strong>🚛 ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
+            echo '<strong>🚛 ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong>';
+            echo ' <span style="background: #28a745; color: white; padding: 1px 4px; border-radius: 3px; font-size: 8px; margin-left: 3px;">✓ Assegnato</span><br>';
             echo '<span style="font-size: 9px; color: #6c757d;">📋 ' . htmlspecialchars($automezzo['targa']) . '</span><br>';
             foreach ($automezzo['cantieri'] as $cantiere_assegnazione) {
                 echo '<span style="font-size: 9px; color: #6c757d;">├ ' . htmlspecialchars($cantiere_assegnazione['cantiere_nome']) . '</span><br>';
             }
             echo '</div>';
         }
-    } else {
+    }
+    
+    // Mostra automezzi NON assegnati con stile diverso
+    if (!empty($all_automezzi)) {
+        $automezzi_assegnati_ids = array();
+        foreach ($automezzi_grouped as $automezzo) {
+            $automezzi_assegnati_ids[] = $automezzo['automezzo_id'];
+        }
+        
+        foreach ($all_automezzi as $automezzo) {
+            if (!in_array($automezzo['id'], $automezzi_assegnati_ids)) {
+                echo '<div style="background: #f8f9fa; color: #6c757d; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #dee2e6; opacity: 0.7;">';
+                echo '<strong>🚛 ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong>';
+                echo ' <span style="background: #6c757d; color: white; padding: 1px 4px; border-radius: 3px; font-size: 8px; margin-left: 3px;">⚪ Non assegnato</span><br>';
+                echo '<span style="font-size: 9px; color: #6c757d;">📋 ' . htmlspecialchars($automezzo['targa']) . '</span><br>';
+                echo '<span style="font-size: 9px; color: #adb5bd; font-style: italic;">Nessun cantiere</span>';
+                echo '</div>';
+            }
+        }
+    }
+    
+    if (empty($automezzi_grouped) && empty($all_automezzi)) {
         echo '<span style="color: #6c757d; font-style: italic;">Nessun automezzo</span>';
     }
     echo '</td>';
     
-    // 🔧 NUOVO: Attrezzi
+    // 🔧 NUOVO: Attrezzi (assegnati e non assegnati con distinzione visiva)
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 10px;">';
+    
+    // Mostra attrezzi assegnati
     if (!empty($attrezzi_grouped)) {
         foreach ($attrezzi_grouped as $attrezzo) {
             echo '<div style="background: #e3f2fd; color: #1565c0; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #2196f3;">';
-            echo '<strong>🔧 ' . htmlspecialchars($attrezzo['descrizione_attrezzo']) . '</strong><br>';
+            echo '<strong>🔧 ' . htmlspecialchars($attrezzo['descrizione_attrezzo']) . '</strong>';
+            echo ' <span style="background: #28a745; color: white; padding: 1px 4px; border-radius: 3px; font-size: 8px; margin-left: 3px;">✓ Assegnato</span><br>';
             if ($attrezzo['data_revisione']) {
                 echo '<span style="font-size: 9px; color: #6c757d;">📅 Rev: ' . date('d/m/Y', strtotime($attrezzo['data_revisione'])) . '</span><br>';
             }
@@ -1767,7 +1809,30 @@ foreach ($richieste as $richiesta) {
             }
             echo '</div>';
         }
-    } else {
+    }
+    
+    // Mostra attrezzi NON assegnati con stile diverso
+    if (!empty($all_attrezzi)) {
+        $attrezzi_assegnati_ids = array();
+        foreach ($attrezzi_grouped as $attrezzo) {
+            $attrezzi_assegnati_ids[] = $attrezzo['attrezzo_id'];
+        }
+        
+        foreach ($all_attrezzi as $attrezzo) {
+            if (!in_array($attrezzo['id'], $attrezzi_assegnati_ids)) {
+                echo '<div style="background: #f8f9fa; color: #6c757d; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #dee2e6; opacity: 0.7;">';
+                echo '<strong>🔧 ' . htmlspecialchars($attrezzo['descrizione_attrezzo']) . '</strong>';
+                echo ' <span style="background: #6c757d; color: white; padding: 1px 4px; border-radius: 3px; font-size: 8px; margin-left: 3px;">⚪ Non assegnato</span><br>';
+                if ($attrezzo['data_revisione']) {
+                    echo '<span style="font-size: 9px; color: #6c757d;">📅 Rev: ' . date('d/m/Y', strtotime($attrezzo['data_revisione'])) . '</span><br>';
+                }
+                echo '<span style="font-size: 9px; color: #adb5bd; font-style: italic;">Nessun cantiere</span>';
+                echo '</div>';
+            }
+        }
+    }
+    
+    if (empty($attrezzi_grouped) && empty($all_attrezzi)) {
         echo '<span style="color: #6c757d; font-style: italic;">Nessun attrezzo</span>';
     }
     echo '</td>';
