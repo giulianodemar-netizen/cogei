@@ -5057,12 +5057,13 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
     
-    // Previeni che i click sui pulsanti submit triggherino l'accordion
+    // Previeni che i click sugli accordion headers triggherino quando si clicca sui pulsanti
     document.addEventListener('click', function(e) {
-        // Se il click è su un pulsante submit, non fare nulla
+        // Se il click è su un pulsante submit, permettigli di funzionare normalmente
         if (e.target.closest('.hse_submit_parte_b_btn') || e.target.closest('.hse_submit_parte_a_btn')) {
-            console.log('✅ Click su pulsante submit registrato:', e.target);
-            return; // Non propagare l'evento
+            console.log('✅ Click su pulsante submit registrato, form submission permessa');
+            // Non fare nulla - lascia che il form si sottometta normalmente
+            return;
         }
         
         if (e.target.closest('.hse_accordion_header') || 
