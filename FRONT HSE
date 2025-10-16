@@ -4979,18 +4979,20 @@ document.addEventListener("DOMContentLoaded", function() {
                 // Save accordion states before submission
                 hse_saveAccordionStates();
                 
-                // Add hidden input with button name/value so PHP can detect Parte B submission
-                // This is needed because programmatic form.submit() doesn't include the clicked button
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'hse_cantiere_submit_parte_b';
-                hiddenInput.value = hse_cantiereId;
-                hse_form.appendChild(hiddenInput);
+                // Create a temporary submit button to trigger natural form submission
+                // This ensures all form data (including checkboxes) is properly serialized
+                const tempSubmitBtn = document.createElement('button');
+                tempSubmitBtn.type = 'submit';
+                tempSubmitBtn.name = 'hse_cantiere_submit_parte_b';
+                tempSubmitBtn.value = hse_cantiereId;
+                tempSubmitBtn.style.display = 'none';
+                hse_form.appendChild(tempSubmitBtn);
                 
-                console.log('✅ Added hidden input for Parte B submission, cantiere ID:', hse_cantiereId);
+                console.log('✅ Created temp submit button for Parte B submission, cantiere ID:', hse_cantiereId);
                 
-                // Submit the form
-                hse_form.submit();
+                // Click the temp button to trigger natural form submission
+                // This is better than form.submit() as it includes all form data properly
+                tempSubmitBtn.click();
             });
         });
         
