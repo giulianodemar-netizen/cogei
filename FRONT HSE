@@ -4979,6 +4979,16 @@ document.addEventListener("DOMContentLoaded", function() {
                 // Save accordion states before submission
                 hse_saveAccordionStates();
                 
+                // Add hidden input with button name/value so PHP can detect Parte B submission
+                // This is needed because programmatic form.submit() doesn't include the clicked button
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'hse_cantiere_submit_parte_b';
+                hiddenInput.value = hse_cantiereId;
+                hse_form.appendChild(hiddenInput);
+                
+                console.log('✅ Added hidden input for Parte B submission, cantiere ID:', hse_cantiereId);
+                
                 // Submit the form
                 hse_form.submit();
             });
