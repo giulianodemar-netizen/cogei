@@ -1666,6 +1666,14 @@ foreach ($richieste as $richiesta) {
     
     // File DVR
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    
+    // TEMPORARY DEBUG - will remove after testing
+    $debug_dvr = "ID: " . $richiesta['id'] . " | ";
+    $debug_dvr .= "isset: " . (isset($richiesta['dvr_file']) ? 'Y' : 'N') . " | ";
+    $debug_dvr .= "empty: " . (empty($richiesta['dvr_file']) ? 'Y' : 'N') . " | ";
+    $debug_dvr .= "value: '" . substr($richiesta['dvr_file'] ?? 'NULL', 0, 30) . "'";
+    echo '<div title="' . htmlspecialchars($debug_dvr) . '" style="cursor: help;">';
+    
     if (!empty($richiesta['dvr_file'])) {
         echo '<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">';
         echo '<a href="' . esc_url($richiesta['dvr_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza DVR">📄 ✓</a>';
@@ -1681,6 +1689,8 @@ foreach ($richieste as $richiesta) {
     } else {
         echo '<span style="color: #dc3545;">✗</span>';
     }
+    
+    echo '</div>'; // Close debug wrapper
     echo '</td>';
     
     // File RCT (da user meta)
