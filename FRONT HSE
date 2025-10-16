@@ -2304,9 +2304,6 @@ echo '</div>';
 
 echo '</div>'; // Fine hse_parte_a
 
-?>
-<?php
-
 // PARTE B PER SINGOLO CANTIERE CON ACCORDION
 if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
     echo '<div class="hse_parte_b" style="background: #e3f2fd; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #2196f3;">';
@@ -2332,6 +2329,10 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         
         // Content accordion cantiere (chiuso di default)
         echo '<div class="hse_cantiere_accordion_content" id="hse_content_cantiere_' . $hse_cantiere['id'] . '" style="display: none; padding: 20px; transition: all 0.3s ease;">';
+        
+        // FORM per questo cantiere specifico
+        echo '<form method="post" enctype="multipart/form-data" class="hse_cantiere_form_parte_b" id="hse_form_cantiere_' . $hse_cantiere['id'] . '">';
+        echo wp_nonce_field('hse_cantiere_form_' . $hse_current_user_id, 'hse_cantiere_nonce', true, false);
         
         // POS File per questo cantiere
         $hse_pos_data = hse_getPosFileByCantiere($hse_cantiere['id'], $hse_current_user_id);
@@ -2589,6 +2590,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         echo '<input type="hidden" name="hse_cantiere_id_' . $hse_cantiere['id'] . '" value="' . $hse_cantiere['id'] . '" class="hse_cantiere_id_input">';
         echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" id="hse_submit_btn_' . $hse_cantiere['id'] . '" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s; position: relative; z-index: 10;" onmousedown="console.log(\'Button clicked for cantiere ' . $hse_cantiere['id'] . '\');">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
         echo '</div>';
+        
+        echo '</form>'; // Chiude il form per questo cantiere
         
         echo '</div>'; // Fine hse_cantiere_accordion_content
         echo '</div>'; // Fine hse_cantiere_accordion
@@ -4828,26 +4831,27 @@ document.addEventListener("DOMContentLoaded", function() {
     if (hse_form) {
         console.log('✅ Form found');
         
-        // Add click listeners to Parte B buttons to ensure they trigger form submission
-        // The original submit handler (line 4885+) will then validate
-        const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
-        console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
-        
-        hse_parteB_buttons.forEach(function(button) {
-            button.addEventListener('click', function(e) {
-                console.log('✅ Parte B button clicked:', this.value);
-                // Don't prevent default - let the button submit the form naturally
-                // The form's submit event handler will do validation
-            });
-        });
-        
         hse_form.addEventListener('submit', function(e) {
             console.log('🔍 Form submit event triggered');
-            console.log('🔍 Event submitter:', e.submitter);
             
             hse_saveAccordionStates();
             
-            const hse_submitButton = e.submitter;
+            // Detect which button was clicked by checking document.activeElement
+            // or by finding which submit button was clicked
+            let hse_submitButton = null;
+            
+            // Try to get the submitter from the event (modern browsers)
+            if (e.submitter) {
+                hse_submitButton = e.submitter;
+                console.log('🔍 Using e.submitter');
+            } else {
+                // Fallback for older browsers: check document.activeElement
+                const activeEl = document.activeElement;
+                if (activeEl && activeEl.tagName === 'BUTTON' && activeEl.type === 'submit') {
+                    hse_submitButton = activeEl;
+                    console.log('🔍 Using document.activeElement');
+                }
+            }
             
             if (hse_submitButton) {
                 console.log('🔍 Submit button name:', hse_submitButton.name);
