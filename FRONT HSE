@@ -4853,6 +4853,20 @@ document.addEventListener("DOMContentLoaded", function() {
                 const hse_totalSelected = hse_selectedOperai.length + hse_selectedAutomezzi.length + hse_selectedAttrezzi.length;
                 
                 console.log('🔍 Selected items:', hse_totalSelected);
+                console.log('🔍 Operai checked:', hse_selectedOperai.length);
+                console.log('🔍 Automezzi checked:', hse_selectedAutomezzi.length);
+                console.log('🔍 Attrezzi checked:', hse_selectedAttrezzi.length);
+                
+                // Log the actual checkbox values
+                if (hse_selectedOperai.length > 0) {
+                    console.log('🔍 Operai IDs:', Array.from(hse_selectedOperai).map(cb => cb.value));
+                }
+                if (hse_selectedAutomezzi.length > 0) {
+                    console.log('🔍 Automezzi IDs:', Array.from(hse_selectedAutomezzi).map(cb => cb.value));
+                }
+                if (hse_selectedAttrezzi.length > 0) {
+                    console.log('🔍 Attrezzi IDs:', Array.from(hse_selectedAttrezzi).map(cb => cb.value));
+                }
                 
                 if (hse_totalSelected === 0) {
                     alert(`⚠️ Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere (ID: ${hse_cantiereId})`);
@@ -4870,6 +4884,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 hse_form.appendChild(hiddenInput);
                 
                 console.log('✅ Added hidden input, submitting form');
+                console.log('🔍 Form will be submitted with these checkboxes checked');
                 
                 // Submit the form
                 hse_form.submit();
