@@ -2587,7 +2587,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         // Pulsante salva per questo cantiere
         echo '<div class="hse_submit_parte_b_section" style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px solid #e9ecef;">';
         echo '<input type="hidden" name="hse_cantiere_id_' . $hse_cantiere['id'] . '" value="' . $hse_cantiere['id'] . '" class="hse_cantiere_id_input">';
-        echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s;">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
+        echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" id="hse_submit_btn_' . $hse_cantiere['id'] . '" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s; position: relative; z-index: 10;" onmousedown="console.log(\'Button clicked for cantiere ' . $hse_cantiere['id'] . '\');">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
         echo '</div>';
         
         echo '</div>'; // Fine hse_cantiere_accordion_content
@@ -3912,11 +3912,14 @@ function hse_togglePersonaAccordion(personaIndex) {
 
 // Gestione Accordion Cantieri
 function hse_toggleCantiereAccordion(cantiereId) {
+    console.log('🔧 Toggling accordion for cantiere:', cantiereId);
+    
     const content = document.getElementById('hse_content_cantiere_' + cantiereId);
     const arrow = document.getElementById('hse_arrow_cantiere_' + cantiereId);
     const header = content.previousElementSibling;
     
     if (content.style.display === 'none' || content.style.display === '') {
+        console.log('📂 Opening accordion for cantiere:', cantiereId);
         content.style.display = 'block';
         arrow.style.transform = 'rotate(180deg)';
         header.style.background = 'linear-gradient(135deg, #1976d2, #1565c0)';
@@ -3931,9 +3934,11 @@ function hse_toggleCantiereAccordion(cantiereId) {
         setTimeout(() => {
             content.style.maxHeight = 'none';
             content.style.overflow = 'visible';
+            console.log('✅ Accordion opened for cantiere:', cantiereId);
         }, 350);
         
     } else {
+        console.log('📁 Closing accordion for cantiere:', cantiereId);
         content.style.maxHeight = content.scrollHeight + 'px';
         content.style.overflow = 'hidden';
         content.style.transition = 'max-height 0.3s ease-in';
@@ -3946,6 +3951,7 @@ function hse_toggleCantiereAccordion(cantiereId) {
             content.style.display = 'none';
             arrow.style.transform = 'rotate(0deg)';
             header.style.background = 'linear-gradient(135deg, #2196f3, #1976d2)';
+            console.log('✅ Accordion closed for cantiere:', cantiereId);
         }, 350);
     }
 }
@@ -4820,18 +4826,40 @@ document.addEventListener("DOMContentLoaded", function() {
     
     const hse_form = document.getElementById('hse_cantiere_form_main');
     if (hse_form) {
+        console.log('✅ Form found');
+        
+        // Add click listeners to Parte B buttons to ensure they trigger form submission
+        // The original submit handler (line 4885+) will then validate
+        const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
+        console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
+        
+        hse_parteB_buttons.forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                console.log('✅ Parte B button clicked:', this.value);
+                // Don't prevent default - let the button submit the form naturally
+                // The form's submit event handler will do validation
+            });
+        });
+        
         hse_form.addEventListener('submit', function(e) {
+            console.log('🔍 Form submit event triggered');
+            console.log('🔍 Event submitter:', e.submitter);
+            
             hse_saveAccordionStates();
             
             const hse_submitButton = e.submitter;
             
             if (hse_submitButton) {
+                console.log('🔍 Submit button name:', hse_submitButton.name);
+                console.log('🔍 Submit button value:', hse_submitButton.value);
+                
                 if (hse_submitButton.name === 'hse_cantiere_submit_parte_a') {
                     if (!hse_validateFormBeforeSubmit('parte_a')) {
                         e.preventDefault();
                         return false;
                     }
                 } else if (hse_submitButton.name === 'hse_cantiere_submit_parte_b') {
+                    console.log('✅ Processing Parte B submission');
                     const hse_cantiereId = hse_submitButton.value;
                     
                     if (!hse_cantiereId) {
@@ -4959,10 +4987,17 @@ document.addEventListener("DOMContentLoaded", function() {
                         hse_showToast('💾 Salvataggio in corso con avvisi informativi...', 'warning');
                     } else {
                         // Tutto OK, salvataggio normale
+                        console.log('✅ Parte B: No warnings, proceeding with submission');
                         hse_showToast('💾 Salvataggio in corso...', 'info');
                     }
+                    
+                    console.log('✅ Parte B validation complete, form will submit');
                 }
+            } else {
+                console.log('⚠️ No submitter detected - browser compatibility issue?');
             }
+            
+            console.log('✅ Form submit handler complete, form should now submit');
         });
     }
     
@@ -5113,8 +5148,7 @@ document.addEventListener("DOMContentLoaded", function() {
     let hse_formChanged = false;
     let hse_originalFormData = '';
     
-    // Cattura lo stato iniziale del form
-    const hse_form = document.getElementById('hse_cantiere_form_main');
+    // Usa il riferimento al form già dichiarato sopra
     if (hse_form) {
         // Salva lo stato iniziale dopo il caricamento completo
         setTimeout(() => {
