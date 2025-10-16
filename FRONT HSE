@@ -4826,6 +4826,47 @@ document.addEventListener("DOMContentLoaded", function() {
     
     const hse_form = document.getElementById('hse_cantiere_form_main');
     if (hse_form) {
+        console.log('✅ Form found, attaching listeners');
+        
+        // Attach click handlers to all Parte B submit buttons
+        const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
+        console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
+        
+        hse_parteB_buttons.forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                e.preventDefault(); // Prevent default to handle manually
+                console.log('✅ Parte B button clicked:', this.value);
+                
+                const hse_cantiereId = this.value;
+                const hse_buttonName = this.name;
+                
+                if (!hse_cantiereId) {
+                    alert('⚠️ Errore: Impossibile identificare il cantiere. Riprova.');
+                    return;
+                }
+                
+                // Validate: at least one item selected
+                const hse_selectedOperai = document.querySelectorAll(`input[name="hse_operai_selezionati_${hse_cantiereId}[]"]:checked`);
+                const hse_selectedAutomezzi = document.querySelectorAll(`input[name="hse_automezzi_selezionati_${hse_cantiereId}[]"]:checked`);
+                const hse_selectedAttrezzi = document.querySelectorAll(`input[name="hse_attrezzi_selezionati_${hse_cantiereId}[]"]:checked`);
+                
+                const hse_totalSelected = hse_selectedOperai.length + hse_selectedAutomezzi.length + hse_selectedAttrezzi.length;
+                
+                console.log('🔍 Selected items:', hse_totalSelected);
+                
+                if (hse_totalSelected === 0) {
+                    alert(`⚠️ Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere (ID: ${hse_cantiereId})`);
+                    return;
+                }
+                
+                console.log('✅ Validation passed, submitting form');
+                hse_saveAccordionStates();
+                
+                // Submit the form
+                hse_form.submit();
+            });
+        });
+        
         hse_form.addEventListener('submit', function(e) {
             console.log('🔍 Form submit event triggered');
             console.log('🔍 Event submitter:', e.submitter);
