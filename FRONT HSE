@@ -2330,6 +2330,10 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         // Content accordion cantiere (chiuso di default)
         echo '<div class="hse_cantiere_accordion_content" id="hse_content_cantiere_' . $hse_cantiere['id'] . '" style="display: none; padding: 20px; transition: all 0.3s ease;">';
         
+        // FORM per questo cantiere specifico
+        echo '<form method="post" enctype="multipart/form-data" class="hse_cantiere_form_parte_b" id="hse_form_cantiere_' . $hse_cantiere['id'] . '">';
+        echo wp_nonce_field('hse_cantiere_form_' . $hse_current_user_id, 'hse_cantiere_nonce', true, false);
+        
         // POS File per questo cantiere
         $hse_pos_data = hse_getPosFileByCantiere($hse_cantiere['id'], $hse_current_user_id);
         
@@ -2586,6 +2590,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         echo '<input type="hidden" name="hse_cantiere_id_' . $hse_cantiere['id'] . '" value="' . $hse_cantiere['id'] . '" class="hse_cantiere_id_input">';
         echo '<button type="submit" name="hse_cantiere_submit_parte_b" value="' . $hse_cantiere['id'] . '" class="hse_submit_parte_b_btn" id="hse_submit_btn_' . $hse_cantiere['id'] . '" style="background: #2196f3; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.3s; position: relative; z-index: 10;" onmousedown="console.log(\'Button clicked for cantiere ' . $hse_cantiere['id'] . '\');">🏗️ Salva per ' . htmlspecialchars($hse_cantiere['nome']) . '</button>';
         echo '</div>';
+        
+        echo '</form>'; // Chiude il form per questo cantiere
         
         echo '</div>'; // Fine hse_cantiere_accordion_content
         echo '</div>'; // Fine hse_cantiere_accordion
