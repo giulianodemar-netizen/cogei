@@ -4828,8 +4828,18 @@ document.addEventListener("DOMContentLoaded", function() {
     if (hse_form) {
         console.log('✅ Form found');
         
-        // NO custom click handlers needed!
-        // The form's submit event handler (line 4885+) already validates Parte B properly
+        // Add click listeners to Parte B buttons to ensure they trigger form submission
+        // The original submit handler (line 4885+) will then validate
+        const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
+        console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
+        
+        hse_parteB_buttons.forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                console.log('✅ Parte B button clicked:', this.value);
+                // Don't prevent default - let the button submit the form naturally
+                // The form's submit event handler will do validation
+            });
+        });
         
         hse_form.addEventListener('submit', function(e) {
             console.log('🔍 Form submit event triggered');
