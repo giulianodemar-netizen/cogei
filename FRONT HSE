@@ -4826,61 +4826,10 @@ document.addEventListener("DOMContentLoaded", function() {
     
     const hse_form = document.getElementById('hse_cantiere_form_main');
     if (hse_form) {
-        console.log('✅ Form found, attaching listeners');
+        console.log('✅ Form found');
         
-        // Attach click handlers to all Parte B submit buttons
-        const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
-        console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
-        
-        hse_parteB_buttons.forEach(function(button) {
-            button.addEventListener('click', function(e) {
-                console.log('✅ Parte B button clicked:', this.value);
-                
-                const hse_cantiereId = this.value;
-                
-                if (!hse_cantiereId) {
-                    e.preventDefault();
-                    alert('⚠️ Errore: Impossibile identificare il cantiere. Riprova.');
-                    return;
-                }
-                
-                // Validate: at least one item selected
-                const hse_selectedOperai = document.querySelectorAll(`input[name="hse_operai_selezionati_${hse_cantiereId}[]"]:checked`);
-                const hse_selectedAutomezzi = document.querySelectorAll(`input[name="hse_automezzi_selezionati_${hse_cantiereId}[]"]:checked`);
-                const hse_selectedAttrezzi = document.querySelectorAll(`input[name="hse_attrezzi_selezionati_${hse_cantiereId}[]"]:checked`);
-                
-                const hse_totalSelected = hse_selectedOperai.length + hse_selectedAutomezzi.length + hse_selectedAttrezzi.length;
-                
-                console.log('🔍 Selected items:', hse_totalSelected);
-                console.log('🔍 Operai checked:', hse_selectedOperai.length);
-                console.log('🔍 Automezzi checked:', hse_selectedAutomezzi.length);
-                console.log('🔍 Attrezzi checked:', hse_selectedAttrezzi.length);
-                
-                // Log the actual checkbox values
-                if (hse_selectedOperai.length > 0) {
-                    console.log('🔍 Operai IDs:', Array.from(hse_selectedOperai).map(cb => cb.value));
-                }
-                if (hse_selectedAutomezzi.length > 0) {
-                    console.log('🔍 Automezzi IDs:', Array.from(hse_selectedAutomezzi).map(cb => cb.value));
-                }
-                if (hse_selectedAttrezzi.length > 0) {
-                    console.log('🔍 Attrezzi IDs:', Array.from(hse_selectedAttrezzi).map(cb => cb.value));
-                }
-                
-                if (hse_totalSelected === 0) {
-                    e.preventDefault();
-                    alert(`⚠️ Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere (ID: ${hse_cantiereId})`);
-                    return;
-                }
-                
-                console.log('✅ Validation passed - letting button submit naturally');
-                hse_saveAccordionStates();
-                
-                // DON'T prevent default - let the button submit the form naturally
-                // This ensures all form data including checkboxes are submitted properly
-                console.log('✅ Form will submit naturally with button click');
-            });
-        });
+        // NO custom click handlers needed!
+        // The form's submit event handler (line 4885+) already validates Parte B properly
         
         hse_form.addEventListener('submit', function(e) {
             console.log('🔍 Form submit event triggered');
