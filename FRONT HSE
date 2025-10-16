@@ -5133,8 +5133,7 @@ document.addEventListener("DOMContentLoaded", function() {
     let hse_formChanged = false;
     let hse_originalFormData = '';
     
-    // Cattura lo stato iniziale del form
-    const hse_form = document.getElementById('hse_cantiere_form_main');
+    // Usa il riferimento al form già dichiarato sopra
     if (hse_form) {
         // Salva lo stato iniziale dopo il caricamento completo
         setTimeout(() => {
