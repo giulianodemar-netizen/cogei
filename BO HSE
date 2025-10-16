@@ -518,10 +518,10 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
             $user->user_email,
             $user->display_name,
             $tipo ?: '',
-            $richiesta['dvr_file'] ? 'Caricato' : 'Non caricato',
-            $richiesta['rct_file'] ? 'Caricato' : 'Non caricato',
-            $richiesta['pos_file'] ? 'Caricato' : 'Non caricato',
-            $richiesta['mezzi_file'] ? 'Caricato' : 'Non caricato',
+            !empty($richiesta['dvr_file']) ? 'Caricato' : 'Non caricato',
+            !empty($richiesta['rct_file']) ? 'Caricato' : 'Non caricato',
+            !empty($richiesta['pos_file']) ? 'Caricato' : 'Non caricato',
+            !empty($richiesta['mezzi_file']) ? 'Caricato' : 'Non caricato',
             $richiesta['numero_personale'],
             $richiesta['parte_b_completata'] ? 'Si' : 'No',
             $stato_hse['label'],
@@ -1670,7 +1670,7 @@ foreach ($richieste as $richiesta) {
     
     // File DVR
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    if ($richiesta['dvr_file']) {
+    if (!empty($richiesta['dvr_file'])) {
         echo '<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">';
         echo '<a href="' . esc_url($richiesta['dvr_file']) . '" target="_blank" style="color: #28a745; font-weight: bold;" title="Visualizza DVR">📄 ✓</a>';
         
