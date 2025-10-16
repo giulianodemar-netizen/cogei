@@ -4834,11 +4834,12 @@ document.addEventListener("DOMContentLoaded", function() {
         
         hse_parteB_buttons.forEach(function(button) {
             button.addEventListener('click', function(e) {
-                e.preventDefault(); // Prevent default to handle manually
+                e.preventDefault(); // Prevent default to validate first
                 console.log('✅ Parte B button clicked:', this.value);
                 
                 const hse_cantiereId = this.value;
                 const hse_buttonName = this.name;
+                const originalButton = this; // Save reference to the actual button
                 
                 if (!hse_cantiereId) {
                     alert('⚠️ Errore: Impossibile identificare il cantiere. Riprova.');
@@ -4876,18 +4877,29 @@ document.addEventListener("DOMContentLoaded", function() {
                 console.log('✅ Validation passed, preparing form submission');
                 hse_saveAccordionStates();
                 
-                // Create a hidden input with button name/value so PHP can detect which button was clicked
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = hse_buttonName;
-                hiddenInput.value = hse_cantiereId;
-                hse_form.appendChild(hiddenInput);
+                console.log('✅ Submitting form using requestSubmit() to include all form data');
                 
-                console.log('✅ Added hidden input, submitting form');
-                console.log('🔍 Form will be submitted with these checkboxes checked');
-                
-                // Submit the form
-                hse_form.submit();
+                // Use requestSubmit() instead of submit() - this properly includes button data and checkbox data
+                // This triggers the form's submit event and includes all form elements
+                try {
+                    if (hse_form.requestSubmit) {
+                        // Modern browsers - this properly submits the form with the button
+                        hse_form.requestSubmit(originalButton);
+                    } else {
+                        // Fallback for older browsers - create a temporary submit button and click it
+                        const tempButton = document.createElement('button');
+                        tempButton.type = 'submit';
+                        tempButton.name = hse_buttonName;
+                        tempButton.value = hse_cantiereId;
+                        tempButton.style.display = 'none';
+                        hse_form.appendChild(tempButton);
+                        tempButton.click();
+                    }
+                } catch (err) {
+                    console.error('❌ Error submitting form:', err);
+                    // Last resort - just submit normally
+                    hse_form.submit();
+                }
             });
         });
         
