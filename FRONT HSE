@@ -4803,6 +4803,15 @@ document.addEventListener("DOMContentLoaded", function() {
     
     hse_setupPersonaTitleUpdate();
     
+    // Check if there's a success message and scroll to it
+    const hse_successMessage = document.querySelector('.hse_success_message');
+    if (hse_successMessage) {
+        setTimeout(() => {
+            hse_successMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            hse_successMessage.style.animation = 'hse_fadeInUp 0.6s ease-out';
+        }, 500);
+    }
+    
     setTimeout(() => {
         hse_restoreAccordionStates();
     }, 500);
@@ -4829,175 +4838,169 @@ document.addEventListener("DOMContentLoaded", function() {
         console.log('✅ Form found');
         
         // Add click listeners to Parte B buttons to ensure they trigger form submission
-        // The original submit handler (line 4885+) will then validate
+        // Handle explicit form submission since e.submitter may not work in all browsers
         const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
         console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
         
         hse_parteB_buttons.forEach(function(button) {
             button.addEventListener('click', function(e) {
+                e.preventDefault(); // Prevent default to handle submission manually
                 console.log('✅ Parte B button clicked:', this.value);
-                // Don't prevent default - let the button submit the form naturally
-                // The form's submit event handler will do validation
+                const hse_cantiereId = this.value;
+                
+                if (!hse_cantiereId) {
+                    alert('⚠️ Errore: Impossibile identificare il cantiere. Riprova.');
+                    return false;
+                }
+                
+                // MODIFICA: Controllo selezionato almeno un elemento (operaio, automezzo o attrezzo)
+                const hse_selectedOperai = document.querySelectorAll(`input[name="hse_operai_selezionati_${hse_cantiereId}[]"]:checked`);
+                const hse_selectedAutomezzi = document.querySelectorAll(`input[name="hse_automezzi_selezionati_${hse_cantiereId}[]"]:checked`);
+                const hse_selectedAttrezzi = document.querySelectorAll(`input[name="hse_attrezzi_selezionati_${hse_cantiereId}[]"]:checked`);
+                
+                const hse_totalSelected = hse_selectedOperai.length + hse_selectedAutomezzi.length + hse_selectedAttrezzi.length;
+                
+                if (hse_totalSelected === 0) {
+                    alert(`⚠️ Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere (ID: ${hse_cantiereId})`);
+                    return false;
+                }
+                
+                // NUOVO: Controlla conformità solo come informazione, non blocca il salvataggio
+                let hse_hasScaduti = false;
+                let hse_hasConformityIssues = false;
+                let hse_operaiScaduti = [];
+                let hse_conformityWarnings = [];
+                
+                if (hse_selectedOperai.length > 0) {
+                    // Calcola statistiche conformità
+                    let antincendioCount = 0;
+                    let primoSoccorsoCount = 0;
+                    let prepostiCount = 0;
+                    
+                    hse_selectedOperai.forEach(checkbox => {
+                        const operaioId = parseInt(checkbox.value);
+                        const operaio = hse_existingPersonaleData.find(p => p.id == operaioId);
+                        
+                        if (operaio) {
+                            // Controlla scadenze documenti
+                            const warnings = [];
+                            const oggi = new Date();
+                            
+                            if (operaio.unilav_data_scadenza) {
+                                const scadenza = new Date(operaio.unilav_data_scadenza);
+                                if (oggi > scadenza) {
+                                    warnings.push('UNILAV scaduto');
+                                    hse_hasScaduti = true;
+                                }
+                            }
+                            
+                            if (operaio.idoneita_sanitaria_scadenza) {
+                                const scadenza = new Date(operaio.idoneita_sanitaria_scadenza);
+                                if (oggi > scadenza) {
+                                    warnings.push('Idoneità sanitaria scaduta');
+                                    hse_hasScaduti = true;
+                                }
+                            }
+                            
+                            if (warnings.length > 0) {
+                                hse_operaiScaduti.push(`${operaio.nome} ${operaio.cognome}: ${warnings.join(', ')}`);
+                            }
+                            
+                            // Conta competenze per conformità
+                            if (operaio.formazione_antincendio_file) antincendioCount++;
+                            if (operaio.formazione_primo_soccorso_file) primoSoccorsoCount++;
+                            if (operaio.formazione_preposti_file) prepostiCount++;
+                        }
+                    });
+                    
+                    // Calcola percentuali conformità
+                    const totalOperai = hse_selectedOperai.length;
+                    const percAntincendio = (antincendioCount / totalOperai) * 100;
+                    const percPrimoSoccorso = (primoSoccorsoCount / totalOperai) * 100;
+                    const percPreposti = (prepostiCount / totalOperai) * 100;
+                    
+                    // Controlla conformità (30% minimo per ogni competenza)
+                    if (percAntincendio < 30) {
+                        hse_hasConformityIssues = true;
+                        hse_conformityWarnings.push(`Antincendio: ${percAntincendio.toFixed(1)}% (minimo 30%)`);
+                    }
+                    if (percPrimoSoccorso < 30) {
+                        hse_hasConformityIssues = true;
+                        hse_conformityWarnings.push(`Primo Soccorso: ${percPrimoSoccorso.toFixed(1)}% (minimo 30%)`);
+                    }
+                    if (percPreposti < 30) {
+                        hse_hasConformityIssues = true;
+                        hse_conformityWarnings.push(`Preposti: ${percPreposti.toFixed(1)}% (minimo 30%)`);
+                    }
+                }
+                
+                // MODIFICA: Mostra avvisi informativi ma non blocca il salvataggio
+                let confirmationMessage = '';
+                let hasWarnings = false;
+                
+                if (hse_hasScaduti) {
+                    confirmationMessage += '⚠️ DOCUMENTI SCADUTI:\n\n' + hse_operaiScaduti.join('\n') + '\n\n';
+                    hasWarnings = true;
+                }
+                
+                if (hse_hasConformityIssues) {
+                    confirmationMessage += '📊 CONFORMITÀ NON RAGGIUNTA:\n\n' + hse_conformityWarnings.join('\n') + '\n\n';
+                    confirmationMessage += 'Il cantiere risulta NON CONFORME ai requisiti di formazione del personale.\n\n';
+                    hasWarnings = true;
+                }
+                
+                if (hasWarnings) {
+                    confirmationMessage += '💡 NOTA: Questi sono avvisi informativi. Puoi comunque salvare, ma ti consigliamo di risolvere le problematiche prima di accedere al cantiere.\n\nVuoi continuare con il salvataggio?';
+                    
+                    if (!confirm(confirmationMessage)) {
+                        return false;
+                    }
+                    
+                    // Log degli avvisi per debugging
+                    console.log('CANTIERE SAVE WITH WARNINGS:', {
+                        cantiereId: hse_cantiereId,
+                        hasScaduti: hse_hasScaduti,
+                        hasConformityIssues: hse_hasConformityIssues,
+                        operaiScaduti: hse_operaiScaduti,
+                        conformityWarnings: hse_conformityWarnings,
+                        totalSelected: hse_totalSelected
+                    });
+                    
+                    // Mostra toast informativo
+                    hse_showToast('💾 Salvataggio in corso con avvisi informativi...', 'warning');
+                } else {
+                    // Tutto OK, salvataggio normale
+                    console.log('✅ Parte B: No warnings, proceeding with submission');
+                    hse_showToast('💾 Salvataggio in corso...', 'info');
+                }
+                
+                console.log('✅ Parte B validation complete, submitting form');
+                
+                // Save accordion states before submission
+                hse_saveAccordionStates();
+                
+                // Submit the form
+                hse_form.submit();
             });
         });
         
         hse_form.addEventListener('submit', function(e) {
             console.log('🔍 Form submit event triggered');
-            console.log('🔍 Event submitter:', e.submitter);
             
             hse_saveAccordionStates();
             
-            const hse_submitButton = e.submitter;
-            
-            if (hse_submitButton) {
-                console.log('🔍 Submit button name:', hse_submitButton.name);
-                console.log('🔍 Submit button value:', hse_submitButton.value);
-                
-                if (hse_submitButton.name === 'hse_cantiere_submit_parte_a') {
-                    if (!hse_validateFormBeforeSubmit('parte_a')) {
-                        e.preventDefault();
-                        return false;
-                    }
-                } else if (hse_submitButton.name === 'hse_cantiere_submit_parte_b') {
-                    console.log('✅ Processing Parte B submission');
-                    const hse_cantiereId = hse_submitButton.value;
-                    
-                    if (!hse_cantiereId) {
-                        alert('⚠️ Errore: Impossibile identificare il cantiere. Riprova.');
-                        e.preventDefault();
-                        return false;
-                    }
-                    
-                    // MODIFICA: Controllo selezionato almeno un elemento (operaio, automezzo o attrezzo)
-                    const hse_selectedOperai = document.querySelectorAll(`input[name="hse_operai_selezionati_${hse_cantiereId}[]"]:checked`);
-                    const hse_selectedAutomezzi = document.querySelectorAll(`input[name="hse_automezzi_selezionati_${hse_cantiereId}[]"]:checked`);
-                    const hse_selectedAttrezzi = document.querySelectorAll(`input[name="hse_attrezzi_selezionati_${hse_cantiereId}[]"]:checked`);
-                    
-                    const hse_totalSelected = hse_selectedOperai.length + hse_selectedAutomezzi.length + hse_selectedAttrezzi.length;
-                    
-                    if (hse_totalSelected === 0) {
-                        alert(`⚠️ Devi selezionare almeno un operaio, automezzo o attrezzo per questo cantiere (ID: ${hse_cantiereId})`);
-                        e.preventDefault();
-                        return false;
-                    }
-                    
-                    // NUOVO: Controlla conformità solo come informazione, non blocca il salvataggio
-                    let hse_hasScaduti = false;
-                    let hse_hasConformityIssues = false;
-                    let hse_operaiScaduti = [];
-                    let hse_conformityWarnings = [];
-                    
-                    if (hse_selectedOperai.length > 0) {
-                        // Calcola statistiche conformità
-                        let antincendioCount = 0;
-                        let primoSoccorsoCount = 0;
-                        let prepostiCount = 0;
-                        
-                        hse_selectedOperai.forEach(checkbox => {
-                            const operaioId = parseInt(checkbox.value);
-                            const operaio = hse_existingPersonaleData.find(p => p.id == operaioId);
-                            
-                            if (operaio) {
-                                // Controlla scadenze documenti
-                                const warnings = [];
-                                const oggi = new Date();
-                                
-                                if (operaio.unilav_data_scadenza) {
-                                    const scadenza = new Date(operaio.unilav_data_scadenza);
-                                    if (oggi > scadenza) {
-                                        warnings.push('UNILAV scaduto');
-                                        hse_hasScaduti = true;
-                                    }
-                                }
-                                
-                                if (operaio.idoneita_sanitaria_scadenza) {
-                                    const scadenza = new Date(operaio.idoneita_sanitaria_scadenza);
-                                    if (oggi > scadenza) {
-                                        warnings.push('Idoneità sanitaria scaduta');
-                                        hse_hasScaduti = true;
-                                    }
-                                }
-                                
-                                if (warnings.length > 0) {
-                                    hse_operaiScaduti.push(`${operaio.nome} ${operaio.cognome}: ${warnings.join(', ')}`);
-                                }
-                                
-                                // Conta competenze per conformità
-                                if (operaio.formazione_antincendio_file) antincendioCount++;
-                                if (operaio.formazione_primo_soccorso_file) primoSoccorsoCount++;
-                                if (operaio.formazione_preposti_file) prepostiCount++;
-                            }
-                        });
-                        
-                        // Calcola percentuali conformità
-                        const totalOperai = hse_selectedOperai.length;
-                        const percAntincendio = (antincendioCount / totalOperai) * 100;
-                        const percPrimoSoccorso = (primoSoccorsoCount / totalOperai) * 100;
-                        const percPreposti = (prepostiCount / totalOperai) * 100;
-                        
-                        // Controlla conformità (30% minimo per ogni competenza)
-                        if (percAntincendio < 30) {
-                            hse_hasConformityIssues = true;
-                            hse_conformityWarnings.push(`Antincendio: ${percAntincendio.toFixed(1)}% (minimo 30%)`);
-                        }
-                        if (percPrimoSoccorso < 30) {
-                            hse_hasConformityIssues = true;
-                            hse_conformityWarnings.push(`Primo Soccorso: ${percPrimoSoccorso.toFixed(1)}% (minimo 30%)`);
-                        }
-                        if (percPreposti < 30) {
-                            hse_hasConformityIssues = true;
-                            hse_conformityWarnings.push(`Preposti: ${percPreposti.toFixed(1)}% (minimo 30%)`);
-                        }
-                    }
-                    
-                    // MODIFICA: Mostra avvisi informativi ma non blocca il salvataggio
-                    let confirmationMessage = '';
-                    let hasWarnings = false;
-                    
-                    if (hse_hasScaduti) {
-                        confirmationMessage += '⚠️ DOCUMENTI SCADUTI:\n\n' + hse_operaiScaduti.join('\n') + '\n\n';
-                        hasWarnings = true;
-                    }
-                    
-                    if (hse_hasConformityIssues) {
-                        confirmationMessage += '📊 CONFORMITÀ NON RAGGIUNTA:\n\n' + hse_conformityWarnings.join('\n') + '\n\n';
-                        confirmationMessage += 'Il cantiere risulta NON CONFORME ai requisiti di formazione del personale.\n\n';
-                        hasWarnings = true;
-                    }
-                    
-                    if (hasWarnings) {
-                        confirmationMessage += '💡 NOTA: Questi sono avvisi informativi. Puoi comunque salvare, ma ti consigliamo di risolvere le problematiche prima di accedere al cantiere.\n\nVuoi continuare con il salvataggio?';
-                        
-                        if (!confirm(confirmationMessage)) {
-                            e.preventDefault();
-                            return false;
-                        }
-                        
-                        // Log degli avvisi per debugging
-                        console.log('CANTIERE SAVE WITH WARNINGS:', {
-                            cantiereId: hse_cantiereId,
-                            hasScaduti: hse_hasScaduti,
-                            hasConformityIssues: hse_hasConformityIssues,
-                            operaiScaduti: hse_operaiScaduti,
-                            conformityWarnings: hse_conformityWarnings,
-                            totalSelected: hse_totalSelected
-                        });
-                        
-                        // Mostra toast informativo
-                        hse_showToast('💾 Salvataggio in corso con avvisi informativi...', 'warning');
-                    } else {
-                        // Tutto OK, salvataggio normale
-                        console.log('✅ Parte B: No warnings, proceeding with submission');
-                        hse_showToast('💾 Salvataggio in corso...', 'info');
-                    }
-                    
-                    console.log('✅ Parte B validation complete, form will submit');
+            // Check if this is a Parte A submission using the submit button
+            const hse_parteA_button = document.querySelector('button[name="hse_cantiere_submit_parte_a"]');
+            if (hse_parteA_button && document.activeElement === hse_parteA_button) {
+                console.log('🔍 Processing Parte A submission');
+                if (!hse_validateFormBeforeSubmit('parte_a')) {
+                    e.preventDefault();
+                    return false;
                 }
-            } else {
-                console.log('⚠️ No submitter detected - browser compatibility issue?');
             }
             
-            console.log('✅ Form submit handler complete, form should now submit');
+            // Note: Parte B submissions are now handled directly in button click handlers
+            console.log('✅ Form submit handler complete, form will submit');
         });
     }
     
