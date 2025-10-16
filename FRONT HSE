@@ -2304,9 +2304,6 @@ echo '</div>';
 
 echo '</div>'; // Fine hse_parte_a
 
-?>
-<?php
-
 // PARTE B PER SINGOLO CANTIERE CON ACCORDION
 if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
     echo '<div class="hse_parte_b" style="background: #e3f2fd; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #2196f3;">';
