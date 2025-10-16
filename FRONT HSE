@@ -4828,39 +4828,27 @@ document.addEventListener("DOMContentLoaded", function() {
     if (hse_form) {
         console.log('✅ Form found');
         
-        // Add click listeners to Parte B buttons to ensure they trigger form submission
-        // Store the clicked button reference for browsers that don't support e.submitter
-        let hse_lastClickedButton = null;
-        
-        const hse_parteB_buttons = document.querySelectorAll('.hse_submit_parte_b_btn');
-        console.log('🔍 Found Parte B buttons:', hse_parteB_buttons.length);
-        
-        hse_parteB_buttons.forEach(function(button) {
-            button.addEventListener('click', function(e) {
-                console.log('✅ Parte B button clicked:', this.value);
-                // Store reference to clicked button for browsers without e.submitter support
-                hse_lastClickedButton = this;
-                // Don't prevent default - let the button submit the form naturally
-            });
-        });
-        
-        // Also handle Parte A button
-        const hse_parteA_button = document.querySelector('.hse_submit_parte_a_btn');
-        if (hse_parteA_button) {
-            hse_parteA_button.addEventListener('click', function(e) {
-                console.log('✅ Parte A button clicked');
-                hse_lastClickedButton = this;
-            });
-        }
-        
         hse_form.addEventListener('submit', function(e) {
             console.log('🔍 Form submit event triggered');
-            console.log('🔍 Event submitter:', e.submitter);
             
             hse_saveAccordionStates();
             
-            // Use e.submitter if available, otherwise fall back to last clicked button
-            const hse_submitButton = e.submitter || hse_lastClickedButton;
+            // Detect which button was clicked by checking document.activeElement
+            // or by finding which submit button was clicked
+            let hse_submitButton = null;
+            
+            // Try to get the submitter from the event (modern browsers)
+            if (e.submitter) {
+                hse_submitButton = e.submitter;
+                console.log('🔍 Using e.submitter');
+            } else {
+                // Fallback for older browsers: check document.activeElement
+                const activeEl = document.activeElement;
+                if (activeEl && activeEl.tagName === 'BUTTON' && activeEl.type === 'submit') {
+                    hse_submitButton = activeEl;
+                    console.log('🔍 Using document.activeElement');
+                }
+            }
             
             if (hse_submitButton) {
                 console.log('🔍 Submit button name:', hse_submitButton.name);
