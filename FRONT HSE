@@ -4859,8 +4859,17 @@ document.addEventListener("DOMContentLoaded", function() {
                     return;
                 }
                 
-                console.log('✅ Validation passed, submitting form');
+                console.log('✅ Validation passed, preparing form submission');
                 hse_saveAccordionStates();
+                
+                // Create a hidden input with button name/value so PHP can detect which button was clicked
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = hse_buttonName;
+                hiddenInput.value = hse_cantiereId;
+                hse_form.appendChild(hiddenInput);
+                
+                console.log('✅ Added hidden input, submitting form');
                 
                 // Submit the form
                 hse_form.submit();
