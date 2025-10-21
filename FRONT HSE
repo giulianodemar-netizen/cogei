@@ -237,6 +237,121 @@ function hse_migrateCantiereDatabase() {
         $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_file varchar(255) AFTER formazione_dpi_terza_categoria_file");
     }
     
+    // 📋 NUOVE COLONNE: Date emissione e scadenza per formazioni esistenti
+    // Formazione Antincendio
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_antincendio_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_antincendio_data_emissione date AFTER formazione_antincendio_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_antincendio_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_antincendio_data_scadenza date AFTER formazione_antincendio_data_emissione");
+    }
+    
+    // Formazione Primo Soccorso
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_primo_soccorso_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_primo_soccorso_data_emissione date AFTER formazione_primo_soccorso_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_primo_soccorso_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_primo_soccorso_data_scadenza date AFTER formazione_primo_soccorso_data_emissione");
+    }
+    
+    // Formazione Preposti
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_preposti_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_preposti_data_nomina date AFTER formazione_preposti_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_preposti_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_preposti_data_scadenza date AFTER formazione_preposti_data_nomina");
+    }
+    
+    // 🎓 NUOVE COLONNE: Formazione Generale e Specifica
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_generale_specifica_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_generale_specifica_file varchar(255) AFTER formazione_preposti_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_generale_specifica_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_generale_specifica_data_emissione date AFTER formazione_generale_specifica_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_generale_specifica_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_generale_specifica_data_scadenza date AFTER formazione_generale_specifica_data_emissione");
+    }
+    
+    // 👷 NUOVE COLONNE: RSPP (OBBLIGATORIO)
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'rspp_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN rspp_file varchar(255) AFTER formazione_generale_specifica_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'rspp_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN rspp_data_nomina date AFTER rspp_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'rspp_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN rspp_data_scadenza date AFTER rspp_data_nomina");
+    }
+    
+    // 👷 NUOVE COLONNE: RLS (OBBLIGATORIO)
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'rls_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN rls_file varchar(255) AFTER rspp_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'rls_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN rls_data_nomina date AFTER rls_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'rls_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN rls_data_scadenza date AFTER rls_data_nomina");
+    }
+    
+    // 👷 NUOVE COLONNE: ASPP (opzionale)
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'aspp_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN aspp_file varchar(255) AFTER rls_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'aspp_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN aspp_data_nomina date AFTER aspp_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'aspp_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN aspp_data_scadenza date AFTER aspp_data_nomina");
+    }
+    
+    // 🏗️ NUOVE COLONNE: Formazione Utilizzo PLE
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ple_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ple_file varchar(255) AFTER aspp_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ple_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ple_data_emissione date AFTER formazione_ple_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ple_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ple_data_scadenza date AFTER formazione_ple_data_emissione");
+    }
+    
+    // 🚜 NUOVE COLONNE: Formazione Utilizzo Carrelli Elevatori
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_carrelli_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_carrelli_file varchar(255) AFTER formazione_ple_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_carrelli_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_carrelli_data_emissione date AFTER formazione_carrelli_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_carrelli_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_carrelli_data_scadenza date AFTER formazione_carrelli_data_emissione");
+    }
+    
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'pos_file'");
     if (!empty($columns)) {
         $wpdb->query("ALTER TABLE $table_richieste DROP COLUMN pos_file");
@@ -844,14 +959,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
             
             $hse_error_messages = array_merge($hse_error_messages, $hse_personale_errors, $hse_automezzi_errors, $hse_attrezzi_errors);
             
+            // 📋 VALIDAZIONE DVR OBBLIGATORIO: Verifica se esiste file già caricato
+            $hse_existing_request_dvr = $wpdb->get_row($wpdb->prepare(
+                "SELECT dvr_file, dvr_data_emissione FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d",
+                $hse_current_user_id
+            ), ARRAY_A);
+            
+            // Se non c'è né file caricato né nuovo upload, errore
+            $hse_has_existing_dvr = ($hse_existing_request_dvr && !empty($hse_existing_request_dvr['dvr_file']));
+            $hse_has_new_dvr_upload = (!empty($_FILES['hse_dvr_file']['name']) && $_FILES['hse_dvr_file']['error'] === UPLOAD_ERR_OK);
+            
+            if (!$hse_has_existing_dvr && !$hse_has_new_dvr_upload) {
+                $hse_error_messages[] = "⚠️ Il file DVR è obbligatorio. Devi caricare il Documento Valutazione Rischi.";
+            }
+            
             if (empty($hse_error_messages)) {
                 $hse_dvr_file = '';
                 $hse_dvr_data_emissione = sanitize_text_field($_POST['hse_dvr_data_emissione'] ?? '');
                 
                 if (!empty($_FILES['hse_dvr_file']['name'])) {
-                    $hse_dvr_file = hse_uploadFileToWordPress($_FILES['hse_dvr_file'], $hse_current_user_id, 'dvr');
-                    if (!$hse_dvr_file) {
-                        $hse_error_messages[] = "Errore durante l'upload del file DVR";
+                    // Se viene caricato un nuovo file DVR, la data di emissione è obbligatoria
+                    if (empty($hse_dvr_data_emissione)) {
+                        $hse_error_messages[] = "⚠️ La data di emissione del DVR è obbligatoria quando carichi il file";
+                    } else {
+                        $hse_dvr_file = hse_uploadFileToWordPress($_FILES['hse_dvr_file'], $hse_current_user_id, 'dvr');
+                        if (!$hse_dvr_file) {
+                            $hse_error_messages[] = "Errore durante l'upload del file DVR";
+                        }
                     }
                 }
                 
@@ -1442,11 +1576,12 @@ $hse_dvr_style = ($hse_existing_data && $hse_existing_data['dvr_file']) ?
 echo '<input type="file" name="hse_dvr_file" accept=".pdf" class="hse_dvr_input" style="' . $hse_dvr_style . '">';
 echo '</div>';
 
-// Campo Data Emissione DVR
+// Campo Data Emissione DVR (readonly - calcolato automaticamente)
 echo '<div class="hse_dvr_data_field">';
-echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR:</label>';
+echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR (oggi + 1 anno):</label>';
 $hse_dvr_data_value = ($hse_existing_data && $hse_existing_data['dvr_data_emissione']) ? $hse_existing_data['dvr_data_emissione'] : '';
-echo '<input type="date" name="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white;">';
+echo '<input type="date" name="hse_dvr_data_emissione" id="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" readonly class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; cursor: not-allowed;">';
+echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">⚠️ Data calcolata automaticamente al caricamento del file</small>';
 echo '</div>';
 
 echo '</div>'; // Fine hse_dvr_fields_grid
@@ -5029,11 +5164,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 
                 if (this.name === 'hse_dvr_file') {
                     const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
-                    if (dvrDataInput && !dvrDataInput.value) {
-                        hse_showToast('💡 Non dimenticare di inserire la data di emissione del DVR!', 'warning');
-                        setTimeout(() => {
-                            dvrDataInput.focus();
-                        }, 1000);
+                    if (dvrDataInput) {
+                        // Calcola data = oggi + 1 anno
+                        const today = new Date();
+                        const emissionDate = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+                        const formattedDate = emissionDate.toISOString().split('T')[0];
+                        dvrDataInput.value = formattedDate;
+                        dvrDataInput.style.borderColor = '#28a745';
+                        dvrDataInput.style.background = '#f8fff8';
+                        hse_showToast('✅ Data di emissione DVR impostata automaticamente a ' + formattedDate + ' (oggi + 1 anno)', 'success');
                     }
                 }
             } else {
