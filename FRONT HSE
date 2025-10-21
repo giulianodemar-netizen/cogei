@@ -1935,16 +1935,22 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<h5 class="hse_formazione_title" style="margin: 0 0 15px 0; color: #17a2b8;">🎓 Documenti Formazione</h5>';
         echo '<div class="hse_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">';
         
-        // Formazione Antincendio
+        // Formazione e Nomina Antincendio (3 anni scadenza)
         echo '<div class="hse_antincendio_field">';
-        echo '<label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione Antincendio:</label>';
+        echo '<label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione e nomina Antincendio:</label>';
         if (!empty($hse_persona['formazione_antincendio_file'])) {
             echo '<div class="hse_antincendio_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
             echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
             echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🔥 File Antincendio Caricato</div>';
-            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
+            if (!empty($hse_persona['formazione_antincendio_data_emissione'])) {
+                echo '<div class="hse_file_success_date" style="font-size: 10px; color: #155724;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_antincendio_data_emissione'])) . '</div>';
+            }
+            if (!empty($hse_persona['formazione_antincendio_data_scadenza'])) {
+                echo '<div class="hse_file_success_expiry" style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_antincendio_data_scadenza'])) . '</div>';
+            }
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
             echo '<a href="' . esc_url($hse_persona['formazione_antincendio_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
             echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_antincendio\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
             echo '</div>';
@@ -1952,8 +1958,28 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '</div>';
             echo '</div>';
         }
-        echo '<input type="file" name="hse_formazione_antincendio_' . $index . '" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        echo '<input type="file" name="hse_formazione_antincendio_' . $index . '" id="hse_formazione_antincendio_file_' . $index . '" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
+        
+        // Data emissione Antincendio
+        $hse_antincendio_emissione_value = !empty($hse_persona['formazione_antincendio_data_emissione']) ? $hse_persona['formazione_antincendio_data_emissione'] : '';
+        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+        echo '<input type="date" name="hse_formazione_antincendio_emissione_' . $index . '" id="hse_formazione_antincendio_emissione_' . $index . '" value="' . esc_attr($hse_antincendio_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 3, document.getElementById(\'hse_formazione_antincendio_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+        
+        // Data scadenza Antincendio (readonly - calcolata)
+        $hse_antincendio_scadenza_value = !empty($hse_persona['formazione_antincendio_data_scadenza']) ? $hse_persona['formazione_antincendio_data_scadenza'] : '';
+        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>';
+        echo '<input type="date" name="hse_formazione_antincendio_scadenza_' . $index . '" id="hse_formazione_antincendio_scadenza_' . $index . '" value="' . esc_attr($hse_antincendio_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '</div>';
+        
+        echo '<script>
+            // Auto-fill date when file is selected for Antincendio ' . $index . '
+            hse_autoFillEmissionDate(
+                document.getElementById("hse_formazione_antincendio_file_' . $index . '"),
+                document.getElementById("hse_formazione_antincendio_emissione_' . $index . '"),
+                3,
+                document.getElementById("hse_formazione_antincendio_scadenza_' . $index . '")
+            );
+        </script>';
         
         // Formazione Primo Soccorso
         echo '<div class="hse_primo_soccorso_field">';
@@ -5330,6 +5356,47 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 });
+
+// 📅 FUNZIONE HELPER: Calcola data scadenza aggiungendo anni a una data
+function hse_calculateExpiryDate(emissionDateInput, years, expiryDateInput) {
+    if (!emissionDateInput || !expiryDateInput) return;
+    
+    const emissionValue = emissionDateInput.value;
+    if (!emissionValue) {
+        expiryDateInput.value = '';
+        return;
+    }
+    
+    const emissionDate = new Date(emissionValue);
+    const expiryDate = new Date(emissionDate.getFullYear() + years, emissionDate.getMonth(), emissionDate.getDate());
+    const formattedDate = expiryDate.toISOString().split('T')[0];
+    expiryDateInput.value = formattedDate;
+    
+    // Stile visivo per indicare scadenza calcolata
+    expiryDateInput.style.borderColor = '#28a745';
+    expiryDateInput.style.background = '#f8fff8';
+}
+
+// 📅 FUNZIONE: Auto-riempi data emissione con oggi quando si seleziona un file
+function hse_autoFillEmissionDate(fileInput, emissionDateInput, years, expiryDateInput) {
+    if (!fileInput || !emissionDateInput) return;
+    
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0 && !emissionDateInput.value) {
+            // Imposta data emissione a oggi
+            const today = new Date();
+            const formattedDate = today.toISOString().split('T')[0];
+            emissionDateInput.value = formattedDate;
+            emissionDateInput.style.borderColor = '#28a745';
+            emissionDateInput.style.background = '#f8fff8';
+            
+            // Calcola e imposta scadenza se presente
+            if (expiryDateInput) {
+                hse_calculateExpiryDate(emissionDateInput, years, expiryDateInput);
+            }
+        }
+    });
+}
 
 // Esporta funzioni globali per debugging
 if (typeof window !== 'undefined') {
