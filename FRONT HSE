@@ -61,20 +61,48 @@ function hse_createCantiereTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_personale);
     
-    // 🚛 NUOVA TABELLA: AUTOMEZZI
+    // 🚛 AGGIORNAMENTO TABELLA: MEZZI MECCANICI (ex AUTOMEZZI)
     $table_cantiere_automezzi = $wpdb->prefix . 'cantiere_automezzi';
+    
+    // Aggiungi nuove colonne se non esistono
+    $columns_to_add = array(
+        'tipologia' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN tipologia VARCHAR(50) DEFAULT 'AUTO' AFTER descrizione_automezzo",
+        'file_targa' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_targa TEXT AFTER targa",
+        'scadenza_revisione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_revisione DATE AFTER file_targa",
+        'scadenza_assicurazione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_assicurazione DATE AFTER scadenza_revisione",
+        'file_assicurazione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_assicurazione TEXT AFTER scadenza_assicurazione",
+        'scadenza_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_verifiche_periodiche DATE AFTER file_assicurazione",
+        'file_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_verifiche_periodiche TEXT AFTER scadenza_verifiche_periodiche"
+    );
+    
+    foreach ($columns_to_add as $column => $sql) {
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_cantiere_automezzi LIKE '$column'");
+        if (empty($column_exists)) {
+            $wpdb->query($sql);
+        }
+    }
+    
+    // Crea tabella se non esiste
     $sql_cantiere_automezzi = "CREATE TABLE IF NOT EXISTS $table_cantiere_automezzi (
         id int(11) NOT NULL AUTO_INCREMENT,
         richiesta_id int(11) NOT NULL,
         descrizione_automezzo varchar(255) NOT NULL,
-        targa varchar(8) NOT NULL,
+        tipologia varchar(50) DEFAULT 'AUTO',
+        targa varchar(50) NOT NULL,
+        file_targa text,
+        scadenza_revisione date,
+        scadenza_assicurazione date,
+        file_assicurazione text,
+        scadenza_verifiche_periodiche date,
+        file_verifiche_periodiche text,
         user_id int(11) NOT NULL,
         data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
         data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         KEY richiesta_id (richiesta_id),
         KEY user_id (user_id),
-        KEY targa (targa)
+        KEY targa (targa),
+        KEY tipologia (tipologia)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_automezzi);
     
@@ -933,12 +961,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                 }
             }
             
-            // 🚛 NUOVO: Validazione dati automezzi
+            // 🚛 NUOVO: Validazione dati mezzi meccanici
             for ($i = 0; $i < $hse_numero_automezzi; $i++) {
                 if (isset($_POST['hse_automezzi_descrizione'][$i]) && !empty($_POST['hse_automezzi_descrizione'][$i])) {
+                    $hse_tipologia = sanitize_text_field($_POST['hse_automezzi_tipologia'][$i] ?? 'AUTO');
+                    
+                    // Gestione upload file targa
+                    $hse_file_targa = '';
+                    if (!empty($_FILES['hse_automezzi_file_targa_' . $i]['name'])) {
+                        $hse_file_targa = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_targa_' . $i], $hse_current_user_id, 'mezzo_targa_' . $i);
+                    }
+                    
+                    // Gestione upload file assicurazione
+                    $hse_file_assicurazione = '';
+                    if (!empty($_FILES['hse_automezzi_file_assicurazione_' . $i]['name'])) {
+                        $hse_file_assicurazione = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_assicurazione_' . $i], $hse_current_user_id, 'mezzo_assicurazione_' . $i);
+                    }
+                    
+                    // Gestione upload file verifiche periodiche
+                    $hse_file_verifiche = '';
+                    if (!empty($_FILES['hse_automezzi_file_verifiche_' . $i]['name'])) {
+                        $hse_file_verifiche = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_verifiche_' . $i], $hse_current_user_id, 'mezzo_verifiche_' . $i);
+                    }
+                    
                     $hse_automezzi_data[] = array(
+                        'tipologia' => $hse_tipologia,
                         'descrizione_automezzo' => sanitize_text_field($_POST['hse_automezzi_descrizione'][$i]),
-                        'targa' => sanitize_text_field($_POST['hse_automezzi_targa'][$i])
+                        'targa' => sanitize_text_field($_POST['hse_automezzi_targa'][$i]),
+                        'file_targa' => $hse_file_targa,
+                        'scadenza_revisione' => sanitize_text_field($_POST['hse_automezzi_scadenza_revisione'][$i] ?? ''),
+                        'scadenza_assicurazione' => sanitize_text_field($_POST['hse_automezzi_scadenza_assicurazione'][$i] ?? ''),
+                        'file_assicurazione' => $hse_file_assicurazione,
+                        'scadenza_verifiche_periodiche' => sanitize_text_field($_POST['hse_automezzi_scadenza_verifiche'][$i] ?? ''),
+                        'file_verifiche_periodiche' => $hse_file_verifiche
                     );
                 }
             }
@@ -2708,30 +2763,31 @@ echo '</div>'; // Fine hse_personale_group
 echo '</div>'; // Fine accordion content personale  
 echo '</div>'; // Fine personale accordion group
 
-// 🚛 NUOVO: Accordion Automezzi
+// 🚛 NUOVO: Accordion Mezzi Meccanici
 echo '<div class="hse_automezzi_group" style="margin-bottom: 30px; background: #fff3cd; padding: 0; border-radius: 10px; border-left: 5px solid #ffc107; overflow: hidden;">';
 
-// Header accordion automezzi
+// Header accordion mezzi meccanici
 $hse_numero_automezzi_value = ($hse_existing_data && !empty($hse_existing_data['automezzi'])) ? count($hse_existing_data['automezzi']) : 0;
 echo '<div class="hse_accordion_header hse_automezzi_accordion_header" onclick="hse_toggleAccordion(\'automezzi\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(255, 193, 7, 0.1); transition: all 0.3s ease;">';
-echo '<h3 class="hse_automezzi_title" style="color: #856404; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #ffc107; color: #000; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🚛</span>Elenco Automezzi <span id="hse_automezzi_count" class="hse_automezzi_count" style="background: #856404; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_automezzi_value . ' automezzi)</span></h3>';
+echo '<h3 class="hse_automezzi_title" style="color: #856404; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #ffc107; color: #000; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🚛</span>Elenco Mezzi Meccanici <span id="hse_automezzi_count" class="hse_automezzi_count" style="background: #856404; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_automezzi_value . ' mezzi)</span></h3>';
 echo '<span class="hse_accordion_arrow" id="hse_arrow_automezzi" style="font-size: 18px; font-weight: bold; color: #856404; transition: transform 0.3s ease;">▼</span>';
 echo '</div>';
 
-// Content accordion automezzi (chiuso di default)
+// Content accordion mezzi meccanici (chiuso di default)
 echo '<div class="hse_accordion_content" id="hse_content_automezzi" style="display: none; padding: 25px; transition: all 0.3s ease;">';
 
 echo '<input type="hidden" name="hse_numero_automezzi" id="hse_numero_automezzi" value="' . $hse_numero_automezzi_value . '">';
 
-// Informazioni targa generica
+// Informazioni targa e documenti
 echo '<div class="hse_targa_info_box" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; border-radius: 8px; padding: 15px; margin-bottom: 20px;">';
 echo '<div class="hse_targa_info_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
 echo '<span class="hse_targa_info_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">🚗</span>';
-echo '<strong class="hse_targa_info_title" style="color: #1565c0; font-size: 14px;">Targa Veicolo</strong>';
+echo '<strong class="hse_targa_info_title" style="color: #1565c0; font-size: 14px;">Documenti Mezzo Meccanico</strong>';
 echo '</div>';
 echo '<div class="hse_targa_info_text" style="color: #1565c0; font-size: 13px; line-height: 1.4;">';
-echo 'Inserisci la targa del veicolo. <strong>Accettati tutti i formati</strong> (italiane, straniere, speciali). ';
-echo 'Non sono previste limitazioni di formato.';
+echo 'Per ogni mezzo meccanico, inserisci la <strong>tipologia</strong>, <strong>targa</strong> (tutti i formati accettati), e carica i documenti richiesti: ';
+echo '<strong>file targa</strong>, <strong>scadenza revisione</strong>, <strong>scadenza assicurazione + file</strong>. ';
+echo 'Per alcuni mezzi (Autocarro con Gru, PLE, Mezzi Movimenti Terra) sono richieste anche le <strong>verifiche periodiche</strong>.';
 echo '</div>';
 echo '</div>';
 
@@ -2763,41 +2819,133 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
             echo '</div>';
         }
         
-        // Dati automezzo
-        echo '<div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+        // Dati mezzo meccanico - ristrutturato
+        $hse_tipologia = !empty($hse_automezzo['tipologia']) ? $hse_automezzo['tipologia'] : 'AUTO';
+        $hse_needs_verifiche = in_array($hse_tipologia, ['AUTOCARRO_GRU', 'PLE', 'MEZZI_TERRA']);
+        
+        echo '<div class="hse_automezzo_data" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 10px;">';
+        
+        // Prima riga: Tipologia e Descrizione
+        echo '<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 15px;">';
+        
+        echo '<div class="hse_automezzo_tipologia_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Tipologia Mezzo *:</label>';
+        echo '<select name="hse_automezzi_tipologia[]" class="hse_mezzo_tipologia_select" onchange="hse_toggleVerificheFields(this)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
+        $tipologie = [
+            'AUTO' => '🚗 Auto',
+            'AUTOCARRO' => '🚚 Autocarro',
+            'AUTOCARRO_GRU' => '🏗️ Autocarro con Gru',
+            'PLE' => '⬆️ PLE',
+            'MEZZI_TERRA' => '🚜 Mezzi Movimenti Terra'
+        ];
+        foreach ($tipologie as $value => $label) {
+            $selected = ($hse_tipologia === $value) ? 'selected' : '';
+            echo '<option value="' . $value . '" ' . $selected . '>' . $label . '</option>';
+        }
+        echo '</select>';
+        echo '</div>';
         
         echo '<div class="hse_automezzo_descrizione_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo *:</label>';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📝 Descrizione Mezzo *:</label>';
         echo '<input type="text" name="hse_automezzi_descrizione[]" value="' . esc_attr($hse_automezzo['descrizione_automezzo']) . '" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
         echo '</div>';
+        
+        echo '</div>'; // Fine prima riga
+        
+        // Seconda riga: Targa e File Targa
+        echo '<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 15px;">';
         
         echo '<div class="hse_automezzo_targa_field">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa *:</label>';
         echo '<input type="text" name="hse_automezzi_targa[]" value="' . esc_attr($hse_automezzo['targa']) . '" placeholder="Inserisci targa" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" required>';
         echo '</div>';
         
-        echo '<div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">';
-        if (count($hse_existing_data['automezzi']) > 0) {
-            echo '<button type="button" onclick="hse_deleteAutomezzo(' . $hse_automezzo['id'] . ', \'' . addslashes($hse_automezzo['descrizione_automezzo'] . ' - ' . $hse_automezzo['targa']) . '\', ' . ($hse_is_assigned ? 'true' : 'false') . ')" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Elimina</button>';
+        echo '<div class="hse_automezzo_file_targa_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📄 File Targa *:</label>';
+        if (!empty($hse_automezzo['file_targa'])) {
+            echo '<div style="margin-bottom: 5px; padding: 8px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
+            echo '<a href="' . esc_url($hse_automezzo['file_targa']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
+            echo '</div>';
         }
+        echo '<input type="file" name="hse_automezzi_file_targa_' . $index . '" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">';
         echo '</div>';
         
+        echo '</div>'; // Fine seconda riga
+        
+        // Terza riga: Scadenza Revisione e Scadenza Assicurazione
+        echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+        
+        echo '<div class="hse_automezzo_scadenza_revisione_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🔧 Scadenza Revisione *:</label>';
+        echo '<input type="date" name="hse_automezzi_scadenza_revisione[]" value="' . esc_attr($hse_automezzo['scadenza_revisione'] ?? '') . '" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
+        echo '</div>';
+        
+        echo '<div class="hse_automezzo_scadenza_assicurazione_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🛡️ Scadenza Assicurazione *:</label>';
+        echo '<input type="date" name="hse_automezzi_scadenza_assicurazione[]" value="' . esc_attr($hse_automezzo['scadenza_assicurazione'] ?? '') . '" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>';
+        echo '</div>';
+        
+        echo '</div>'; // Fine terza riga
+        
+        // Quarta riga: File Assicurazione
+        echo '<div style="margin-bottom: 15px;">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📋 File Assicurazione *:</label>';
+        if (!empty($hse_automezzo['file_assicurazione'])) {
+            echo '<div style="margin-bottom: 5px; padding: 8px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
+            echo '<a href="' . esc_url($hse_automezzo['file_assicurazione']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_automezzi_file_assicurazione_' . $index . '" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">';
+        echo '</div>';
+        
+        // Quinta riga: Verifiche Periodiche (condizionale)
+        $verifiche_style = $hse_needs_verifiche ? '' : 'display: none;';
+        echo '<div class="hse_verifiche_periodiche_section" style="' . $verifiche_style . ' background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">';
+        echo '<h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">⚠️ Verifiche Periodiche (obbligatorie per questo tipo di mezzo)</h6>';
+        
+        echo '<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">';
+        
+        echo '<div class="hse_automezzo_scadenza_verifiche_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📅 Scadenza Verifiche:</label>';
+        echo '<input type="date" name="hse_automezzi_scadenza_verifiche[]" value="' . esc_attr($hse_automezzo['scadenza_verifiche_periodiche'] ?? '') . '" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">';
+        echo '</div>';
+        
+        echo '<div class="hse_automezzo_file_verifiche_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📄 File Verifiche:</label>';
+        if (!empty($hse_automezzo['file_verifiche_periodiche'])) {
+            echo '<div style="margin-bottom: 5px; padding: 6px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
+            echo '<a href="' . esc_url($hse_automezzo['file_verifiche_periodiche']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
+            echo '</div>';
+        }
+        echo '<input type="file" name="hse_automezzi_file_verifiche_' . $index . '" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; font-size: 11px;">';
+        echo '</div>';
+        
+        echo '</div>'; // Fine grid verifiche
+        echo '</div>'; // Fine sezione verifiche
+        
+        echo '</div>'; // Fine hse_automezzo_data
+        
+        // Pulsante elimina
+        echo '<div class="hse_automezzo_actions" style="text-align: right; margin-top: 10px;">';
+        if (count($hse_existing_data['automezzi']) > 0) {
+            echo '<button type="button" onclick="hse_deleteAutomezzo(' . $hse_automezzo['id'] . ', \'' . addslashes($hse_automezzo['descrizione_automezzo'] . ' - ' . $hse_automezzo['targa']) . '\', ' . ($hse_is_assigned ? 'true' : 'false') . ')" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Elimina Mezzo</button>';
+        }
         echo '</div>';
         
         echo '</div>'; // Fine row automezzo
     }
 } else {
-    // Nessun automezzo esistente, mostra messaggio
+    // Nessun mezzo meccanico esistente, mostra messaggio
     echo '<div class="hse_no_automezzi_message" style="text-align: center; padding: 20px; color: #856404; font-style: italic; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin-bottom: 15px;">';
-    echo '🚛 Nessun automezzo inserito. Usa il pulsante qui sotto per aggiungere automezzi.';
+    echo '🚛 Nessun mezzo meccanico inserito. Usa il pulsante qui sotto per aggiungere mezzi.';
     echo '</div>';
 }
 
 echo '</div>'; // Fine automezzi container
 
-// Pulsanti gestione automezzi
+// Pulsanti gestione mezzi meccanici
 echo '<div class="hse_automezzi_controls" style="margin-top: 20px; text-align: center;">';
-echo '<button type="button" onclick="hse_addAutomezzo()" class="hse_add_automezzo_btn" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-weight: bold;">➕ Aggiungi Automezzo</button>';
+echo '<button type="button" onclick="hse_addAutomezzo()" class="hse_add_automezzo_btn" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-weight: bold;">➕ Aggiungi Mezzo Meccanico</button>';
 if ($hse_numero_automezzi_value > 0) {
     echo '<button type="button" onclick="hse_removeLastAutomezzo()" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">➖ Rimuovi Ultimo</button>';
 }
@@ -2924,7 +3072,7 @@ echo '</div>'; // Fine attrezzi group
 
 // Pulsante Salva Parte A
 echo '<div class="hse_submit_parte_a_section" style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 2px solid #e9ecef;">';
-echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti + Personale + Automezzi + Attrezzi</button>';
+echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti + Personale + Mezzi Meccanici + Attrezzi</button>';
 echo '</div>';
 
 echo '</div>'; // Fine hse_parte_a
@@ -3063,7 +3211,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         
         // 🚛 NUOVO: Selezione automezzi per questo cantiere
         echo '<div class="hse_automezzi_selection_group" style="margin-bottom: 20px;">';
-        echo '<label class="hse_automezzi_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">🚛 Seleziona Automezzi per questo Cantiere</label>';
+        echo '<label class="hse_automezzi_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">🚛 Seleziona Mezzi Meccanici per questo Cantiere</label>';
         
         if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
             $hse_automezzi_assegnati = hse_getAutomezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
@@ -3839,7 +3987,7 @@ function hse_addAutomezzo() {
     const currentCount = parseInt(document.getElementById('hse_numero_automezzi').value);
     const newIndex = currentCount;
     
-    // Rimuovi messaggio "nessun automezzo" se presente
+    // Rimuovi messaggio "nessun mezzo" se presente
     const noAutomezziMessage = container.querySelector('.hse_no_automezzi_message');
     if (noAutomezziMessage) {
         noAutomezziMessage.remove();
@@ -3851,18 +3999,74 @@ function hse_addAutomezzo() {
     newRow.style.cssText = 'border: 1px solid #ddd; background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px;';
     
     newRow.innerHTML = `
-        <div class="hse_automezzo_data" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-            <div class="hse_automezzo_descrizione_field">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Descrizione Automezzo *:</label>
-                <input type="text" name="hse_automezzi_descrizione[]" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+        <div class="hse_automezzo_data" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
+            <!-- Prima riga: Tipologia e Descrizione -->
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 15px;">
+                <div class="hse_automezzo_tipologia_field">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🚛 Tipologia Mezzo *:</label>
+                    <select name="hse_automezzi_tipologia[]" class="hse_mezzo_tipologia_select" onchange="hse_toggleVerificheFields(this)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+                        <option value="AUTO">🚗 Auto</option>
+                        <option value="AUTOCARRO">🚚 Autocarro</option>
+                        <option value="AUTOCARRO_GRU">🏗️ Autocarro con Gru</option>
+                        <option value="PLE">⬆️ PLE</option>
+                        <option value="MEZZI_TERRA">🚜 Mezzi Movimenti Terra</option>
+                    </select>
+                </div>
+                <div class="hse_automezzo_descrizione_field">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📝 Descrizione Mezzo *:</label>
+                    <input type="text" name="hse_automezzi_descrizione[]" placeholder="es. Escavatore CAT 320" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+                </div>
             </div>
-            <div class="hse_automezzo_targa_field">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa *:</label>
-                <input type="text" name="hse_automezzi_targa[]" placeholder="Inserisci targa" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" required>
+            
+            <!-- Seconda riga: Targa e File Targa -->
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; margin-bottom: 15px;">
+                <div class="hse_automezzo_targa_field">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🏷️ Targa *:</label>
+                    <input type="text" name="hse_automezzi_targa[]" placeholder="Inserisci targa" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; text-transform: uppercase; font-family: monospace; font-weight: bold;" required>
+                </div>
+                <div class="hse_automezzo_file_targa_field">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📄 File Targa *:</label>
+                    <input type="file" name="hse_automezzi_file_targa_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;" required>
+                </div>
             </div>
-            <div class="hse_automezzo_actions" style="display: flex; flex-direction: column; justify-content: center; gap: 5px;">
-                <button type="button" onclick="hse_removeAutomezzoRow(this)" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Rimuovi</button>
+            
+            <!-- Terza riga: Scadenza Revisione e Scadenza Assicurazione -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div class="hse_automezzo_scadenza_revisione_field">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🔧 Scadenza Revisione *:</label>
+                    <input type="date" name="hse_automezzi_scadenza_revisione[]" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+                </div>
+                <div class="hse_automezzo_scadenza_assicurazione_field">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">🛡️ Scadenza Assicurazione *:</label>
+                    <input type="date" name="hse_automezzi_scadenza_assicurazione[]" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" required>
+                </div>
             </div>
+            
+            <!-- Quarta riga: File Assicurazione -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📋 File Assicurazione *:</label>
+                <input type="file" name="hse_automezzi_file_assicurazione_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;" required>
+            </div>
+            
+            <!-- Quinta riga: Verifiche Periodiche (nascosta di default) -->
+            <div class="hse_verifiche_periodiche_section" style="display: none; background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">
+                <h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">⚠️ Verifiche Periodiche (obbligatorie per questo tipo di mezzo)</h6>
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+                    <div class="hse_automezzo_scadenza_verifiche_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📅 Scadenza Verifiche:</label>
+                        <input type="date" name="hse_automezzi_scadenza_verifiche[]" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">
+                    </div>
+                    <div class="hse_automezzo_file_verifiche_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📄 File Verifiche:</label>
+                        <input type="file" name="hse_automezzi_file_verifiche_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; font-size: 11px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pulsante elimina -->
+        <div class="hse_automezzo_actions" style="text-align: right; margin-top: 10px;">
+            <button type="button" onclick="hse_removeAutomezzoRow(this)" class="hse_remove_automezzo_btn" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.3s;">🗑️ Elimina Mezzo</button>
         </div>
     `;
     
@@ -3882,12 +4086,44 @@ function hse_addAutomezzo() {
     hse_updateAutomezziCount();
     
     // Focus sul primo campo
-    const firstInput = newRow.querySelector('input[name="hse_automezzi_descrizione[]"]');
+    const firstInput = newRow.querySelector('select[name="hse_automezzi_tipologia[]"]');
     if (firstInput) {
         setTimeout(() => firstInput.focus(), 300);
     }
     
-    hse_showToast('✅ Nuovo automezzo aggiunto', 'success');
+    hse_showToast('✅ Nuovo mezzo meccanico aggiunto', 'success');
+}
+
+// 🆕 Nuova funzione: Toggle campi verifiche periodiche
+function hse_toggleVerificheFields(selectElement) {
+    const row = selectElement.closest('.hse_automezzo_row');
+    const verificheSection = row.querySelector('.hse_verifiche_periodiche_section');
+    const verificheDateInput = row.querySelector('.hse_verifiche_date_input');
+    const verificheFileInput = row.querySelector('.hse_verifiche_file_input');
+    
+    const tipologia = selectElement.value;
+    const needsVerifiche = ['AUTOCARRO_GRU', 'PLE', 'MEZZI_TERRA'].includes(tipologia);
+    
+    if (verificheSection) {
+        verificheSection.style.display = needsVerifiche ? 'block' : 'none';
+        
+        // Rendi i campi required/non-required in base alla tipologia
+        if (verificheDateInput) {
+            if (needsVerifiche) {
+                verificheDateInput.setAttribute('required', 'required');
+            } else {
+                verificheDateInput.removeAttribute('required');
+            }
+        }
+        
+        if (verificheFileInput) {
+            if (needsVerifiche) {
+                verificheFileInput.setAttribute('required', 'required');
+            } else {
+                verificheFileInput.removeAttribute('required');
+            }
+        }
+    }
 }
 
 function hse_removeAutomezzoRow(button) {
@@ -3907,13 +4143,13 @@ function hse_removeAutomezzoRow(button) {
         document.getElementById('hse_numero_automezzi').value = Math.max(0, currentCount - 1);
         hse_updateAutomezziCount();
         
-        // Mostra messaggio se non ci sono più automezzi
+        // Mostra messaggio se non ci sono più mezzi
         const remainingRows = container.querySelectorAll('.hse_automezzo_row');
         if (remainingRows.length === 0) {
             const noAutomezziMessage = document.createElement('div');
             noAutomezziMessage.className = 'hse_no_automezzi_message';
             noAutomezziMessage.style.cssText = 'text-align: center; padding: 20px; color: #856404; font-style: italic; background: rgba(255, 193, 7, 0.1); border-radius: 8px; margin-bottom: 15px;';
-            noAutomezziMessage.innerHTML = '🚛 Nessun automezzo inserito. Usa il pulsante qui sotto per aggiungere automezzi.';
+            noAutomezziMessage.innerHTML = '🚛 Nessun mezzo meccanico inserito. Usa il pulsante qui sotto per aggiungere mezzi.';
             container.appendChild(noAutomezziMessage);
         }
     }, 300);
