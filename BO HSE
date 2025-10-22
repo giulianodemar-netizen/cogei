@@ -1616,7 +1616,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DVR</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
-echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Automezzi</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Mezzi Meccanici</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🔧 Attrezzi</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Stato Richiesta HSE</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Accesso al Cantiere</th>';
@@ -1776,13 +1776,24 @@ foreach ($richieste as $richiesta) {
     // 🚛 NUOVO: Automezzi (assegnati e non assegnati con distinzione visiva)
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 10px;">';
     
-    // Mostra automezzi assegnati
+    // Mostra mezzi meccanici assegnati
     if (!empty($automezzi_grouped)) {
         foreach ($automezzi_grouped as $automezzo) {
-            echo '<div style="background: #fff3cd; color: #856404; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #ffc107;">';
+            $tipologia_icon = '🚗';
+            if (!empty($automezzo['tipologia'])) {
+                $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜'];
+                $tipologia_icon = $tipologia_icons[$automezzo['tipologia']] ?? '🚗';
+            }
+            
+            echo '<div onclick="showMezzoDetails(' . $automezzo['automezzo_id'] . ', \'' . addslashes($automezzo['descrizione_automezzo']) . '\')" style="background: #fff3cd; color: #856404; padding: 4px 7px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #ffc107; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background=\'#ffe9a3\'" onmouseout="this.style.background=\'#fff3cd\'">';
             echo '<span style="display: block; background: #28a745; color: white; padding: 1px 4px; border-radius: 3px; font-size: 8px; margin-bottom: 3px; width: fit-content;">✓ Assegnato</span>';
-            echo '<strong>🚛 ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
-            echo '<span style="font-size: 9px; color: #6c757d;">📋 ' . htmlspecialchars($automezzo['targa']) . '</span><br>';
+            echo '<strong>' . $tipologia_icon . ' ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
+            echo '<span style="font-size: 9px; color: #6c757d;">🏷️ ' . htmlspecialchars($automezzo['targa']) . '</span>';
+            if (!empty($automezzo['tipologia']) && $automezzo['tipologia'] !== 'AUTO') {
+                $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra'];
+                echo ' <span style="font-size: 8px; background: #17a2b8; color: white; padding: 1px 4px; border-radius: 3px;">' . ($tipologia_labels[$automezzo['tipologia']] ?? $automezzo['tipologia']) . '</span>';
+            }
+            echo '<br>';
             foreach ($automezzo['cantieri'] as $cantiere_assegnazione) {
                 echo '<span style="font-size: 9px; color: #6c757d;">├ ' . htmlspecialchars($cantiere_assegnazione['cantiere_nome']) . '</span><br>';
             }
@@ -1790,7 +1801,7 @@ foreach ($richieste as $richiesta) {
         }
     }
     
-    // Mostra automezzi NON assegnati con stile diverso
+    // Mostra mezzi meccanici NON assegnati con stile diverso
     if (!empty($all_automezzi)) {
         $automezzi_assegnati_ids = array();
         foreach ($automezzi_grouped as $automezzo) {
@@ -1799,17 +1810,27 @@ foreach ($richieste as $richiesta) {
         
         foreach ($all_automezzi as $automezzo) {
             if (!in_array($automezzo['id'], $automezzi_assegnati_ids)) {
-                echo '<div style="background: #f8f9fa; color: #6c757d; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #dee2e6; opacity: 0.7;">';
+                $tipologia_icon = '🚗';
+                if (!empty($automezzo['tipologia'])) {
+                    $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜'];
+                    $tipologia_icon = $tipologia_icons[$automezzo['tipologia']] ?? '🚗';
+                }
+                
+                echo '<div onclick="showMezzoDetails(' . $automezzo['id'] . ', \'' . addslashes($automezzo['descrizione_automezzo']) . '\')" style="background: #f8f9fa; color: #6c757d; padding: 4px 7px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #dee2e6; opacity: 0.7; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.7\'">';
                 echo '<span style="display: block; background: #6c757d; color: white; padding: 1px 4px; border-radius: 3px; font-size: 8px; margin-bottom: 3px; width: fit-content;">⚪ Non assegnato</span>';
-                echo '<strong>🚛 ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
-                echo '<span style="font-size: 9px; color: #6c757d;">📋 ' . htmlspecialchars($automezzo['targa']) . '</span>';
+                echo '<strong>' . $tipologia_icon . ' ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
+                echo '<span style="font-size: 9px; color: #6c757d;">🏷️ ' . htmlspecialchars($automezzo['targa']) . '</span>';
+                if (!empty($automezzo['tipologia']) && $automezzo['tipologia'] !== 'AUTO') {
+                    $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra'];
+                    echo ' <span style="font-size: 8px; background: #17a2b8; color: white; padding: 1px 4px; border-radius: 3px;">' . ($tipologia_labels[$automezzo['tipologia']] ?? $automezzo['tipologia']) . '</span>';
+                }
                 echo '</div>';
             }
         }
     }
     
     if (empty($automezzi_grouped) && empty($all_automezzi)) {
-        echo '<span style="color: #6c757d; font-style: italic;">Nessun automezzo</span>';
+        echo '<span style="color: #6c757d; font-style: italic;">Nessun mezzo meccanico</span>';
     }
     echo '</td>';
     
@@ -2397,6 +2418,29 @@ foreach ($richieste as $richiesta) {
     echo '},';
 }
 echo '};';
+
+// 🚛 NUOVA STRUTTURA DATI: Mezzi Meccanici
+echo 'window.mezziData = {';
+$all_richieste_for_mezzi = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}cantiere_richieste WHERE 1=1", ARRAY_A);
+foreach ($all_richieste_for_mezzi as $richiesta) {
+    $mezzi = hse_getAutomezziByRichiestaId($richiesta['id']);
+    foreach ($mezzi as $mezzo) {
+        echo $mezzo['id'] . ': {';
+        echo 'id: ' . $mezzo['id'] . ',';
+        echo 'tipologia: "' . addslashes($mezzo['tipologia'] ?? 'AUTO') . '",';
+        echo 'descrizione: "' . addslashes($mezzo['descrizione_automezzo']) . '",';
+        echo 'targa: "' . addslashes($mezzo['targa']) . '",';
+        echo 'file_targa: "' . addslashes($mezzo['file_targa'] ?? '') . '",';
+        echo 'scadenza_revisione: "' . addslashes($mezzo['scadenza_revisione'] ?? '') . '",';
+        echo 'scadenza_assicurazione: "' . addslashes($mezzo['scadenza_assicurazione'] ?? '') . '",';
+        echo 'file_assicurazione: "' . addslashes($mezzo['file_assicurazione'] ?? '') . '",';
+        echo 'scadenza_verifiche_periodiche: "' . addslashes($mezzo['scadenza_verifiche_periodiche'] ?? '') . '",';
+        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '"';
+        echo '},';
+    }
+}
+echo '};';
+
 echo '</script>';
 
 echo '</div>'; // Fine tab richieste
@@ -6041,4 +6085,119 @@ button[onclick*="showDeleteCantiereModal"]:hover {
  *    - Testa le assegnazioni migliorate
  * ==========================================
  */
+
+// 🚛 NUOVA FUNZIONE: Mostra dettagli mezzo meccanico
+echo '<script>';
+echo 'function showMezzoDetails(mezzoId, mezzoDesc) {';
+echo '    const mezzoData = window.mezziData[mezzoId];';
+echo '    if (!mezzoData) {';
+echo '        alert("Dati mezzo non trovati");';
+echo '        return;';
+echo '    }';
+echo '    ';
+echo '    let modal = document.getElementById("mezzo-details-modal");';
+echo '    if (!modal) {';
+echo '        modal = document.createElement("div");';
+echo '        modal.id = "mezzo-details-modal";';
+echo '        modal.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001;";';
+echo '        ';
+echo '        modal.innerHTML = `';
+echo '            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
+echo '                <div style="background: #ffc107; color: #000; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '                    <div style="display: flex; justify-content: space-between; align-items: center;">';
+echo '                        <h4 style="margin: 0;">🚛 Dettagli Mezzo Meccanico</h4>';
+echo '                        <button onclick="closeMezzoDetailsModal()" style="background: transparent; color: #000; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '                    </div>';
+echo '                    <p id="mezzo-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>';
+echo '                </div>';
+echo '                <div id="mezzo-details-content" style="padding: 20px;"></div>';
+echo '            </div>';
+echo '        `;';
+echo '        ';
+echo '        document.body.appendChild(modal);';
+echo '        modal.addEventListener("click", function(e) {';
+echo '            if (e.target === this) closeMezzoDetailsModal();';
+echo '        });';
+echo '    }';
+echo '    ';
+echo '    document.getElementById("mezzo-name").textContent = mezzoDesc;';
+echo '    ';
+echo '    const tipologiaLabels = {';
+echo '        "AUTO": "🚗 Auto",';
+echo '        "AUTOCARRO": "🚚 Autocarro",';
+echo '        "AUTOCARRO_GRU": "🏗️ Autocarro con Gru",';
+echo '        "PLE": "⬆️ PLE",';
+echo '        "MEZZI_TERRA": "🚜 Mezzi Movimenti Terra"';
+echo '    };';
+echo '    ';
+echo '    const needsVerifiche = ["AUTOCARRO_GRU", "PLE", "MEZZI_TERRA"].includes(mezzoData.tipologia);';
+echo '    ';
+echo '    let content = `';
+echo '        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px;">';
+echo '            <h5 style="margin: 0 0 15px 0; color: #856404;">📋 Informazioni Generali</h5>';
+echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px;">';
+echo '                <div>';
+echo '                    <strong style="color: #666;">Tipologia:</strong><br>';
+echo '                    <span style="font-size: 14px;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
+echo '                </div>';
+echo '                <div>';
+echo '                    <strong style="color: #666;">🏷️ Targa:</strong><br>';
+echo '                    <span style="font-family: monospace; font-size: 14px; font-weight: bold;">${mezzoData.targa}</span>';
+echo '                </div>';
+echo '            </div>';
+echo '        </div>';
+echo '        ';
+echo '        <div style="background: #fff; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #ddd;">';
+echo '            <h5 style="margin: 0 0 15px 0; color: #17a2b8;">📄 Documenti e Scadenze</h5>';
+echo '            <div style="display: grid; gap: 12px; font-size: 12px;">';
+echo '                ';
+echo '                <div style="padding: 10px; background: ${mezzoData.file_targa ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"};">';
+echo '                    <strong>📎 File Targa:</strong><br>';
+echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                </div>';
+echo '                ';
+echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_revisione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"};">';
+echo '                    <strong>🔧 Scadenza Revisione:</strong><br>';
+echo '                    ${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                </div>';
+echo '                ';
+echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_assicurazione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"};">';
+echo '                    <strong>🛡️ Scadenza Assicurazione:</strong><br>';
+echo '                    ${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                </div>';
+echo '                ';
+echo '                <div style="padding: 10px; background: ${mezzoData.file_assicurazione ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"};">';
+echo '                    <strong>📋 File Assicurazione:</strong><br>';
+echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                </div>';
+echo '            </div>';
+echo '        </div>';
+echo '    `;';
+echo '    ';
+echo '    if (needsVerifiche) {';
+echo '        content += `';
+echo '            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border: 2px solid #ffc107;">';
+echo '                <h5 style="margin: 0 0 15px 0; color: #856404;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
+echo '                <div style="display: grid; gap: 12px; font-size: 12px;">';
+echo '                    <div style="padding: 10px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
+echo '                        <strong>📅 Scadenza Verifiche Periodiche:</strong><br>';
+echo '                        ${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                    </div>';
+echo '                    <div style="padding: 10px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
+echo '                        <strong>📄 File Verifiche Periodiche:</strong><br>';
+echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                    </div>';
+echo '                </div>';
+echo '            </div>';
+echo '        `;';
+echo '    }';
+echo '    ';
+echo '    document.getElementById("mezzo-details-content").innerHTML = content;';
+echo '    modal.style.display = "block";';
+echo '}';
+echo '';
+echo 'function closeMezzoDetailsModal() {';
+echo '    document.getElementById("mezzo-details-modal").style.display = "none";';
+echo '}';
+echo '</script>';
 ?>
