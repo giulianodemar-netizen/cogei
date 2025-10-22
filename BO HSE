@@ -668,7 +668,15 @@ function getOperaiAssegnatiCantiere($cantiere_id, $user_id = null) {
     
     return $wpdb->get_results($wpdb->prepare("
         SELECT oa.*, p.nome, p.cognome, p.data_nascita,
-               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file,
+               p.formazione_antincendio_file, p.formazione_antincendio_data_emissione, p.formazione_antincendio_data_scadenza,
+               p.formazione_primo_soccorso_file, p.formazione_primo_soccorso_data_emissione, p.formazione_primo_soccorso_data_scadenza,
+               p.formazione_preposti_file, p.formazione_preposti_data_nomina, p.formazione_preposti_data_scadenza,
+               p.formazione_generale_specifica_file, p.formazione_generale_specifica_data_emissione, p.formazione_generale_specifica_data_scadenza,
+               p.rspp_file, p.rspp_data_nomina, p.rspp_data_scadenza,
+               p.rls_file, p.rls_data_nomina, p.rls_data_scadenza,
+               p.aspp_file, p.aspp_data_nomina, p.aspp_data_scadenza,
+               p.formazione_ple_file, p.formazione_ple_data_emissione, p.formazione_ple_data_scadenza,
+               p.formazione_carrelli_file, p.formazione_carrelli_data_emissione, p.formazione_carrelli_data_scadenza,
                p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
@@ -862,7 +870,15 @@ function getOperaiAssegnazioniByUser($user_id) {
     
     return $wpdb->get_results($wpdb->prepare("
         SELECT oa.*, p.nome, p.cognome, p.data_nascita, c.nome as cantiere_nome, c.id as cantiere_id,
-               p.formazione_antincendio_file, p.formazione_primo_soccorso_file, p.formazione_preposti_file,
+               p.formazione_antincendio_file, p.formazione_antincendio_data_emissione, p.formazione_antincendio_data_scadenza,
+               p.formazione_primo_soccorso_file, p.formazione_primo_soccorso_data_emissione, p.formazione_primo_soccorso_data_scadenza,
+               p.formazione_preposti_file, p.formazione_preposti_data_nomina, p.formazione_preposti_data_scadenza,
+               p.formazione_generale_specifica_file, p.formazione_generale_specifica_data_emissione, p.formazione_generale_specifica_data_scadenza,
+               p.rspp_file, p.rspp_data_nomina, p.rspp_data_scadenza,
+               p.rls_file, p.rls_data_nomina, p.rls_data_scadenza,
+               p.aspp_file, p.aspp_data_nomina, p.aspp_data_scadenza,
+               p.formazione_ple_file, p.formazione_ple_data_emissione, p.formazione_ple_data_scadenza,
+               p.formazione_carrelli_file, p.formazione_carrelli_data_emissione, p.formazione_carrelli_data_scadenza,
                p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
@@ -1959,16 +1975,141 @@ foreach ($richieste as $richiesta) {
             
             $formazioni = [];
             if (!empty($persona['formazione_antincendio_file'])) {
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2;">🔥 Antincendio</a>';
+                $antincendio_text = '🔥 Antincendio';
+                if (!empty($persona['formazione_antincendio_data_emissione']) || !empty($persona['formazione_antincendio_data_scadenza'])) {
+                    $antincendio_text .= ' (';
+                    if (!empty($persona['formazione_antincendio_data_emissione'])) {
+                        $antincendio_text .= 'Em: ' . date('d/m/Y', strtotime($persona['formazione_antincendio_data_emissione']));
+                    }
+                    if (!empty($persona['formazione_antincendio_data_scadenza'])) {
+                        $antincendio_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['formazione_antincendio_data_scadenza']));
+                    }
+                    $antincendio_text .= ')';
+                }
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2;">' . $antincendio_text . '</a>';
             }
             if (!empty($persona['formazione_primo_soccorso_file'])) {
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2;">🚑 Primo Soccorso</a>';
+                $primo_soccorso_text = '🚑 Primo Soccorso';
+                if (!empty($persona['formazione_primo_soccorso_data_emissione']) || !empty($persona['formazione_primo_soccorso_data_scadenza'])) {
+                    $primo_soccorso_text .= ' (';
+                    if (!empty($persona['formazione_primo_soccorso_data_emissione'])) {
+                        $primo_soccorso_text .= 'Em: ' . date('d/m/Y', strtotime($persona['formazione_primo_soccorso_data_emissione']));
+                    }
+                    if (!empty($persona['formazione_primo_soccorso_data_scadenza'])) {
+                        $primo_soccorso_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['formazione_primo_soccorso_data_scadenza']));
+                    }
+                    $primo_soccorso_text .= ')';
+                }
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2;">' . $primo_soccorso_text . '</a>';
             }
             if (!empty($persona['formazione_preposti_file'])) {
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">👮 Preposti</a>';
+                $preposti_text = '👮 Preposti';
+                if (!empty($persona['formazione_preposti_data_nomina']) || !empty($persona['formazione_preposti_data_scadenza'])) {
+                    $preposti_text .= ' (';
+                    if (!empty($persona['formazione_preposti_data_nomina'])) {
+                        $preposti_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['formazione_preposti_data_nomina']));
+                    }
+                    if (!empty($persona['formazione_preposti_data_scadenza'])) {
+                        $preposti_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['formazione_preposti_data_scadenza']));
+                    }
+                    $preposti_text .= ')';
+                }
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">' . $preposti_text . '</a>';
             }
             
-            // 🎯 NUOVE FORMAZIONI AGGIUNTIVE
+            // 📚 NUOVE FORMAZIONI: Generale e Specifica + Nomine
+            $formazioni_nuove = [];
+            if (!empty($persona['formazione_generale_specifica_file'])) {
+                $gen_spec_text = '🎓 Form. Generale e Specifica';
+                if (!empty($persona['formazione_generale_specifica_data_emissione']) || !empty($persona['formazione_generale_specifica_data_scadenza'])) {
+                    $gen_spec_text .= ' (';
+                    if (!empty($persona['formazione_generale_specifica_data_emissione'])) {
+                        $gen_spec_text .= 'Em: ' . date('d/m/Y', strtotime($persona['formazione_generale_specifica_data_emissione']));
+                    }
+                    if (!empty($persona['formazione_generale_specifica_data_scadenza'])) {
+                        $gen_spec_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['formazione_generale_specifica_data_scadenza']));
+                    }
+                    $gen_spec_text .= ')';
+                }
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2;">' . $gen_spec_text . '</a>';
+            }
+            
+            if (!empty($persona['rspp_file'])) {
+                $rspp_text = '👷 RSPP';
+                if (!empty($persona['rspp_data_nomina']) || !empty($persona['rspp_data_scadenza'])) {
+                    $rspp_text .= ' (';
+                    if (!empty($persona['rspp_data_nomina'])) {
+                        $rspp_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['rspp_data_nomina']));
+                    }
+                    if (!empty($persona['rspp_data_scadenza'])) {
+                        $rspp_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['rspp_data_scadenza']));
+                    }
+                    $rspp_text .= ')';
+                }
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-weight: bold;">' . $rspp_text . '</a>';
+            }
+            
+            if (!empty($persona['rls_file'])) {
+                $rls_text = '👷 RLS';
+                if (!empty($persona['rls_data_nomina']) || !empty($persona['rls_data_scadenza'])) {
+                    $rls_text .= ' (';
+                    if (!empty($persona['rls_data_nomina'])) {
+                        $rls_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['rls_data_nomina']));
+                    }
+                    if (!empty($persona['rls_data_scadenza'])) {
+                        $rls_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['rls_data_scadenza']));
+                    }
+                    $rls_text .= ')';
+                }
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-weight: bold;">' . $rls_text . '</a>';
+            }
+            
+            if (!empty($persona['aspp_file'])) {
+                $aspp_text = '👷 ASPP';
+                if (!empty($persona['aspp_data_nomina']) || !empty($persona['aspp_data_scadenza'])) {
+                    $aspp_text .= ' (';
+                    if (!empty($persona['aspp_data_nomina'])) {
+                        $aspp_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['aspp_data_nomina']));
+                    }
+                    if (!empty($persona['aspp_data_scadenza'])) {
+                        $aspp_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['aspp_data_scadenza']));
+                    }
+                    $aspp_text .= ')';
+                }
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2;">' . $aspp_text . '</a>';
+            }
+            
+            if (!empty($persona['formazione_ple_file'])) {
+                $ple_text = '🏗️ PLE';
+                if (!empty($persona['formazione_ple_data_emissione']) || !empty($persona['formazione_ple_data_scadenza'])) {
+                    $ple_text .= ' (';
+                    if (!empty($persona['formazione_ple_data_emissione'])) {
+                        $ple_text .= 'Em: ' . date('d/m/Y', strtotime($persona['formazione_ple_data_emissione']));
+                    }
+                    if (!empty($persona['formazione_ple_data_scadenza'])) {
+                        $ple_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['formazione_ple_data_scadenza']));
+                    }
+                    $ple_text .= ')';
+                }
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2;">' . $ple_text . '</a>';
+            }
+            
+            if (!empty($persona['formazione_carrelli_file'])) {
+                $carrelli_text = '🚜 Carrelli';
+                if (!empty($persona['formazione_carrelli_data_emissione']) || !empty($persona['formazione_carrelli_data_scadenza'])) {
+                    $carrelli_text .= ' (';
+                    if (!empty($persona['formazione_carrelli_data_emissione'])) {
+                        $carrelli_text .= 'Em: ' . date('d/m/Y', strtotime($persona['formazione_carrelli_data_emissione']));
+                    }
+                    if (!empty($persona['formazione_carrelli_data_scadenza'])) {
+                        $carrelli_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['formazione_carrelli_data_scadenza']));
+                    }
+                    $carrelli_text .= ')';
+                }
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2;">' . $carrelli_text . '</a>';
+            }
+            
+            // 🎯 FORMAZIONI LEGACY AGGIUNTIVE
             $formazioni_aggiuntive = [];
             if (!empty($persona['formazione_lavori_quota_file'])) {
                 $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2;">🏗️ Lavori in Quota</a>';
@@ -1984,11 +2125,15 @@ foreach ($richieste as $richiesta) {
                 echo '<div style="font-size: 11px; margin-bottom: 5px;"><strong>Formazioni Base:</strong><br>' . implode(' | ', $formazioni) . '</div>';
             }
             
+            if (!empty($formazioni_nuove)) {
+                echo '<div style="font-size: 11px; margin-bottom: 5px; padding: 5px; background: rgba(33, 150, 243, 0.1); border-left: 3px solid #2196f3; border-radius: 3px;"><strong>📚 Formazioni Specifiche e Nomine:</strong><br>' . implode(' | ', $formazioni_nuove) . '</div>';
+            }
+            
             if (!empty($formazioni_aggiuntive)) {
                 echo '<div style="font-size: 11px; padding: 5px; background: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107; border-radius: 3px;"><strong>🎯 Formazioni Aggiuntive:</strong><br>' . implode(' | ', $formazioni_aggiuntive) . '</div>';
             }
             
-            if (empty($formazioni) && empty($formazioni_aggiuntive)) {
+            if (empty($formazioni) && empty($formazioni_nuove) && empty($formazioni_aggiuntive)) {
                 echo '<div style="font-size: 11px; color: #dc3545;">Nessuna formazione caricata</div>';
             }
             echo '</div>';
