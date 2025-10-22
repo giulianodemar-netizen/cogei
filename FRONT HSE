@@ -5146,20 +5146,88 @@ function hse_addPersona() {
                 <h5 class="hse_formazione_title" style="margin: 0 0 15px 0; color: #17a2b8;">🎓 Documenti Formazione</h5>
                 <div class="hse_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                     <div class="hse_antincendio_field">
-                        <label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione Antincendio:</label>
-                        <input type="file" name="hse_formazione_antincendio_${hse_newIndex}" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione e nomina Antincendio:</label>
+                        <input type="file" name="hse_formazione_antincendio_${hse_newIndex}" id="hse_formazione_antincendio_file_${hse_newIndex}" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_antincendio_emissione_${hse_newIndex}" id="hse_formazione_antincendio_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 3, document.getElementById('hse_formazione_antincendio_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>
+                        <input type="date" name="hse_formazione_antincendio_scadenza_${hse_newIndex}" id="hse_formazione_antincendio_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_primo_soccorso_field">
-                        <label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione Primo Soccorso:</label>
-                        <input type="file" name="hse_formazione_primo_soccorso_${hse_newIndex}" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione e nomina Primo Soccorso:</label>
+                        <input type="file" name="hse_formazione_primo_soccorso_${hse_newIndex}" id="hse_formazione_primo_soccorso_file_${hse_newIndex}" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_primo_soccorso_emissione_${hse_newIndex}" id="hse_formazione_primo_soccorso_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 3, document.getElementById('hse_formazione_primo_soccorso_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>
+                        <input type="date" name="hse_formazione_primo_soccorso_scadenza_${hse_newIndex}" id="hse_formazione_primo_soccorso_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_preposti_field">
-                        <label class="hse_preposti_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👮 Formazione Preposti:</label>
-                        <input type="file" name="hse_formazione_preposti_${hse_newIndex}" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <label class="hse_preposti_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👮 Formazione e nomina Preposti:</label>
+                        <input type="file" name="hse_formazione_preposti_${hse_newIndex}" id="hse_formazione_preposti_file_${hse_newIndex}" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>
+                        <input type="date" name="hse_formazione_preposti_nomina_${hse_newIndex}" id="hse_formazione_preposti_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 2, document.getElementById('hse_formazione_preposti_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 2 anni):</label>
+                        <input type="date" name="hse_formazione_preposti_scadenza_${hse_newIndex}" id="hse_formazione_preposti_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                 </div>
-                <small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l'assegnazione ai cantieri</small>
             </div>
+            
+            <div class="hse_nuove_formazioni_section" style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 4px solid #2196f3; margin-top: 20px;">
+                <h5 style="margin: 0 0 15px 0; color: #1565c0;">📚 Formazione Generale e Specifica + Nomine</h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="hse_formazione_generale_specifica_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🎓 Formazione Generale e Specifica:</label>
+                        <input type="file" name="hse_formazione_generale_specifica_${hse_newIndex}" id="hse_formazione_generale_specifica_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_generale_specifica_emissione_${hse_newIndex}" id="hse_formazione_generale_specifica_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_generale_specifica_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_generale_specifica_scadenza_${hse_newIndex}" id="hse_formazione_generale_specifica_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_rspp_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RSPP (OBBLIGATORIO) *:</label>
+                        <input type="file" name="hse_rspp_${hse_newIndex}" id="hse_rspp_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>
+                        <input type="date" name="hse_rspp_nomina_${hse_newIndex}" id="hse_rspp_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_rspp_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>
+                        <input type="date" name="hse_rspp_scadenza_${hse_newIndex}" id="hse_rspp_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_rls_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RLS (OBBLIGATORIO) *:</label>
+                        <input type="file" name="hse_rls_${hse_newIndex}" id="hse_rls_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>
+                        <input type="date" name="hse_rls_nomina_${hse_newIndex}" id="hse_rls_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 1, document.getElementById('hse_rls_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 1 anno):</label>
+                        <input type="date" name="hse_rls_scadenza_${hse_newIndex}" id="hse_rls_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_aspp_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 ASPP (opzionale):</label>
+                        <input type="file" name="hse_aspp_${hse_newIndex}" id="hse_aspp_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>
+                        <input type="date" name="hse_aspp_nomina_${hse_newIndex}" id="hse_aspp_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_aspp_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>
+                        <input type="date" name="hse_aspp_scadenza_${hse_newIndex}" id="hse_aspp_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_formazione_ple_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>
+                        <input type="file" name="hse_formazione_ple_${hse_newIndex}" id="hse_formazione_ple_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_ple_emissione_${hse_newIndex}" id="hse_formazione_ple_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_ple_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_ple_scadenza_${hse_newIndex}" id="hse_formazione_ple_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_formazione_carrelli_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚜 Formazione Utilizzo Carrelli Elevatori:</label>
+                        <input type="file" name="hse_formazione_carrelli_${hse_newIndex}" id="hse_formazione_carrelli_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_carrelli_emissione_${hse_newIndex}" id="hse_formazione_carrelli_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_carrelli_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_carrelli_scadenza_${hse_newIndex}" id="hse_formazione_carrelli_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                </div>
+                <small style="color: #1565c0; font-weight: bold; margin-top: 10px; display: block;">⚠️ RSPP e RLS sono obbligatori per tutti gli operai</small>
+            </div>
+            
+            <small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l'assegnazione ai cantieri</small>
             
             <div class="hse_ulteriori_formazione_section" style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-top: 20px;">
                 <h5 class="hse_ulteriori_formazione_title" style="margin: 0 0 15px 0; color: #856404;">🎯 Ulteriori Documenti di Formazione</h5>
@@ -5184,7 +5252,81 @@ function hse_addPersona() {
     
     hse_container.appendChild(hse_personaDiv);
     
+    // Initialize auto-fill date scripts for all training fields
     setTimeout(() => {
+        // Antincendio
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_formazione_antincendio_file_${hse_newIndex}`),
+            document.getElementById(`hse_formazione_antincendio_emissione_${hse_newIndex}`),
+            3,
+            document.getElementById(`hse_formazione_antincendio_scadenza_${hse_newIndex}`)
+        );
+        
+        // Primo Soccorso
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_formazione_primo_soccorso_file_${hse_newIndex}`),
+            document.getElementById(`hse_formazione_primo_soccorso_emissione_${hse_newIndex}`),
+            3,
+            document.getElementById(`hse_formazione_primo_soccorso_scadenza_${hse_newIndex}`)
+        );
+        
+        // Preposti
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_formazione_preposti_file_${hse_newIndex}`),
+            document.getElementById(`hse_formazione_preposti_nomina_${hse_newIndex}`),
+            2,
+            document.getElementById(`hse_formazione_preposti_scadenza_${hse_newIndex}`)
+        );
+        
+        // Formazione Generale e Specifica
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_formazione_generale_specifica_file_${hse_newIndex}`),
+            document.getElementById(`hse_formazione_generale_specifica_emissione_${hse_newIndex}`),
+            5,
+            document.getElementById(`hse_formazione_generale_specifica_scadenza_${hse_newIndex}`)
+        );
+        
+        // RSPP
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_rspp_file_${hse_newIndex}`),
+            document.getElementById(`hse_rspp_nomina_${hse_newIndex}`),
+            5,
+            document.getElementById(`hse_rspp_scadenza_${hse_newIndex}`)
+        );
+        
+        // RLS
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_rls_file_${hse_newIndex}`),
+            document.getElementById(`hse_rls_nomina_${hse_newIndex}`),
+            1,
+            document.getElementById(`hse_rls_scadenza_${hse_newIndex}`)
+        );
+        
+        // ASPP
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_aspp_file_${hse_newIndex}`),
+            document.getElementById(`hse_aspp_nomina_${hse_newIndex}`),
+            5,
+            document.getElementById(`hse_aspp_scadenza_${hse_newIndex}`)
+        );
+        
+        // PLE
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_formazione_ple_file_${hse_newIndex}`),
+            document.getElementById(`hse_formazione_ple_emissione_${hse_newIndex}`),
+            5,
+            document.getElementById(`hse_formazione_ple_scadenza_${hse_newIndex}`)
+        );
+        
+        // Carrelli
+        hse_autoFillEmissionDate(
+            document.getElementById(`hse_formazione_carrelli_file_${hse_newIndex}`),
+            document.getElementById(`hse_formazione_carrelli_emissione_${hse_newIndex}`),
+            5,
+            document.getElementById(`hse_formazione_carrelli_scadenza_${hse_newIndex}`)
+        );
+        
+        // Focus on nome input
         const hse_nomeInput = hse_personaDiv.querySelector('input[name="hse_personale_nome[]"]');
         if (hse_nomeInput) hse_nomeInput.focus();
     }, 100);
