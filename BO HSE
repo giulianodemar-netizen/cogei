@@ -199,7 +199,16 @@ function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
     global $wpdb;
     
     return $wpdb->get_results($wpdb->prepare("
-        SELECT aa.*, a.descrizione_automezzo, a.targa
+        SELECT aa.*, 
+               a.descrizione_automezzo, 
+               a.targa, 
+               a.tipologia,
+               a.file_targa,
+               a.scadenza_revisione,
+               a.scadenza_assicurazione,
+               a.file_assicurazione,
+               a.scadenza_verifiche_periodiche,
+               a.file_verifiche_periodiche
         FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
         JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
         WHERE aa.cantiere_id = %d AND aa.user_id = %d
@@ -2349,14 +2358,21 @@ foreach ($richieste as $richiesta) {
         echo 'pos_file: "' . addslashes($pos_data['pos_file'] ?? '') . '",';
         echo 'mezzi_file: "' . addslashes($pos_data['mezzi_file'] ?? '') . '",';
         
-        // Aggiungi automezzi assegnati a questo cantiere
+        // Aggiungi automezzi assegnati a questo cantiere (con nuovi campi mezzi meccanici)
         $automezzi_cantiere = hse_getAutomezziAssegnatiCantiere($cantiere['id'], $user_id);
         echo 'automezzi: [';
         foreach ($automezzi_cantiere as $automezzo) {
             echo '{';
             echo 'id: ' . $automezzo['automezzo_id'] . ',';
+            echo 'tipologia: "' . addslashes($automezzo['tipologia'] ?? 'AUTO') . '",';
             echo 'descrizione: "' . addslashes($automezzo['descrizione_automezzo']) . '",';
             echo 'targa: "' . addslashes($automezzo['targa']) . '",';
+            echo 'file_targa: "' . addslashes($automezzo['file_targa'] ?? '') . '",';
+            echo 'scadenza_revisione: "' . addslashes($automezzo['scadenza_revisione'] ?? '') . '",';
+            echo 'scadenza_assicurazione: "' . addslashes($automezzo['scadenza_assicurazione'] ?? '') . '",';
+            echo 'file_assicurazione: "' . addslashes($automezzo['file_assicurazione'] ?? '') . '",';
+            echo 'scadenza_verifiche_periodiche: "' . addslashes($automezzo['scadenza_verifiche_periodiche'] ?? '') . '",';
+            echo 'file_verifiche_periodiche: "' . addslashes($automezzo['file_verifiche_periodiche'] ?? '') . '",';
             echo 'data_assegnazione: "' . addslashes($automezzo['data_assegnazione']) . '"';
             echo '},';
         }
@@ -2388,6 +2404,14 @@ foreach ($richieste as $richiesta) {
                 echo 'cognome: "' . addslashes($operaio['cognome']) . '",';
                 echo 'data_nascita: "' . addslashes($operaio['data_nascita']) . '",';
                 echo 'data_assegnazione: "' . addslashes($operaio_assegnazione['data_assegnazione']) . '",';
+                
+                // 📚 Aggiungi nuovi campi formazione implementati
+                echo 'formazione_generale_specifica: ' . (!empty($operaio['formazione_generale_specifica_file']) ? 'true' : 'false') . ',';
+                echo 'rspp: ' . (!empty($operaio['rspp_file']) ? 'true' : 'false') . ',';
+                echo 'rls: ' . (!empty($operaio['rls_file']) ? 'true' : 'false') . ',';
+                echo 'aspp: ' . (!empty($operaio['aspp_file']) ? 'true' : 'false') . ',';
+                echo 'formazione_ple: ' . (!empty($operaio['formazione_ple_file']) ? 'true' : 'false') . ',';
+                echo 'formazione_carrelli: ' . (!empty($operaio['formazione_carrelli_file']) ? 'true' : 'false') . ',';
                 
                 $competenze = [];
                 if (!empty($operaio['formazione_antincendio_file'])) $competenze[] = 'Antincendio';
@@ -3985,6 +4009,15 @@ function loadCantiereWorkers(cantiereId, userId) {
                             borderColor = '#ffc107'; // giallo per alcune competenze
                         }
                         
+                        // 📚 Prepara lista formazioni con date (nuovi campi implementati)
+                        const formazioniExtra = [];
+                        if (operaio.formazione_generale_specifica) formazioniExtra.push('🎓 Form. Gen. e Spec.');
+                        if (operaio.rspp) formazioniExtra.push('<strong>👷 RSPP</strong>');
+                        if (operaio.rls) formazioniExtra.push('<strong>👷 RLS</strong>');
+                        if (operaio.aspp) formazioniExtra.push('👷 ASPP');
+                        if (operaio.formazione_ple) formazioniExtra.push('🏗️ PLE');
+                        if (operaio.formazione_carrelli) formazioniExtra.push('🚜 Carrelli');
+                        
                         return `
                         <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -3995,9 +4028,14 @@ function loadCantiereWorkers(cantiereId, userId) {
                                 </div>
                                 <div style="font-size: 16px;">${operaio.icons || '⚠️'}</div>
                             </div>
-                            <div style="font-size: 10px; color: #666;">
-                                <strong>Competenze:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna formazione registrata'}
+                            <div style="font-size: 10px; color: #666; margin-bottom: 5px;">
+                                <strong>Formazioni Base:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna'}
                             </div>
+                            ${formazioniExtra.length > 0 ? `
+                            <div style="font-size: 10px; color: #666; background: #e3f2fd; padding: 5px; border-radius: 3px;">
+                                <strong>Formazioni Specifiche:</strong> ${formazioniExtra.join(' • ')}
+                            </div>
+                            ` : ''}
                         </div>
                         `;
                     }).join('')}
@@ -4012,19 +4050,56 @@ function loadCantiereWorkers(cantiereId, userId) {
             
             ${automezziTotali > 0 ? `
             <div style="margin-bottom: 20px;">
-                <h5 style="color: #ffc107; margin-bottom: 15px;">🚛 Automezzi Assegnati (${automezziTotali})</h5>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                    ${cantiereData.automezzi.map(automezzo => `
+                <h5 style="color: #ffc107; margin-bottom: 15px;">🚛 Mezzi Meccanici Assegnati (${automezziTotali})</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
+                    ${cantiereData.automezzi.map(automezzo => {
+                        // Determina icona tipologia
+                        const iconeTipologia = {
+                            'AUTO': '🚗',
+                            'AUTOCARRO': '🚚',
+                            'AUTOCARRO CON GRU': '🏗️',
+                            'PLE': '⬆️',
+                            'MEZZI MOVIMENTI TERRA': '🚜'
+                        };
+                        const icona = iconeTipologia[automezzo.tipologia] || '🚗';
+                        const tipologia = automezzo.tipologia || 'AUTO';
+                        
+                        // Verifica se richiede verifiche periodiche
+                        const richiedeVerifiche = ['AUTOCARRO CON GRU', 'PLE', 'MEZZI MOVIMENTI TERRA'].includes(tipologia);
+                        
+                        return `
                         <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; border-left: 4px solid #ffc107;">
-                            <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${automezzo.descrizione}</div>
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
+                                <div style="font-weight: bold; color: #333;">${automezzo.descrizione}</div>
+                                <div style="font-size: 18px;">${icona}</div>
+                            </div>
+                            <div style="font-size: 11px; color: #666; margin-bottom: 3px;">
+                                <strong>Tipologia:</strong> ${tipologia}
+                            </div>
                             <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
                                 <strong>Targa:</strong> <span style="font-family: monospace; font-weight: bold;">${automezzo.targa}</span>
                             </div>
-                            <div style="font-size: 10px; color: #888;">
+                            ${automezzo.scadenza_revisione ? `
+                            <div style="font-size: 10px; color: #666;">
+                                🔧 <strong>Revisione:</strong> ${new Date(automezzo.scadenza_revisione).toLocaleDateString('it-IT')}
+                            </div>
+                            ` : ''}
+                            ${automezzo.scadenza_assicurazione ? `
+                            <div style="font-size: 10px; color: #666;">
+                                🛡️ <strong>Assicurazione:</strong> ${new Date(automezzo.scadenza_assicurazione).toLocaleDateString('it-IT')}
+                            </div>
+                            ` : ''}
+                            ${richiedeVerifiche && automezzo.scadenza_verifiche_periodiche ? `
+                            <div style="font-size: 10px; color: #666; background: #fff3cd; padding: 3px; border-radius: 2px; margin-top: 3px;">
+                                ⚠️ <strong>Verifiche:</strong> ${new Date(automezzo.scadenza_verifiche_periodiche).toLocaleDateString('it-IT')}
+                            </div>
+                            ` : ''}
+                            <div style="font-size: 9px; color: #888; margin-top: 5px; border-top: 1px solid #eee; padding-top: 3px;">
                                 Assegnato: ${new Date(automezzo.data_assegnazione).toLocaleDateString('it-IT')}
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
             ` : ''}
