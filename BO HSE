@@ -1945,7 +1945,7 @@ foreach ($richieste as $richiesta) {
     echo '<h4 style="margin: 0 0 10px 0; color: #0066a2;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
     
     if (!empty($personale)) {
-        echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px;">';
+        echo '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; max-width: 100%;">';
         
         foreach ($personale as $index => $persona) {
             // Verifica se questa persona è assegnata a cantieri
@@ -1955,23 +1955,23 @@ foreach ($richieste as $richiesta) {
             
             $isAssigned = !empty($persona_assegnazioni);
             $borderColor = $isAssigned ? '#28a745' : '#ddd';
-            $bgColor = $isAssigned ? '#d4edda' : '#fff';
+            $bgColor = $isAssigned ? '#f0f9f3' : '#fff';
             
-            echo '<div style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; padding: 12px; border-radius: 8px;">';
-            echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
-            echo '<h5 style="margin: 0; color: #333;">Persona ' . ($index + 1) . '</h5>';
+            echo '<div style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; padding: 12px; border-radius: 8px; min-width: 320px; max-width: 500px;">';
+            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px;">';
+            echo '<h5 style="margin: 0; color: #333; font-size: 14px;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
             if ($isAssigned) {
-                echo '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">🏗️ ASSEGNATO A CANTIERI</span>';
+                echo '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 9px; white-space: nowrap;">🏗️ ASSEGNATO</span>';
             }
             echo '</div>';
             
-            echo '<p style="margin: 2px 0;"><strong>Nome:</strong> ' . htmlspecialchars($persona['nome']) . '</p>';
-            echo '<p style="margin: 2px 0;"><strong>Cognome:</strong> ' . htmlspecialchars($persona['cognome']) . '</p>';
-            echo '<p style="margin: 2px 0;"><strong>Data Nascita:</strong> ' . htmlspecialchars($persona['data_nascita']) . '</p>';
+            echo '<div style="font-size: 11px; color: #666; margin-bottom: 8px;">';
+            echo '<div>📅 Nato il: ' . htmlspecialchars($persona['data_nascita']) . '</div>';
+            echo '</div>';
             
-            // Mostra formazioni
-            echo '<div style="margin-top: 8px; border-top: 1px solid #ccc; padding-top: 8px;">';
-            echo '<p style="margin: 2px 0; font-size: 12px;"><strong>Formazioni:</strong></p>';
+            // Mostra formazioni in modo più compatto
+            echo '<div style="margin-top: 8px; border-top: 1px solid #e0e0e0; padding-top: 8px;">';
+            echo '<p style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold; color: #555;">📚 Formazioni:</p>';
             
             $formazioni = [];
             if (!empty($persona['formazione_antincendio_file'])) {
@@ -2122,27 +2122,27 @@ foreach ($richieste as $richiesta) {
             }
             
             if (!empty($formazioni)) {
-                echo '<div style="font-size: 11px; margin-bottom: 5px;"><strong>Formazioni Base:</strong><br>' . implode(' | ', $formazioni) . '</div>';
+                echo '<div style="font-size: 10px; margin-bottom: 6px; line-height: 1.4;"><strong style="color: #17a2b8;">Base:</strong> ' . implode(' • ', $formazioni) . '</div>';
             }
             
             if (!empty($formazioni_nuove)) {
-                echo '<div style="font-size: 11px; margin-bottom: 5px; padding: 5px; background: rgba(33, 150, 243, 0.1); border-left: 3px solid #2196f3; border-radius: 3px;"><strong>📚 Formazioni Specifiche e Nomine:</strong><br>' . implode(' | ', $formazioni_nuove) . '</div>';
+                echo '<div style="font-size: 10px; margin-bottom: 6px; padding: 4px 6px; background: rgba(33, 150, 243, 0.08); border-left: 2px solid #2196f3; border-radius: 2px; line-height: 1.4;"><strong style="color: #1976d2;">Specifiche:</strong> ' . implode(' • ', $formazioni_nuove) . '</div>';
             }
             
             if (!empty($formazioni_aggiuntive)) {
-                echo '<div style="font-size: 11px; padding: 5px; background: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107; border-radius: 3px;"><strong>🎯 Formazioni Aggiuntive:</strong><br>' . implode(' | ', $formazioni_aggiuntive) . '</div>';
+                echo '<div style="font-size: 10px; padding: 4px 6px; background: rgba(255, 193, 7, 0.08); border-left: 2px solid #ffc107; border-radius: 2px; line-height: 1.4;"><strong style="color: #f57c00;">Aggiuntive:</strong> ' . implode(' • ', $formazioni_aggiuntive) . '</div>';
             }
             
             if (empty($formazioni) && empty($formazioni_nuove) && empty($formazioni_aggiuntive)) {
-                echo '<div style="font-size: 11px; color: #dc3545;">Nessuna formazione caricata</div>';
+                echo '<div style="font-size: 10px; color: #dc3545; font-style: italic;">⚠️ Nessuna formazione caricata</div>';
             }
             echo '</div>';
             
-            // 🚀 NUOVA SEZIONE: Mostra cantieri assegnati per questa persona
+            // 🚀 SEZIONE: Mostra cantieri assegnati per questa persona (compatta)
             if ($isAssigned) {
-                echo '<div style="margin-top: 12px; padding: 10px; background: rgba(40, 167, 69, 0.1); border-radius: 6px; border-left: 4px solid #28a745;">';
-                echo '<h6 style="margin: 0 0 8px 0; color: #155724;">🏗️ Cantieri Assegnati</h6>';
-                echo '<div style="font-size: 11px;">';
+                echo '<div style="margin-top: 8px; padding: 6px 8px; background: rgba(40, 167, 69, 0.08); border-radius: 4px; border-left: 2px solid #28a745;">';
+                echo '<div style="font-size: 10px; font-weight: bold; color: #155724; margin-bottom: 3px;">🏗️ Cantieri:</div>';
+                echo '<div style="font-size: 9px; color: #155724; line-height: 1.3;">';
                 
                 $cantieri_persona = array();
                 foreach ($persona_assegnazioni as $assegnazione) {
@@ -2150,11 +2150,7 @@ foreach ($richieste as $richiesta) {
                 }
                 
                 $cantieri_unique = array_unique($cantieri_persona);
-                foreach ($cantieri_unique as $cantiere_nome) {
-                    echo '<div style="background: #d4edda; color: #155724; padding: 3px 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #28a745;">';
-                    echo '🏗️ ' . htmlspecialchars($cantiere_nome);
-                    echo '</div>';
-                }
+                echo implode(' • ', array_map('htmlspecialchars', $cantieri_unique));
                 echo '</div>';
                 echo '</div>';
             }
@@ -2304,6 +2300,12 @@ foreach ($richieste as $richiesta) {
         echo 'formazione_antincendio: ' . (!empty($persona['formazione_antincendio_file']) ? 'true' : 'false') . ',';
         echo 'formazione_primo_soccorso: ' . (!empty($persona['formazione_primo_soccorso_file']) ? 'true' : 'false') . ',';
         echo 'formazione_preposti: ' . (!empty($persona['formazione_preposti_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_generale_specifica: ' . (!empty($persona['formazione_generale_specifica_file']) ? 'true' : 'false') . ',';
+        echo 'rspp: ' . (!empty($persona['rspp_file']) ? 'true' : 'false') . ',';
+        echo 'rls: ' . (!empty($persona['rls_file']) ? 'true' : 'false') . ',';
+        echo 'aspp: ' . (!empty($persona['aspp_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_ple: ' . (!empty($persona['formazione_ple_file']) ? 'true' : 'false') . ',';
+        echo 'formazione_carrelli: ' . (!empty($persona['formazione_carrelli_file']) ? 'true' : 'false') . ',';
         echo 'formazione_lavori_quota: ' . (!empty($persona['formazione_lavori_quota_file']) ? 'true' : 'false') . ',';
         echo 'formazione_dpi_terza: ' . (!empty($persona['formazione_dpi_terza_categoria_file']) ? 'true' : 'false') . ',';
         echo 'formazione_ambienti_confinati: ' . (!empty($persona['formazione_ambienti_confinati_file']) ? 'true' : 'false');
@@ -3740,21 +3742,39 @@ function loadStatusDetails(richiestaId) {
                     ${richiestaData.personale.map(operaio => {
                         const competenze = [];
                         let icons = '';
+                        
+                        // Formazioni Base
                         if (operaio.formazione_antincendio) { competenze.push('Antincendio'); icons += '🔥'; }
                         if (operaio.formazione_primo_soccorso) { competenze.push('Primo Soccorso'); icons += '🚑'; }
                         if (operaio.formazione_preposti) { competenze.push('Preposti'); icons += '👮'; }
+                        
+                        // Formazioni Specifiche e Nomine
+                        if (operaio.formazione_generale_specifica) { competenze.push('Form. Gen. e Spec.'); icons += '🎓'; }
+                        if (operaio.rspp) { competenze.push('RSPP'); icons += '👷'; }
+                        if (operaio.rls) { competenze.push('RLS'); icons += '👷'; }
+                        if (operaio.aspp) { competenze.push('ASPP'); icons += '👷'; }
+                        if (operaio.formazione_ple) { competenze.push('PLE'); icons += '🏗️'; }
+                        if (operaio.formazione_carrelli) { competenze.push('Carrelli'); icons += '🚜'; }
+                        
+                        // Formazioni Aggiuntive Legacy
                         if (operaio.formazione_lavori_quota) { competenze.push('Lavori in Quota'); icons += '🏗️'; }
                         if (operaio.formazione_dpi_terza) { competenze.push('DPI 3° Cat.'); icons += '🦺'; }
                         if (operaio.formazione_ambienti_confinati) { competenze.push('Amb. Confinati'); icons += '🕳️'; }
                         
+                        // Check if RSPP or RLS are present (obbligatori)
+                        const hasRSPP = operaio.rspp;
+                        const hasRLS = operaio.rls;
+                        const borderColor = (hasRSPP && hasRLS) ? '#28a745' : '#ffc107';
+                        
                         return `
-                        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
-                            <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
-                            <div style="font-size: 10px; color: #666; margin: 2px 0;">
-                                Nato: ${operaio.data_nascita || 'N/A'}
+                        <div style="background: white; border: 2px solid ${borderColor}; border-radius: 4px; padding: 8px;">
+                            <div style="font-weight: bold; color: #333; margin-bottom: 4px;">${operaio.nome} ${operaio.cognome}</div>
+                            <div style="font-size: 10px; color: #666; margin-bottom: 4px;">
+                                📅 Nato: ${operaio.data_nascita || 'N/A'}
                             </div>
+                            ${(!hasRSPP || !hasRLS) ? `<div style="background: #fff3cd; color: #856404; font-size: 9px; padding: 3px 5px; border-radius: 3px; margin-bottom: 4px;">⚠️ Mancano: ${!hasRSPP ? 'RSPP' : ''} ${!hasRLS ? 'RLS' : ''}</div>` : ''}
                             <div style="font-size: 14px; margin: 4px 0;">${icons || '⚠️'}</div>
-                            <div style="font-size: 10px; color: #666;">
+                            <div style="font-size: 9px; color: #666; line-height: 1.3;">
                                 ${competenze.length > 0 ? competenze.join(', ') : 'Nessuna formazione'}
                             </div>
                         </div>
