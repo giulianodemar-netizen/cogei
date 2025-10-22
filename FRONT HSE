@@ -1321,20 +1321,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     $hse_new_automezzi_count = count($hse_automezzi_data);
                     
                     for ($i = 0; $i < $hse_new_automezzi_count; $i++) {
+                        // 🚛 NUOVO: Costruisci array con tutti i campi nuovi mezzi meccanici
                         $hse_automezzo_data = array(
                             'richiesta_id' => $hse_richiesta_id,
+                            'tipologia' => $hse_automezzi_data[$i]['tipologia'],
                             'descrizione_automezzo' => $hse_automezzi_data[$i]['descrizione_automezzo'],
                             'targa' => strtoupper($hse_automezzi_data[$i]['targa']),
+                            'scadenza_revisione' => $hse_automezzi_data[$i]['scadenza_revisione'] ?: null,
+                            'scadenza_assicurazione' => $hse_automezzi_data[$i]['scadenza_assicurazione'] ?: null,
+                            'scadenza_verifiche_periodiche' => $hse_automezzi_data[$i]['scadenza_verifiche_periodiche'] ?: null,
                             'user_id' => $hse_current_user_id
                         );
                         
+                        // 🚛 NUOVO: Aggiungi file solo se sono stati caricati (altrimenti preserva esistenti)
                         if ($i < $hse_existing_automezzi_count) {
+                            // UPDATE: aggiungi file solo se nuovi upload, altrimenti mantieni esistenti
+                            if (!empty($hse_automezzi_data[$i]['file_targa'])) {
+                                $hse_automezzo_data['file_targa'] = $hse_automezzi_data[$i]['file_targa'];
+                            }
+                            if (!empty($hse_automezzi_data[$i]['file_assicurazione'])) {
+                                $hse_automezzo_data['file_assicurazione'] = $hse_automezzi_data[$i]['file_assicurazione'];
+                            }
+                            if (!empty($hse_automezzi_data[$i]['file_verifiche_periodiche'])) {
+                                $hse_automezzo_data['file_verifiche_periodiche'] = $hse_automezzi_data[$i]['file_verifiche_periodiche'];
+                            }
+                            
                             $wpdb->update(
                                 $wpdb->prefix . 'cantiere_automezzi',
                                 $hse_automezzo_data,
                                 array('id' => $hse_existing_automezzi[$i]['id'])
                             );
                         } else {
+                            // INSERT: aggiungi tutti i file
+                            $hse_automezzo_data['file_targa'] = $hse_automezzi_data[$i]['file_targa'] ?: '';
+                            $hse_automezzo_data['file_assicurazione'] = $hse_automezzi_data[$i]['file_assicurazione'] ?: '';
+                            $hse_automezzo_data['file_verifiche_periodiche'] = $hse_automezzi_data[$i]['file_verifiche_periodiche'] ?: '';
+                            
                             $wpdb->insert($wpdb->prefix . 'cantiere_automezzi', $hse_automezzo_data);
                         }
                     }
