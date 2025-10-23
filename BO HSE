@@ -4840,7 +4840,7 @@ async function generateCantierePDF(data) {
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(0, 102, 162);
-    pdf.text('📋 Informazioni Generali', margin, currentY);
+    pdf.text('INFORMAZIONI GENERALI', margin, currentY);
     currentY += 7;
     
     pdf.setFontSize(10);
@@ -4880,7 +4880,7 @@ async function generateCantierePDF(data) {
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(0, 102, 162);
-    pdf.text('📊 Statistiche', margin, currentY);
+    pdf.text('STATISTICHE', margin, currentY);
     currentY += 7;
     
     pdf.setFontSize(10);
@@ -4911,7 +4911,7 @@ async function generateCantierePDF(data) {
     pdf.setFont('helvetica', 'bold');
     const isConforme = stats.conforme;
     pdf.setTextColor(isConforme ? 21 : 133, isConforme ? 87 : 100, isConforme ? 36 : 4);
-    pdf.text(isConforme ? '✓ CANTIERE CONFORME' : '⚠ ATTENZIONE: VERIFICA CONFORMITÀ', margin, currentY);
+    pdf.text(isConforme ? 'CANTIERE CONFORME' : 'ATTENZIONE: VERIFICA CONFORMITA', margin, currentY);
     currentY += 7;
     
     pdf.setFontSize(10);
@@ -4919,9 +4919,9 @@ async function generateCantierePDF(data) {
     pdf.setTextColor(0, 0, 0);
     
     const conformitaInfo = [
-        ['Antincendio:', `${stats.percentuali.antincendio}% (${stats.competenze_conteggi.antincendio}/${stats.totale_operai}) ${stats.percentuali.antincendio >= 30 ? '✓' : '✗'}`],
-        ['Primo Soccorso:', `${stats.percentuali.primo_soccorso}% (${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai}) ${stats.percentuali.primo_soccorso >= 30 ? '✓' : '✗'}`],
-        ['Preposti:', `${stats.percentuali.preposti}% (${stats.competenze_conteggi.preposti}/${stats.totale_operai}) ${stats.percentuali.preposti >= 30 ? '✓' : '✗'}`]
+        ['Antincendio:', `${stats.percentuali.antincendio}% (${stats.competenze_conteggi.antincendio}/${stats.totale_operai}) ${stats.percentuali.antincendio >= 30 ? 'OK' : 'NON CONFORME'}`],
+        ['Primo Soccorso:', `${stats.percentuali.primo_soccorso}% (${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai}) ${stats.percentuali.primo_soccorso >= 30 ? 'OK' : 'NON CONFORME'}`],
+        ['Preposti:', `${stats.percentuali.preposti}% (${stats.competenze_conteggi.preposti}/${stats.totale_operai}) ${stats.percentuali.preposti >= 30 ? 'OK' : 'NON CONFORME'}`]
     ];
     
     conformitaInfo.forEach(([label, value]) => {
@@ -4940,7 +4940,7 @@ async function generateCantierePDF(data) {
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(0, 102, 162);
-        pdf.text(`Aziende e Risorse Assegnate (${aziende.length})`, margin, currentY);
+        pdf.text(`AZIENDE E RISORSE ASSEGNATE (${aziende.length})`, margin, currentY);
         currentY += 10;
         
         aziende.forEach((aziendaData, index) => {
@@ -5035,22 +5035,32 @@ async function generateCantierePDF(data) {
                         operaioDetails.push(`   Altre formazioni: ${altreFormazioni.join(', ')}`);
                     }
                     
-                    // Add documents count
+                    // Add ALL documents with expiry dates
                     if (operaio.documenti && operaio.documenti.length > 0) {
                         operaioDetails.push(`   Documenti: ${operaio.documenti.length} disponibili`);
                         
-                        // Add important expired/expiring docs
+                        // Add ALL documents with expiry information
                         operaio.documenti.forEach(doc => {
+                            let docInfo = `     - ${doc.name}`;
+                            
                             if (doc.expires_at) {
                                 const scaduto = new Date(doc.expires_at) < new Date();
                                 const inScadenza = !scaduto && 
                                     Math.ceil((new Date(doc.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
                                 
-                                if (scaduto || inScadenza) {
-                                    const status = scaduto ? 'SCADUTO' : 'In scadenza';
-                                    operaioDetails.push(`     - ${doc.name}: ${status} (${new Date(doc.expires_at).toLocaleDateString('it-IT')})`);
-                                }
+                                let status = '';
+                                if (scaduto) status = ' [SCADUTO]';
+                                else if (inScadenza) status = ' [In scadenza]';
+                                else status = ' [Valido]';
+                                
+                                docInfo += `: Scadenza ${new Date(doc.expires_at).toLocaleDateString('it-IT')}${status}`;
                             }
+                            
+                            if (doc.emission_date) {
+                                docInfo += ` - Emesso: ${new Date(doc.emission_date).toLocaleDateString('it-IT')}`;
+                            }
+                            
+                            operaioDetails.push(docInfo);
                         });
                     }
                     
