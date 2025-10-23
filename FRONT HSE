@@ -1826,12 +1826,12 @@ $hse_dvr_style = ($hse_existing_data && $hse_existing_data['dvr_file']) ?
 echo '<input type="file" name="hse_dvr_file" accept=".pdf" class="hse_dvr_input" style="' . $hse_dvr_style . '">';
 echo '</div>';
 
-// Campo Data Emissione DVR (readonly - calcolato automaticamente)
+// Campo Data Emissione DVR (compilato automaticamente ma modificabile)
 echo '<div class="hse_dvr_data_field">';
-echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR (oggi + 1 anno):</label>';
+echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR:</label>';
 $hse_dvr_data_value = ($hse_existing_data && $hse_existing_data['dvr_data_emissione']) ? $hse_existing_data['dvr_data_emissione'] : '';
-echo '<input type="date" name="hse_dvr_data_emissione" id="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" readonly class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; cursor: not-allowed;">';
-echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">⚠️ Data calcolata automaticamente al caricamento del file</small>';
+echo '<input type="date" name="hse_dvr_data_emissione" id="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white;">';
+echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">💡 Si compila automaticamente con la data odierna al caricamento del file (modificabile)</small>';
 echo '</div>';
 
 echo '</div>'; // Fine hse_dvr_fields_grid
@@ -3200,12 +3200,12 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         echo '<input type="file" name="hse_pos_file_' . $hse_cantiere['id'] . '" accept=".pdf" class="hse_pos_input" style="' . $hse_pos_style . '">';
         echo '</div>';
         
-        // Campo Data Emissione POS (readonly - calcolato automaticamente)
+        // Campo Data Emissione POS (compilato automaticamente ma modificabile)
         echo '<div class="hse_pos_data_field">';
-        echo '<label class="hse_pos_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione POS (oggi + 1 anno):</label>';
+        echo '<label class="hse_pos_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione POS:</label>';
         $hse_pos_data_value = ($hse_pos_data && $hse_pos_data['pos_data_emissione']) ? $hse_pos_data['pos_data_emissione'] : '';
-        echo '<input type="date" name="hse_pos_data_emissione_' . $hse_cantiere['id'] . '" id="hse_pos_data_emissione_' . $hse_cantiere['id'] . '" value="' . esc_attr($hse_pos_data_value) . '" readonly class="hse_pos_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; cursor: not-allowed;">';
-        echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">⚠️ Data calcolata automaticamente al caricamento del file</small>';
+        echo '<input type="date" name="hse_pos_data_emissione_' . $hse_cantiere['id'] . '" id="hse_pos_data_emissione_' . $hse_cantiere['id'] . '" value="' . esc_attr($hse_pos_data_value) . '" class="hse_pos_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white;">';
+        echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">💡 Si compila automaticamente con la data odierna al caricamento del file (modificabile)</small>';
         echo '</div>';
         
         echo '</div>'; // Fine hse_pos_fields_grid
@@ -6145,15 +6145,17 @@ document.addEventListener("DOMContentLoaded", function() {
                 
                 if (this.name === 'hse_dvr_file') {
                     const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
-                    if (dvrDataInput) {
-                        // Calcola data = oggi + 1 anno
+                    if (dvrDataInput && !dvrDataInput.value) {
+                        // Usa la data di oggi (fix timezone: usa date locali invece di UTC)
                         const today = new Date();
-                        const emissionDate = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
-                        const formattedDate = emissionDate.toISOString().split('T')[0];
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
                         dvrDataInput.value = formattedDate;
                         dvrDataInput.style.borderColor = '#28a745';
                         dvrDataInput.style.background = '#f8fff8';
-                        hse_showToast('✅ Data di emissione DVR impostata automaticamente a ' + formattedDate + ' (oggi + 1 anno)', 'success');
+                        hse_showToast('✅ Data di emissione DVR impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
                     }
                 }
                 
@@ -6161,15 +6163,17 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (this.name && this.name.startsWith('hse_pos_file_')) {
                     const cantiereId = this.name.replace('hse_pos_file_', '');
                     const posDataInput = document.querySelector('input[name="hse_pos_data_emissione_' + cantiereId + '"]');
-                    if (posDataInput) {
-                        // Calcola data = oggi + 1 anno
+                    if (posDataInput && !posDataInput.value) {
+                        // Usa la data di oggi (fix timezone: usa date locali invece di UTC)
                         const today = new Date();
-                        const emissionDate = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
-                        const formattedDate = emissionDate.toISOString().split('T')[0];
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
                         posDataInput.value = formattedDate;
                         posDataInput.style.borderColor = '#28a745';
                         posDataInput.style.background = '#f8fff8';
-                        hse_showToast('✅ Data di emissione POS impostata automaticamente a ' + formattedDate + ' (oggi + 1 anno)', 'success');
+                        hse_showToast('✅ Data di emissione POS impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
                     }
                 }
             } else {
