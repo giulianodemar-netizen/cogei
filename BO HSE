@@ -4259,19 +4259,19 @@ function generateRealCantiereDetailsContent(data) {
     const aziende = data.aziende;
     
     let contentHTML = `
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-            <h5 style="margin: 0 0 10px 0; color: #17a2b8;">📊 Riepilogo Cantiere #${cantiere.id}</h5>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; font-size: 13px;">
-                <div><strong>🏗️ Nome:</strong> ${cantiere.nome}</div>
-                <div><strong>📅 Inizio:</strong> ${cantiere.data_inizio ? new Date(cantiere.data_inizio).toLocaleDateString('it-IT') : 'Non definita'}</div>
-                <div><strong>🏁 Fine:</strong> ${cantiere.data_fine ? new Date(cantiere.data_fine).toLocaleDateString('it-IT') : 'Non definita'}</div>
-                <div><strong>📅 Creato:</strong> ${new Date(cantiere.data_creazione).toLocaleDateString('it-IT')}</div>
-                <div><strong>🏢 Aziende:</strong> ${stats.totale_aziende}</div>
-                <div><strong>👷 Operai Totali:</strong> ${stats.totale_operai}</div>
-                <div><strong>🚛 Mezzi Totali:</strong> ${stats.totale_mezzi || 0}</div>
-                <div><strong>🔧 Attrezzature:</strong> ${stats.totale_attrezzature || 0}</div>
-                <div><strong>✅ Operai Formati:</strong> ${stats.operai_con_formazioni}</div>
-                <div><strong>🔄 Aggiornato:</strong> ${data.timestamp}</div>
+        <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 25px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+            <h3 style="margin: 0 0 20px 0; color: #0066a2; font-size: 22px; font-weight: 700; border-bottom: 3px solid #17a2b8; padding-bottom: 12px;">📊 Riepilogo Cantiere #${cantiere.id}</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; font-size: 15px; line-height: 1.6;">
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">🏗️ Nome:</strong><br><span style="color: #212529; font-size: 16px; font-weight: 600;">${cantiere.nome}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">📅 Inizio:</strong><br><span style="color: #212529; font-size: 16px;">${cantiere.data_inizio ? new Date(cantiere.data_inizio).toLocaleDateString('it-IT') : 'Non definita'}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">🏁 Fine:</strong><br><span style="color: #212529; font-size: 16px;">${cantiere.data_fine ? new Date(cantiere.data_fine).toLocaleDateString('it-IT') : 'Non definita'}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">📅 Creato:</strong><br><span style="color: #212529; font-size: 16px;">${new Date(cantiere.data_creazione).toLocaleDateString('it-IT')}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">🏢 Aziende:</strong><br><span style="color: #007bff; font-size: 18px; font-weight: 700;">${stats.totale_aziende}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">👷 Operai:</strong><br><span style="color: #007bff; font-size: 18px; font-weight: 700;">${stats.totale_operai}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">🚛 Mezzi:</strong><br><span style="color: #007bff; font-size: 18px; font-weight: 700;">${stats.totale_mezzi || 0}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">🔧 Attrezzature:</strong><br><span style="color: #007bff; font-size: 18px; font-weight: 700;">${stats.totale_attrezzature || 0}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">✅ Formati:</strong><br><span style="color: #28a745; font-size: 18px; font-weight: 700;">${stats.operai_con_formazioni}</span></div>
+                <div style="padding: 8px 0;"><strong style="color: #495057; font-size: 14px;">🔄 Aggiornato:</strong><br><span style="color: #212529; font-size: 14px;">${data.timestamp}</span></div>
             </div>
         </div>
     `;
@@ -4281,37 +4281,39 @@ function generateRealCantiereDetailsContent(data) {
     const conformitaPerc = stats.conformita_percentuale;
     
     contentHTML += `
-        <div style="background: ${isConforme ? '#d4edda' : '#f8d7da'}; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 5px solid ${isConforme ? '#28a745' : '#dc3545'};">
-            <h5 style="margin: 0 0 10px 0; color: ${isConforme ? '#155724' : '#721c24'};">
-                ${isConforme ? '✅ CANTIERE CONFORME' : '⚠️ CANTIERE NON CONFORME'}
-                <span style="font-size: 14px; opacity: 0.8;">(${conformitaPerc}% operai formati)</span>
-            </h5>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px;">
-                <div style="text-align: center; padding: 8px; background: ${stats.percentuali.antincendio >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
-                    <div style="font-size: 16px; font-weight: bold;">${stats.percentuali.antincendio}%</div>
-                    <div>🔥 Antincendio</div>
-                    <div style="font-size: 10px;">${stats.competenze_conteggi.antincendio}/${stats.totale_operai}</div>
+        <div style="background: ${isConforme ? '#d4edda' : '#fff3cd'}; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 6px solid ${isConforme ? '#28a745' : '#ffc107'}; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+            <h3 style="margin: 0 0 20px 0; color: ${isConforme ? '#155724' : '#856404'}; font-size: 20px; font-weight: 700;">
+                ${isConforme ? '✅ CANTIERE CONFORME' : '⚠️ ATTENZIONE: VERIFICA CONFORMITÀ'}
+            </h3>
+            <div style="margin-bottom: 15px; font-size: 16px; color: ${isConforme ? '#155724' : '#856404'}; font-weight: 600;">
+                Operai con formazione: ${conformitaPerc}% (${stats.operai_con_formazioni}/${stats.totale_operai})
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 20px;">
+                <div style="text-align: center; padding: 18px; background: ${stats.percentuali.antincendio >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                    <div style="font-size: 28px; font-weight: 700; margin-bottom: 8px;">${stats.percentuali.antincendio}%</div>
+                    <div style="font-size: 15px; font-weight: 600; margin-bottom: 5px;">🔥 Antincendio</div>
+                    <div style="font-size: 13px; opacity: 0.9;">${stats.competenze_conteggi.antincendio} su ${stats.totale_operai} operai</div>
                 </div>
-                <div style="text-align: center; padding: 8px; background: ${stats.percentuali.primo_soccorso >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
-                    <div style="font-size: 16px; font-weight: bold;">${stats.percentuali.primo_soccorso}%</div>
-                    <div>🚑 Primo Soccorso</div>
-                    <div style="font-size: 10px;">${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai}</div>
+                <div style="text-align: center; padding: 18px; background: ${stats.percentuali.primo_soccorso >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                    <div style="font-size: 28px; font-weight: 700; margin-bottom: 8px;">${stats.percentuali.primo_soccorso}%</div>
+                    <div style="font-size: 15px; font-weight: 600; margin-bottom: 5px;">🚑 Primo Soccorso</div>
+                    <div style="font-size: 13px; opacity: 0.9;">${stats.competenze_conteggi.primo_soccorso} su ${stats.totale_operai} operai</div>
                 </div>
-                <div style="text-align: center; padding: 8px; background: ${stats.percentuali.preposti >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
-                    <div style="font-size: 16px; font-weight: bold;">${stats.percentuali.preposti}%</div>
-                    <div>👮 Preposti</div>
-                    <div style="font-size: 10px;">${stats.competenze_conteggi.preposti}/${stats.totale_operai}</div>
+                <div style="text-align: center; padding: 18px; background: ${stats.percentuali.preposti >= 30 ? '#28a745' : '#dc3545'}; color: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                    <div style="font-size: 28px; font-weight: 700; margin-bottom: 8px;">${stats.percentuali.preposti}%</div>
+                    <div style="font-size: 15px; font-weight: 600; margin-bottom: 5px;">👮 Preposti</div>
+                    <div style="font-size: 13px; opacity: 0.9;">${stats.competenze_conteggi.preposti} su ${stats.totale_operai} operai</div>
                 </div>
             </div>
-            <div style="margin-top: 10px; font-size: 11px; opacity: 0.8;">
-                💡 Soglia minima richiesta: 30% per ogni competenza
+            <div style="margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.6); border-radius: 6px; font-size: 14px; color: ${isConforme ? '#155724' : '#856404'};">
+                💡 <strong>Soglia minima richiesta:</strong> 30% per ogni competenza
             </div>
         </div>
     `;
     
     // Lista aziende con operai reali
     if (aziende && aziende.length > 0) {
-        contentHTML += `<h5 style="color: #17a2b8; margin-bottom: 15px;">🏢 Aziende e Operai Assegnati (${aziende.length})</h5>`;
+        contentHTML += `<h2 style="color: #0066a2; margin: 30px 0 20px 0; font-size: 24px; font-weight: 700; border-bottom: 3px solid #17a2b8; padding-bottom: 10px;">🏢 Aziende e Risorse Assegnate (${aziende.length})</h2>`;
         
         aziende.forEach(aziendaData => {
             const azienda = aziendaData.azienda;
@@ -4319,30 +4321,34 @@ function generateRealCantiereDetailsContent(data) {
             const statistiche = aziendaData.statistiche;
             
             contentHTML += `
-                <div style="background: white; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 15px; overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #2196f3, #1976d2); color: white; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <h6 style="margin: 0; font-size: 14px;">${azienda.nome}</h6>
-                                <div style="font-size: 11px; opacity: 0.9;">${azienda.email} • ${azienda.tipo}</div>
+                <div style="background: white; border: 2px solid #dee2e6; border-radius: 10px; margin-bottom: 25px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <div style="background: linear-gradient(135deg, #2196f3, #1976d2); color: white; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 700;">${azienda.nome}</h4>
+                                <div style="font-size: 14px; opacity: 0.95; line-height: 1.4;">
+                                    📧 ${azienda.email}<br>
+                                    🏷️ Tipologia: ${azienda.tipo}
+                                </div>
                             </div>
-                            <div style="text-align: right; font-size: 11px;">
-                                <div>👷 ${azienda.operai_totali} operai</div>
-                                <div>🚛 ${azienda.automezzi_totali || 0} mezzi • 🔧 ${azienda.attrezzi_totali || 0} attrezzi</div>
-                                <div>📅 ${new Date(azienda.data_assegnazione).toLocaleDateString('it-IT')}</div>
-                                <div style="background: ${azienda.conformita_percentuale >= 70 ? '#28a745' : (azienda.conformita_percentuale >= 40 ? '#ffc107' : '#dc3545')}; color: white; padding: 1px 6px; border-radius: 8px; margin-top: 2px; display: inline-block;">
-                                    ${azienda.conformita_percentuale}%
+                            <div style="text-align: right; font-size: 14px; line-height: 1.6;">
+                                <div style="margin-bottom: 4px;"><strong>👷 Operai:</strong> ${azienda.operai_totali}</div>
+                                <div style="margin-bottom: 4px;"><strong>🚛 Mezzi:</strong> ${azienda.automezzi_totali || 0} • <strong>🔧 Attrezzi:</strong> ${azienda.attrezzi_totali || 0}</div>
+                                <div style="margin-bottom: 8px;"><strong>📅 Assegnato:</strong> ${new Date(azienda.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                                <div style="background: ${azienda.conformita_percentuale >= 70 ? '#28a745' : (azienda.conformita_percentuale >= 40 ? '#ffc107' : '#dc3545')}; color: white; padding: 6px 12px; border-radius: 20px; margin-top: 6px; display: inline-block; font-size: 16px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+                                    Conformità: ${azienda.conformita_percentuale}%
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div style="padding: 15px;">
+                    <div style="padding: 25px;">
             `;
             
             if (operai && operai.length > 0) {
                 contentHTML += `
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
+                    <h5 style="color: #0066a2; margin: 0 0 20px 0; font-size: 18px; font-weight: 700; border-bottom: 2px solid #17a2b8; padding-bottom: 8px;">👷 OPERAI ASSEGNATI (${operai.length})</h5>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;">
                 `;
                 
                 operai.forEach(operaio => {
@@ -4361,51 +4367,51 @@ function generateRealCantiereDetailsContent(data) {
                     const totaleDocs = operaio.documenti ? operaio.documenti.length : 0;
                     
                     contentHTML += `
-                        <div style="background: ${hasFormazioni ? '#e8f5e8' : '#fff3cd'}; border: 1px solid ${hasFormazioni ? '#c3e6cb' : '#ffc107'}; border-radius: 4px; padding: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
-                                <div>
-                                    <div style="font-weight: bold; font-size: 12px; color: #333;">${operaio.nome_completo}</div>
-                                    <div style="font-size: 10px; color: #666;">Età: ${operaio.eta} anni</div>
-                                    <div style="font-size: 9px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
+                        <div style="background: ${hasFormazioni ? '#e8f5e9' : '#fff8e1'}; border: 2px solid ${hasFormazioni ? '#66bb6a' : '#ffb300'}; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 700; font-size: 16px; color: #212529; margin-bottom: 4px;">${operaio.nome_completo}</div>
+                                    <div style="font-size: 13px; color: #495057; margin-bottom: 2px;">👤 Età: <strong>${operaio.eta} anni</strong></div>
+                                    <div style="font-size: 12px; color: #6c757d;">📅 Assegnato il: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
                                 </div>
-                                <div style="font-size: 16px;">
-                                    ${competenzeIcons.length > 0 ? competenzeIcons.join('') : '⚠️'}
+                                <div style="font-size: 22px; line-height: 1.2;">
+                                    ${competenzeIcons.length > 0 ? competenzeIcons.join(' ') : '⚠️'}
                                 </div>
                             </div>
-                            <div style="font-size: 10px; color: #666; margin-bottom: 5px;">
+                            <div style="font-size: 13px; color: #495057; margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.7); border-radius: 4px; line-height: 1.5;">
                                 ${hasFormazioni ? 
-                                    'Competenze: ' + operaio.competenze.map(c => 
+                                    '<strong>✓ Competenze:</strong> ' + operaio.competenze.map(c => 
                                         c === 'antincendio' ? 'Antincendio' : 
                                         c === 'primo_soccorso' ? 'Primo Soccorso' : 
                                         c === 'preposti' ? 'Preposti' : c
                                     ).join(', ') : 
-                                    'Nessuna formazione registrata'
+                                    '<strong style="color: #f57c00;">⚠ Nessuna formazione registrata</strong>'
                                 }
                             </div>
                             ${totaleDocs > 0 ? `
-                                <details style="margin-top: 8px; font-size: 10px;">
-                                    <summary style="cursor: pointer; color: #007bff; font-weight: bold;">
+                                <details style="margin-top: 10px;">
+                                    <summary style="cursor: pointer; color: #007bff; font-weight: 700; font-size: 14px; padding: 8px; background: rgba(0,123,255,0.1); border-radius: 4px; list-style: none; user-select: none;">
                                         📎 ${totaleDocs} documento${totaleDocs !== 1 ? 'i' : ''} disponibile${totaleDocs !== 1 ? 'i' : ''}
                                     </summary>
-                                    <div style="margin-top: 5px; padding: 5px; background: white; border-radius: 3px; max-height: 150px; overflow-y: auto;">
+                                    <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px; max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6;">
                                         ${operaio.documenti.map(doc => {
                                             const scaduto = doc.expires_at && new Date(doc.expires_at) < new Date();
                                             const inScadenza = doc.expires_at && !scaduto && 
                                                 Math.ceil((new Date(doc.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
                                             
                                             return `
-                                                <div style="margin-bottom: 4px; padding: 4px; background: ${scaduto ? '#f8d7da' : inScadenza ? '#fff3cd' : '#f8f9fa'}; border-radius: 2px;">
-                                                    <a href="${doc.url}" target="_blank" style="color: #007bff; text-decoration: none; font-size: 9px;">
+                                                <div style="margin-bottom: 8px; padding: 8px; background: ${scaduto ? '#ffebee' : inScadenza ? '#fff3e0' : '#f8f9fa'}; border-radius: 4px; border-left: 3px solid ${scaduto ? '#d32f2f' : inScadenza ? '#f57c00' : '#4caf50'};">
+                                                    <a href="${doc.url}" target="_blank" style="color: #1976d2; text-decoration: none; font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">
                                                         📄 ${doc.name}
                                                     </a>
                                                     ${doc.expires_at ? `
-                                                        <div style="font-size: 8px; color: ${scaduto ? '#721c24' : inScadenza ? '#856404' : '#666'}; margin-top: 2px;">
-                                                            ${scaduto ? '⚠️ Scaduto' : '📅 Scad.'}: ${new Date(doc.expires_at).toLocaleDateString('it-IT')}
+                                                        <div style="font-size: 12px; color: ${scaduto ? '#b71c1c' : inScadenza ? '#e65100' : '#2e7d32'}; font-weight: ${scaduto || inScadenza ? '700' : '500'};">
+                                                            ${scaduto ? '⚠️ SCADUTO' : inScadenza ? '⏰ In scadenza' : '✓ Valido'}: ${new Date(doc.expires_at).toLocaleDateString('it-IT')}
                                                         </div>
                                                     ` : ''}
                                                     ${doc.emission_date ? `
-                                                        <div style="font-size: 8px; color: #666; margin-top: 2px;">
-                                                            📅 Emissione: ${new Date(doc.emission_date).toLocaleDateString('it-IT')}
+                                                        <div style="font-size: 11px; color: #616161; margin-top: 3px;">
+                                                            📅 Emesso: ${new Date(doc.emission_date).toLocaleDateString('it-IT')}
                                                         </div>
                                                     ` : ''}
                                                 </div>
@@ -4431,9 +4437,9 @@ function generateRealCantiereDetailsContent(data) {
             const mezzi = aziendaData.mezzi;
             if (mezzi && mezzi.length > 0) {
                 contentHTML += `
-                    <div style="margin-top: 20px; padding: 12px; background: #fff9e6; border-radius: 6px; border-left: 4px solid #ffc107;">
-                        <h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">🚛 Mezzi Assegnati (${mezzi.length})</h6>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
+                    <div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%); border-radius: 8px; border-left: 5px solid #ffc107; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <h5 style="margin: 0 0 20px 0; color: #f57c00; font-size: 18px; font-weight: 700; border-bottom: 2px solid #ffc107; padding-bottom: 8px;">🚛 MEZZI ASSEGNATI (${mezzi.length})</h5>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
                 `;
                 
                 mezzi.forEach(mezzo => {
@@ -4474,40 +4480,43 @@ function generateRealCantiereDetailsContent(data) {
                     }
                     
                     const hasWarnings = scadenzeWarning.length > 0;
-                    const bgColor = hasWarnings ? '#fff3cd' : '#f8f9fa';
-                    const borderColor = hasWarnings ? '#dc3545' : '#6c757d';
+                    const bgColor = hasWarnings ? '#ffebee' : 'white';
+                    const borderColor = hasWarnings ? '#d32f2f' : '#90a4ae';
                     
                     contentHTML += `
-                        <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 4px; padding: 10px;">
-                            <div style="font-weight: bold; font-size: 12px; color: #333; margin-bottom: 5px;">
-                                ${tipologiaLabel} - ${mezzo.descrizione}
+                        <div style="background: ${bgColor}; border: 2px solid ${borderColor}; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <div style="font-weight: 700; font-size: 16px; color: #212529; margin-bottom: 8px;">
+                                ${tipologiaLabel}
                             </div>
-                            <div style="font-size: 11px; color: #666; font-family: monospace; margin-bottom: 5px;">
-                                🏷️ Targa: <strong>${mezzo.targa}</strong>
+                            <div style="font-size: 14px; color: #495057; margin-bottom: 8px;">
+                                ${mezzo.descrizione}
+                            </div>
+                            <div style="font-size: 15px; color: #212529; font-family: 'Courier New', monospace; background: rgba(0,0,0,0.05); padding: 6px 10px; border-radius: 4px; margin-bottom: 10px; font-weight: 600;">
+                                🏷️ Targa: ${mezzo.targa}
                             </div>
                             
                             ${hasWarnings ? `
-                                <div style="background: #f8d7da; border: 1px solid #dc3545; border-radius: 3px; padding: 5px; margin-bottom: 5px;">
-                                    <div style="font-size: 10px; color: #721c24;">
-                                        ${scadenzeWarning.join(' • ')}
+                                <div style="background: #ffcdd2; border: 2px solid #d32f2f; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                                    <div style="font-size: 13px; color: #b71c1c; font-weight: 700; line-height: 1.6;">
+                                        ${scadenzeWarning.join('<br>')}
                                     </div>
                                 </div>
                             ` : ''}
                             
-                            <div style="font-size: 10px; color: #666; margin-top: 5px;">
-                                ${mezzo.scadenza_revisione ? `📅 Revisione: ${new Date(mezzo.scadenza_revisione).toLocaleDateString('it-IT')}<br>` : ''}
-                                ${mezzo.scadenza_assicurazione ? `🛡️ Assicurazione: ${new Date(mezzo.scadenza_assicurazione).toLocaleDateString('it-IT')}<br>` : ''}
-                                ${needsVerifiche && mezzo.scadenza_verifiche_periodiche ? `🔍 Verifiche: ${new Date(mezzo.scadenza_verifiche_periodiche).toLocaleDateString('it-IT')}<br>` : ''}
+                            <div style="font-size: 13px; color: #495057; margin-top: 10px; line-height: 1.8; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 4px;">
+                                ${mezzo.scadenza_revisione ? `<div><strong>📅 Revisione:</strong> ${new Date(mezzo.scadenza_revisione).toLocaleDateString('it-IT')}</div>` : ''}
+                                ${mezzo.scadenza_assicurazione ? `<div><strong>🛡️ Assicurazione:</strong> ${new Date(mezzo.scadenza_assicurazione).toLocaleDateString('it-IT')}</div>` : ''}
+                                ${needsVerifiche && mezzo.scadenza_verifiche_periodiche ? `<div><strong>🔍 Verifiche Periodiche:</strong> ${new Date(mezzo.scadenza_verifiche_periodiche).toLocaleDateString('it-IT')}</div>` : ''}
                             </div>
                             
                             ${mezzo.documenti && mezzo.documenti.length > 0 ? `
-                                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
-                                    <div style="font-size: 10px; font-weight: bold; color: #495057; margin-bottom: 4px;">📎 Documenti (${mezzo.documenti.length}):</div>
-                                    <div style="font-size: 9px;">
+                                <div style="margin-top: 12px; padding-top: 12px; border-top: 2px solid #dee2e6;">
+                                    <div style="font-size: 14px; font-weight: 700; color: #495057; margin-bottom: 8px;">📎 Documenti (${mezzo.documenti.length})</div>
+                                    <div style="font-size: 13px; line-height: 1.8;">
                                         ${mezzo.documenti.map(doc => `
-                                            <div style="margin-bottom: 2px;">
-                                                • <a href="${doc.url}" target="_blank" style="color: #007bff; text-decoration: none;">${doc.name}</a>
-                                                ${doc.expires_at ? ` (Scad: ${new Date(doc.expires_at).toLocaleDateString('it-IT')})` : ''}
+                                            <div style="margin-bottom: 6px; padding: 6px; background: rgba(255,255,255,0.8); border-radius: 4px;">
+                                                📄 <a href="${doc.url}" target="_blank" style="color: #1976d2; text-decoration: none; font-weight: 600;">${doc.name}</a>
+                                                ${doc.expires_at ? `<br><span style="font-size: 12px; color: #616161;">Scadenza: ${new Date(doc.expires_at).toLocaleDateString('it-IT')}</span>` : ''}
                                             </div>
                                         `).join('')}
                                     </div>
@@ -4524,39 +4533,46 @@ function generateRealCantiereDetailsContent(data) {
             const attrezzature = aziendaData.attrezzature;
             if (attrezzature && attrezzature.length > 0) {
                 contentHTML += `
-                    <div style="margin-top: 20px; padding: 12px; background: #e8f4f8; border-radius: 6px; border-left: 4px solid #17a2b8;">
-                        <h6 style="margin: 0 0 10px 0; color: #0c5460; font-size: 13px;">🔧 Attrezzature Assegnate (${attrezzature.length})</h6>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+                    <div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #e8f4f8 0%, #f0f8fa 100%); border-radius: 8px; border-left: 5px solid #17a2b8; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <h5 style="margin: 0 0 20px 0; color: #00838f; font-size: 18px; font-weight: 700; border-bottom: 2px solid #17a2b8; padding-bottom: 8px;">🔧 ATTREZZATURE ASSEGNATE (${attrezzature.length})</h5>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 15px;">
                 `;
                 
                 attrezzature.forEach(attrezzo => {
                     // Check scadenza revisione
                     let revisioneWarning = '';
+                    let bgColor = 'white';
+                    let borderColor = '#90a4ae';
+                    
                     if (attrezzo.data_revisione) {
                         const oggi = new Date();
                         const revisioneDate = new Date(attrezzo.data_revisione);
                         const diffDays = Math.ceil((revisioneDate - oggi) / (1000 * 60 * 60 * 24));
                         
                         if (diffDays < 0) {
-                            revisioneWarning = `<div style="background: #f8d7da; color: #721c24; padding: 3px 6px; border-radius: 3px; font-size: 9px; margin-top: 4px;">⚠️ Revisione scaduta da ${Math.abs(diffDays)} giorni</div>`;
+                            revisioneWarning = `<div style="background: #ffcdd2; color: #b71c1c; padding: 8px; border-radius: 4px; font-size: 13px; margin-top: 8px; font-weight: 700;">⚠️ Revisione scaduta da ${Math.abs(diffDays)} giorni</div>`;
+                            bgColor = '#ffebee';
+                            borderColor = '#d32f2f';
                         } else if (diffDays <= 30) {
-                            revisioneWarning = `<div style="background: #fff3cd; color: #856404; padding: 3px 6px; border-radius: 3px; font-size: 9px; margin-top: 4px;">⏰ Revisione tra ${diffDays} giorni</div>`;
+                            revisioneWarning = `<div style="background: #fff3e0; color: #e65100; padding: 8px; border-radius: 4px; font-size: 13px; margin-top: 8px; font-weight: 700;">⏰ Revisione tra ${diffDays} giorni</div>`;
+                            bgColor = '#fffbf0';
+                            borderColor = '#f57c00';
                         }
                     }
                     
                     contentHTML += `
-                        <div style="background: #f8f9fa; border: 1px solid #6c757d; border-radius: 4px; padding: 10px;">
-                            <div style="font-weight: bold; font-size: 12px; color: #333; margin-bottom: 5px;">
+                        <div style="background: ${bgColor}; border: 2px solid ${borderColor}; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <div style="font-weight: 700; font-size: 16px; color: #212529; margin-bottom: 8px;">
                                 🔧 ${attrezzo.descrizione}
                             </div>
                             ${attrezzo.data_revisione ? `
-                                <div style="font-size: 10px; color: #666;">
-                                    📅 Prossima revisione: ${new Date(attrezzo.data_revisione).toLocaleDateString('it-IT')}
+                                <div style="font-size: 14px; color: #495057; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                                    <strong>📅 Prossima revisione:</strong> ${new Date(attrezzo.data_revisione).toLocaleDateString('it-IT')}
                                 </div>
                             ` : ''}
                             ${revisioneWarning}
-                            <div style="font-size: 9px; color: #888; margin-top: 5px;">
-                                Assegnato: ${new Date(attrezzo.data_assegnazione).toLocaleDateString('it-IT')}
+                            <div style="font-size: 13px; color: #616161; margin-top: 10px; padding: 6px; background: rgba(255,255,255,0.5); border-radius: 4px;">
+                                📅 Assegnato: ${new Date(attrezzo.data_assegnazione).toLocaleDateString('it-IT')}
                             </div>
                         </div>
                     `;
