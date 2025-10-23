@@ -1469,15 +1469,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
             } else {
                 $hse_pos_file = '';
                 $hse_mezzi_file = '';
-                $hse_pos_data_emissione = '';
+                // Capture POS emission date (always, not just when file is uploaded)
+                $hse_pos_data_emissione = sanitize_text_field($_POST['hse_pos_data_emissione_' . $hse_cantiere_id] ?? '');
                 
                 if (!empty($_FILES['hse_pos_file_' . $hse_cantiere_id]['name'])) {
                     $hse_pos_file = hse_uploadFileToWordPress($_FILES['hse_pos_file_' . $hse_cantiere_id], $hse_current_user_id, 'pos_cantiere_' . $hse_cantiere_id);
                     if (!$hse_pos_file) {
                         $hse_error_messages[] = "Errore durante l'upload del file POS per il cantiere";
                     }
-                    // Capture POS emission date if file is uploaded
-                    $hse_pos_data_emissione = sanitize_text_field($_POST['hse_pos_data_emissione_' . $hse_cantiere_id] ?? '');
                 }
                 
                 if (!empty($_FILES['hse_mezzi_file_' . $hse_cantiere_id]['name'])) {
@@ -1503,6 +1502,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         if (!$hse_pos_file && !empty($hse_existing_pos['pos_file'])) {
                             $hse_pos_data['pos_file'] = $hse_existing_pos['pos_file'];
                         }
+                        if (!$hse_pos_data_emissione && !empty($hse_existing_pos['pos_data_emissione'])) {
+                            $hse_pos_data['pos_data_emissione'] = $hse_existing_pos['pos_data_emissione'];
+                        }
                         if (!$hse_mezzi_file && !empty($hse_existing_pos['mezzi_file'])) {
                             $hse_pos_data['mezzi_file'] = $hse_existing_pos['mezzi_file'];
                         }
@@ -1513,7 +1515,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
                         );
                     } else {
-                        if ($hse_pos_file) {
+                        if ($hse_pos_file || $hse_pos_data_emissione) {
                             $wpdb->insert($wpdb->prefix . 'cantiere_pos_files', $hse_pos_data);
                         }
                     }
@@ -6122,7 +6124,9 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     const hse_fileInputs = document.querySelectorAll('.hse_cantiere_form input[type="file"], .hse_cantiere_form_parte_b input[type="file"]');
+    console.log('🔍 Found ' + hse_fileInputs.length + ' file inputs for auto-date handling');
     hse_fileInputs.forEach(input => {
+        console.log('📎 Attaching listener to:', input.name);
         input.addEventListener('change', function() {
             if (this.files.length > 0) {
                 this.style.borderColor = '#28a745';
@@ -6161,8 +6165,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 
                 // Handle POS files with auto-fill emission date (like DVR)
                 if (this.name && this.name.startsWith('hse_pos_file_')) {
+                    console.log('📋 POS file detected:', this.name);
                     const cantiereId = this.name.replace('hse_pos_file_', '');
+                    console.log('🔑 Cantiere ID extracted:', cantiereId);
                     const posDataInput = document.querySelector('input[name="hse_pos_data_emissione_' + cantiereId + '"]');
+                    console.log('📅 POS date input found:', posDataInput ? posDataInput.name : 'NOT FOUND');
+                    console.log('📅 Current value:', posDataInput ? posDataInput.value : 'N/A');
                     if (posDataInput && !posDataInput.value) {
                         // Usa la data di oggi (fix timezone: usa date locali invece di UTC)
                         const today = new Date();
@@ -6173,7 +6181,10 @@ document.addEventListener("DOMContentLoaded", function() {
                         posDataInput.value = formattedDate;
                         posDataInput.style.borderColor = '#28a745';
                         posDataInput.style.background = '#f8fff8';
+                        console.log('✅ POS date set to:', formattedDate);
                         hse_showToast('✅ Data di emissione POS impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
+                    } else if (posDataInput && posDataInput.value) {
+                        console.log('⚠️ POS date already has value, skipping auto-fill');
                     }
                 }
             } else {
