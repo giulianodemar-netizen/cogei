@@ -6121,7 +6121,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
     
-    const hse_fileInputs = document.querySelectorAll('.hse_cantiere_form input[type="file"]');
+    const hse_fileInputs = document.querySelectorAll('.hse_cantiere_form input[type="file"], .hse_cantiere_form_parte_b input[type="file"]');
     hse_fileInputs.forEach(input => {
         input.addEventListener('change', function() {
             if (this.files.length > 0) {
