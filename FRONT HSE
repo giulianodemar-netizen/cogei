@@ -213,6 +213,7 @@ function hse_createCantiereTablesIfNotExists() {
         cantiere_id int(11) NOT NULL,
         user_id int(11) NOT NULL,
         pos_file varchar(255) NOT NULL,
+        pos_data_emissione date,
         mezzi_file varchar(255),
         data_caricamento datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
@@ -221,6 +222,12 @@ function hse_createCantiereTablesIfNotExists() {
         KEY user_id (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_pos);
+    
+    // Add pos_data_emissione column if it doesn't exist
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_cantiere_pos LIKE 'pos_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_cantiere_pos ADD COLUMN pos_data_emissione date AFTER pos_file");
+    }
     
     hse_migrateCantiereDatabase();
 }
@@ -1462,6 +1469,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
             } else {
                 $hse_pos_file = '';
                 $hse_mezzi_file = '';
+                // Capture POS emission date (always, not just when file is uploaded)
+                $hse_pos_data_emissione = sanitize_text_field($_POST['hse_pos_data_emissione_' . $hse_cantiere_id] ?? '');
                 
                 if (!empty($_FILES['hse_pos_file_' . $hse_cantiere_id]['name'])) {
                     $hse_pos_file = hse_uploadFileToWordPress($_FILES['hse_pos_file_' . $hse_cantiere_id], $hse_current_user_id, 'pos_cantiere_' . $hse_cantiere_id);
@@ -1486,11 +1495,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     );
                     
                     if ($hse_pos_file) $hse_pos_data['pos_file'] = $hse_pos_file;
+                    if ($hse_pos_data_emissione) $hse_pos_data['pos_data_emissione'] = $hse_pos_data_emissione;
                     if ($hse_mezzi_file) $hse_pos_data['mezzi_file'] = $hse_mezzi_file;
                     
                     if ($hse_existing_pos) {
                         if (!$hse_pos_file && !empty($hse_existing_pos['pos_file'])) {
                             $hse_pos_data['pos_file'] = $hse_existing_pos['pos_file'];
+                        }
+                        if (!$hse_pos_data_emissione && !empty($hse_existing_pos['pos_data_emissione'])) {
+                            $hse_pos_data['pos_data_emissione'] = $hse_existing_pos['pos_data_emissione'];
                         }
                         if (!$hse_mezzi_file && !empty($hse_existing_pos['mezzi_file'])) {
                             $hse_pos_data['mezzi_file'] = $hse_existing_pos['mezzi_file'];
@@ -1502,7 +1515,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             array('cantiere_id' => $hse_cantiere_id, 'user_id' => $hse_current_user_id)
                         );
                     } else {
-                        if ($hse_pos_file) {
+                        if ($hse_pos_file || $hse_pos_data_emissione) {
                             $wpdb->insert($wpdb->prefix . 'cantiere_pos_files', $hse_pos_data);
                         }
                     }
@@ -1815,12 +1828,12 @@ $hse_dvr_style = ($hse_existing_data && $hse_existing_data['dvr_file']) ?
 echo '<input type="file" name="hse_dvr_file" accept=".pdf" class="hse_dvr_input" style="' . $hse_dvr_style . '">';
 echo '</div>';
 
-// Campo Data Emissione DVR (readonly - calcolato automaticamente)
+// Campo Data Emissione DVR (compilato automaticamente ma modificabile)
 echo '<div class="hse_dvr_data_field">';
-echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR (oggi + 1 anno):</label>';
+echo '<label class="hse_dvr_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione DVR:</label>';
 $hse_dvr_data_value = ($hse_existing_data && $hse_existing_data['dvr_data_emissione']) ? $hse_existing_data['dvr_data_emissione'] : '';
-echo '<input type="date" name="hse_dvr_data_emissione" id="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" readonly class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; cursor: not-allowed;">';
-echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">⚠️ Data calcolata automaticamente al caricamento del file</small>';
+echo '<input type="date" name="hse_dvr_data_emissione" id="hse_dvr_data_emissione" value="' . esc_attr($hse_dvr_data_value) . '" class="hse_dvr_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white;">';
+echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">💡 Si compila automaticamente con la data odierna al caricamento del file (modificabile)</small>';
 echo '</div>';
 
 echo '</div>'; // Fine hse_dvr_fields_grid
@@ -3177,16 +3190,37 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         
         echo '<div class="hse_pos_group" style="margin-bottom: 20px;">';
         echo '<label class="hse_pos_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">📋 POS (Piano Operativo Sicurezza) per questo cantiere</label>';
+        
+        // Grid POS File + Data Emissione
+        echo '<div class="hse_pos_fields_grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 10px;">';
+        
+        // Campo File POS
+        echo '<div class="hse_pos_file_field">';
         $hse_pos_style = ($hse_pos_data && $hse_pos_data['pos_file']) ? 
             'width: 100%; padding: 10px; border: 3px solid #28a745; border-radius: 5px; background: #f8fff8;' : 
             'width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; background: white;';
         echo '<input type="file" name="hse_pos_file_' . $hse_cantiere['id'] . '" accept=".pdf" class="hse_pos_input" style="' . $hse_pos_style . '">';
+        echo '</div>';
+        
+        // Campo Data Emissione POS (compilato automaticamente ma modificabile)
+        echo '<div class="hse_pos_data_field">';
+        echo '<label class="hse_pos_data_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📅 Data Emissione POS:</label>';
+        $hse_pos_data_value = ($hse_pos_data && $hse_pos_data['pos_data_emissione']) ? $hse_pos_data['pos_data_emissione'] : '';
+        echo '<input type="date" name="hse_pos_data_emissione_' . $hse_cantiere['id'] . '" id="hse_pos_data_emissione_' . $hse_cantiere['id'] . '" value="' . esc_attr($hse_pos_data_value) . '" class="hse_pos_data_input" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white;">';
+        echo '<small style="color: #666; font-size: 11px; margin-top: 3px; display: block;">💡 Si compila automaticamente con la data odierna al caricamento del file (modificabile)</small>';
+        echo '</div>';
+        
+        echo '</div>'; // Fine hse_pos_fields_grid
+        
         if ($hse_pos_data && $hse_pos_data['pos_file']) {
             echo '<div class="hse_pos_success" style="margin-top: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 8px; border-left: 5px solid #28a745;">';
             echo '<div class="hse_success_content" style="display: flex; align-items: center; gap: 10px;">';
             echo '<span class="hse_success_icon" style="background: #28a745; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px;">✓</span>';
             echo '<div class="hse_success_info" style="flex: 1;">';
             echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📋 File POS Caricato</div>';
+            if ($hse_pos_data['pos_data_emissione']) {
+                echo '<div class="hse_success_date" style="font-size: 11px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_pos_data['pos_data_emissione'])) . '</div>';
+            }
             echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
             echo '<a href="' . esc_url($hse_pos_data['pos_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza POS</a>';
             echo '</div>';
@@ -6089,8 +6123,10 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
     
-    const hse_fileInputs = document.querySelectorAll('.hse_cantiere_form input[type="file"]');
+    const hse_fileInputs = document.querySelectorAll('.hse_cantiere_form input[type="file"], .hse_cantiere_form_parte_b input[type="file"]');
+    console.log('🔍 Found ' + hse_fileInputs.length + ' file inputs for auto-date handling');
     hse_fileInputs.forEach(input => {
+        console.log('📎 Attaching listener to:', input.name);
         input.addEventListener('change', function() {
             if (this.files.length > 0) {
                 this.style.borderColor = '#28a745';
@@ -6112,16 +6148,45 @@ document.addEventListener("DOMContentLoaded", function() {
                 this.parentNode.insertBefore(hse_fileInfo, this.nextSibling);
                 
                 if (this.name === 'hse_dvr_file') {
+                    console.log('📄 DVR file detected:', this.name);
                     const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
+                    console.log('📅 DVR date input found:', dvrDataInput ? dvrDataInput.name : 'NOT FOUND');
+                    console.log('📅 Current DVR value:', dvrDataInput ? dvrDataInput.value : 'N/A');
                     if (dvrDataInput) {
-                        // Calcola data = oggi + 1 anno
+                        // Sempre aggiorna la data quando un nuovo file viene caricato
                         const today = new Date();
-                        const emissionDate = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
-                        const formattedDate = emissionDate.toISOString().split('T')[0];
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
                         dvrDataInput.value = formattedDate;
                         dvrDataInput.style.borderColor = '#28a745';
                         dvrDataInput.style.background = '#f8fff8';
-                        hse_showToast('✅ Data di emissione DVR impostata automaticamente a ' + formattedDate + ' (oggi + 1 anno)', 'success');
+                        console.log('✅ DVR date set to:', formattedDate);
+                        hse_showToast('✅ Data di emissione DVR impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
+                    }
+                }
+                
+                // Handle POS files with auto-fill emission date (like DVR)
+                if (this.name && this.name.startsWith('hse_pos_file_')) {
+                    console.log('📋 POS file detected:', this.name);
+                    const cantiereId = this.name.replace('hse_pos_file_', '');
+                    console.log('🔑 Cantiere ID extracted:', cantiereId);
+                    const posDataInput = document.querySelector('input[name="hse_pos_data_emissione_' + cantiereId + '"]');
+                    console.log('📅 POS date input found:', posDataInput ? posDataInput.name : 'NOT FOUND');
+                    console.log('📅 Current POS value:', posDataInput ? posDataInput.value : 'N/A');
+                    if (posDataInput) {
+                        // Sempre aggiorna la data quando un nuovo file viene caricato
+                        const today = new Date();
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
+                        posDataInput.value = formattedDate;
+                        posDataInput.style.borderColor = '#28a745';
+                        posDataInput.style.background = '#f8fff8';
+                        console.log('✅ POS date set to:', formattedDate);
+                        hse_showToast('✅ Data di emissione POS impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
                     }
                 }
             } else {
