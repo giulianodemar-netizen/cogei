@@ -2367,6 +2367,7 @@ foreach ($richieste as $richiesta) {
         // Aggiungi dati POS per questo cantiere
         $pos_data = getPosFileByCantiere($cantiere['id'], $user_id);
         echo 'pos_file: "' . addslashes($pos_data['pos_file'] ?? '') . '",';
+        echo 'pos_data_emissione: "' . addslashes($pos_data['pos_data_emissione'] ?? '') . '",';
         echo 'mezzi_file: "' . addslashes($pos_data['mezzi_file'] ?? '') . '",';
         
         // Aggiungi automezzi assegnati a questo cantiere (con nuovi campi mezzi meccanici)
@@ -3978,13 +3979,10 @@ function loadCantiereWorkers(cantiereId, userId) {
                         <div style="font-size: 16px; font-weight: bold;">${attrezziTotali}</div>
                         <div>🔧 Attrezzi</div>
                     </div>
-                    <div style="text-align: center; padding: 8px; background: ${hasPOS ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
+                    <div style="text-align: center; padding: 8px; background: ${hasPOS ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px; cursor: ${hasPOS ? 'pointer' : 'default'};" onclick="${hasPOS ? `window.open('${cantiereData.pos_file}', '_blank')` : ''}">
                         <div style="font-size: 16px; font-weight: bold;">${hasPOS ? '✅' : '❌'}</div>
                         <div>📋 POS</div>
-                    </div>
-                    <div style="text-align: center; padding: 8px; background: ${hasMezziFile ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${hasMezziFile ? '✅' : '❌'}</div>
-                        <div>📄 Elenco Mezzi</div>
+                        ${hasPOS && cantiereData.pos_data_emissione ? `<div style="font-size: 10px; margin-top: 4px; opacity: 0.9;">📅 ${new Date(cantiereData.pos_data_emissione).toLocaleDateString('it-IT')}</div>` : ''}
                     </div>
                 </div>
             </div>
