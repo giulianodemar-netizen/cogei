@@ -524,7 +524,7 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
             $richiesta['id'],
             $richiesta['user_id'],
             $rag_soc ?: '',
-            $user->user_email,
+            !empty($richiesta['email_notifiche']) ? $richiesta['email_notifiche'] . ' (Notifiche HSE)' : $user->user_email . ' (Account)',
             $user->display_name,
             $tipo ?: '',
             !empty($richiesta['dvr_file']) ? 'Caricato' : 'Non caricato',
@@ -1686,7 +1686,18 @@ foreach ($richieste as $richiesta) {
     echo '<tr style="border-bottom: 1px solid #ddd;" class="cantiere-row" data-hse-status="' . $stato_hse['key'] . '" data-accesso="' . $accesso_cantiere['key'] . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $richiesta['id'] . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
-    echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
+    
+    // 📧 NUOVO: Mostra email notifiche se configurata, altrimenti email account
+    echo '<td style="padding: 8px; border: 1px solid #ddd;">';
+    if (!empty($richiesta['email_notifiche'])) {
+        echo '<span style="color: #28a745; font-weight: bold;">📧 ' . esc_html($richiesta['email_notifiche']) . '</span>';
+        echo '<div style="font-size: 10px; color: #6c757d; margin-top: 2px;">(Email Notifiche HSE)</div>';
+    } else {
+        echo '<span>👤 ' . esc_html($user->user_email) . '</span>';
+        echo '<div style="font-size: 10px; color: #6c757d; margin-top: 2px;">(Email Account)</div>';
+    }
+    echo '</td>';
+    
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->display_name . '</td>';
     
     // File DVR

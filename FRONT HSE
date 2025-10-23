@@ -31,12 +31,19 @@ function hse_createCantiereTablesIfNotExists() {
         rct_file varchar(255),
         numero_personale int(11) DEFAULT 0,
         parte_b_completata tinyint(1) DEFAULT 0,
+        email_notifiche varchar(100),
         data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
         data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY user_id (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_richieste);
+    
+    // 📧 MIGRAZIONE: Aggiungi colonna email_notifiche se non esiste
+    $column_email_notifiche = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'email_notifiche'");
+    if (empty($column_email_notifiche)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN email_notifiche VARCHAR(100) AFTER parte_b_completata");
+    }
     
     $table_personale = $wpdb->prefix . 'cantiere_personale';
     $sql_personale = "CREATE TABLE IF NOT EXISTS $table_personale (
@@ -1057,6 +1064,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         'numero_personale' => $hse_numero_personale
                     );
                     
+                    // 📧 NUOVO: Gestione email notifiche HSE
+                    if (isset($_POST['hse_use_different_email']) && $_POST['hse_use_different_email'] == '1') {
+                        $hse_email_notifiche = sanitize_email($_POST['hse_email_notifiche'] ?? '');
+                        if (!empty($hse_email_notifiche) && is_email($hse_email_notifiche)) {
+                            $hse_richiesta_data['email_notifiche'] = $hse_email_notifiche;
+                        }
+                    } else {
+                        // Se checkbox non è spuntata, rimuovi l'email notifiche
+                        $hse_richiesta_data['email_notifiche'] = null;
+                    }
+                    
                     if ($hse_dvr_file) $hse_richiesta_data['dvr_file'] = $hse_dvr_file;
                     if ($hse_dvr_data_emissione) $hse_richiesta_data['dvr_data_emissione'] = $hse_dvr_data_emissione;
                     
@@ -1732,6 +1750,31 @@ if (!empty($hse_error_messages) && $hse_current_user_id) {
 // Form principale
 echo '<form method="post" enctype="multipart/form-data" class="hse_cantiere_form" id="hse_cantiere_form_main">';
 echo wp_nonce_field('hse_cantiere_form_' . $hse_current_user_id, 'hse_cantiere_nonce');
+
+// 📧 NUOVO: Configurazione Email Notifiche HSE (in cima al form)
+echo '<div class="hse_email_notifiche_section" style="margin-bottom: 30px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 20px 25px; border-radius: 10px; border-left: 5px solid #2196f3;">';
+echo '<div class="hse_email_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">';
+echo '<span class="hse_email_icon" style="background: #2196f3; color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold;">📧</span>';
+echo '<h3 class="hse_email_title" style="margin: 0; color: #1565c0; font-size: 16px;">Configurazione Email Notifiche HSE</h3>';
+echo '</div>';
+
+$hse_use_different_email = ($hse_existing_data && !empty($hse_existing_data['email_notifiche'])) ? true : false;
+$hse_email_notifiche_value = ($hse_existing_data && !empty($hse_existing_data['email_notifiche'])) ? $hse_existing_data['email_notifiche'] : '';
+
+echo '<div class="hse_email_checkbox_wrapper" style="margin-bottom: 15px;">';
+echo '<label class="hse_email_checkbox_label" style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #1565c0;">';
+echo '<input type="checkbox" name="hse_use_different_email" id="hse_use_different_email" value="1" ' . ($hse_use_different_email ? 'checked' : '') . ' onchange="hse_toggleEmailField()" style="width: 18px; height: 18px; cursor: pointer;">';
+echo '<span style="font-weight: bold;">Desidero ricevere tutte le comunicazioni e reminder HSE su un\'email diversa dall\'email dell\'account</span>';
+echo '</label>';
+echo '</div>';
+
+echo '<div id="hse_email_field_container" class="hse_email_field_container" style="' . ($hse_use_different_email ? '' : 'display: none;') . '">';
+echo '<label class="hse_email_input_label" style="display: block; font-weight: bold; margin-bottom: 8px; color: #1565c0; font-size: 13px;">📧 Email per Notifiche e Reminder HSE:</label>';
+echo '<input type="email" name="hse_email_notifiche" id="hse_email_notifiche" value="' . esc_attr($hse_email_notifiche_value) . '" placeholder="esempio@email.com" class="hse_email_input" style="width: 100%; max-width: 400px; padding: 10px; border: 2px solid #2196f3; border-radius: 6px; font-size: 14px;">';
+echo '<small style="display: block; margin-top: 6px; color: #1565c0; font-size: 12px;">💡 Su questa email riceverai tutte le notifiche relative a scadenze documenti, verifiche periodiche e comunicazioni HSE</small>';
+echo '</div>';
+
+echo '</div>'; // Fine hse_email_notifiche_section
 
 // PARTE A - Documenti Aziendali Accordion
 echo '<div class="hse_documenti_group" style="margin-bottom: 30px; background: #f8f9fa; padding: 0; border-radius: 10px; border-left: 5px solid #0066a2; overflow: hidden;">';
@@ -2982,7 +3025,7 @@ echo '<div class="hse_attrezzi_group" style="margin-bottom: 30px; background: #e
 // Header accordion attrezzi
 $hse_numero_attrezzi_value = ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) ? count($hse_existing_data['attrezzi']) : 0;
 echo '<div class="hse_accordion_header hse_attrezzi_accordion_header" onclick="hse_toggleAccordion(\'attrezzi\')" style="padding: 20px 25px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(33, 150, 243, 0.1); transition: all 0.3s ease;">';
-echo '<h3 class="hse_attrezzi_title" style="color: #1565c0; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🔧</span>Elenco Attrezzi <span id="hse_attrezzi_count" class="hse_attrezzi_count" style="background: #1565c0; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_attrezzi_value . ' attrezzi)</span></h3>';
+echo '<h3 class="hse_attrezzi_title" style="color: #1565c0; margin: 0; display: flex; align-items: center;"><span class="hse_title_icon" style="background: #2196f3; color: white; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 16px; font-weight: bold;">🔧</span>Elenco Attrezzature <span id="hse_attrezzi_count" class="hse_attrezzi_count" style="background: #1565c0; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">(' . $hse_numero_attrezzi_value . ' attrezzature)</span></h3>';
 echo '<span class="hse_accordion_arrow" id="hse_arrow_attrezzi" style="font-size: 18px; font-weight: bold; color: #1565c0; transition: transform 0.3s ease;">▼</span>';
 echo '</div>';
 
@@ -2995,7 +3038,7 @@ echo '<input type="hidden" name="hse_numero_attrezzi" id="hse_numero_attrezzi" v
 echo '<div class="hse_revisione_info_box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 20px;">';
 echo '<div class="hse_revisione_info_header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
 echo '<span class="hse_revisione_info_icon" style="background: #ffc107; color: #000; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">📅</span>';
-echo '<strong class="hse_revisione_info_title" style="color: #856404; font-size: 14px;">Data Revisione Attrezzi</strong>';
+echo '<strong class="hse_revisione_info_title" style="color: #856404; font-size: 14px;">Data Revisione Attrezzature</strong>';
 echo '</div>';
 echo '<div class="hse_revisione_info_text" style="color: #856404; font-size: 13px; line-height: 1.4;">';
 echo 'La <strong>data revisione è opzionale</strong> ma consigliata per tenere traccia della manutenzione degli attrezzi. ';
@@ -3094,7 +3137,7 @@ echo '</div>'; // Fine attrezzi group
 
 // Pulsante Salva Parte A
 echo '<div class="hse_submit_parte_a_section" style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 2px solid #e9ecef;">';
-echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti + Personale + Mezzi Meccanici + Attrezzi</button>';
+echo '<button type="submit" name="hse_cantiere_submit_parte_a" class="hse_submit_parte_a_btn" style="background: #0066a2; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s;">💾 Salva Parte A - Documenti + Personale + Mezzi Meccanici + Attrezzature</button>';
 echo '</div>';
 
 echo '</div>'; // Fine hse_parte_a
@@ -3275,7 +3318,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         
         // 🔧 NUOVO: Selezione attrezzi per questo cantiere
         echo '<div class="hse_attrezzi_selection_group" style="margin-bottom: 20px;">';
-        echo '<label class="hse_attrezzi_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">🔧 Seleziona Attrezzi per questo Cantiere</label>';
+        echo '<label class="hse_attrezzi_label" style="display: block; font-weight: bold; margin-bottom: 10px; color: #333;">🔧 Seleziona Attrezzature per questo Cantiere</label>';
         
         if ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) {
             $hse_attrezzi_assegnati = hse_getAttrezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
@@ -3962,6 +4005,22 @@ function hse_eliminaFile(fileName, fieldType, personaId, buttonElement) {
 }
 </script>
 <script>
+// 📧 NUOVA FUNZIONE: Toggle campo email notifiche
+function hse_toggleEmailField() {
+    const checkbox = document.getElementById('hse_use_different_email');
+    const container = document.getElementById('hse_email_field_container');
+    const emailInput = document.getElementById('hse_email_notifiche');
+    
+    if (checkbox.checked) {
+        container.style.display = 'block';
+        emailInput.setAttribute('required', 'required');
+    } else {
+        container.style.display = 'none';
+        emailInput.removeAttribute('required');
+        emailInput.value = '';
+    }
+}
+
 // Gestione Accordion Principale
 function hse_toggleAccordion(sectionId) {
     const content = document.getElementById('hse_content_' + sectionId);
@@ -4481,7 +4540,7 @@ function hse_removeAttrezzoRow(button) {
             const noAttrezziMessage = document.createElement('div');
             noAttrezziMessage.className = 'hse_no_attrezzi_message';
             noAttrezziMessage.style.cssText = 'text-align: center; padding: 20px; color: #1565c0; font-style: italic; background: rgba(33, 150, 243, 0.1); border-radius: 8px; margin-bottom: 15px;';
-            noAttrezziMessage.innerHTML = '🔧 Nessun attrezzo inserito. Usa il pulsante qui sotto per aggiungere attrezzi.';
+            noAttrezziMessage.innerHTML = '🔧 Nessuna attrezzatura inserita. Usa il pulsante qui sotto per aggiungere attrezzature.';
             container.appendChild(noAttrezziMessage);
         }
     }, 300);
