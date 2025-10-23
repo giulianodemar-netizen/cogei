@@ -4910,7 +4910,7 @@ async function generateCantierePDF(data) {
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
     const isConforme = stats.conforme;
-    pdf.setTextColor(isConforme ? 21, 87, 36 : 133, 100, 4);
+    pdf.setTextColor(isConforme ? 21 : 133, isConforme ? 87 : 100, isConforme ? 36 : 4);
     pdf.text(isConforme ? '✓ CANTIERE CONFORME' : '⚠ ATTENZIONE: VERIFICA CONFORMITÀ', margin, currentY);
     currentY += 7;
     
