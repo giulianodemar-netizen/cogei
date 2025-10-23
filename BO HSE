@@ -4261,13 +4261,15 @@ function generateRealCantiereDetailsContent(data) {
     let contentHTML = `
         <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
             <h5 style="margin: 0 0 10px 0; color: #17a2b8;">📊 Riepilogo Cantiere #${cantiere.id}</h5>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; font-size: 13px;">
                 <div><strong>🏗️ Nome:</strong> ${cantiere.nome}</div>
                 <div><strong>📅 Inizio:</strong> ${cantiere.data_inizio ? new Date(cantiere.data_inizio).toLocaleDateString('it-IT') : 'Non definita'}</div>
                 <div><strong>🏁 Fine:</strong> ${cantiere.data_fine ? new Date(cantiere.data_fine).toLocaleDateString('it-IT') : 'Non definita'}</div>
                 <div><strong>📅 Creato:</strong> ${new Date(cantiere.data_creazione).toLocaleDateString('it-IT')}</div>
                 <div><strong>🏢 Aziende:</strong> ${stats.totale_aziende}</div>
                 <div><strong>👷 Operai Totali:</strong> ${stats.totale_operai}</div>
+                <div><strong>🚛 Mezzi Totali:</strong> ${stats.totale_mezzi || 0}</div>
+                <div><strong>🔧 Attrezzature:</strong> ${stats.totale_attrezzature || 0}</div>
                 <div><strong>✅ Operai Formati:</strong> ${stats.operai_con_formazioni}</div>
                 <div><strong>🔄 Aggiornato:</strong> ${data.timestamp}</div>
             </div>
@@ -4326,6 +4328,7 @@ function generateRealCantiereDetailsContent(data) {
                             </div>
                             <div style="text-align: right; font-size: 11px;">
                                 <div>👷 ${azienda.operai_totali} operai</div>
+                                <div>🚛 ${azienda.automezzi_totali || 0} mezzi • 🔧 ${azienda.attrezzi_totali || 0} attrezzi</div>
                                 <div>📅 ${new Date(azienda.data_assegnazione).toLocaleDateString('it-IT')}</div>
                                 <div style="background: ${azienda.conformita_percentuale >= 70 ? '#28a745' : (azienda.conformita_percentuale >= 40 ? '#ffc107' : '#dc3545')}; color: white; padding: 1px 6px; border-radius: 8px; margin-top: 2px; display: inline-block;">
                                     ${azienda.conformita_percentuale}%
@@ -4349,6 +4352,13 @@ function generateRealCantiereDetailsContent(data) {
                     if (operaio.formazioni.antincendio) competenzeIcons.push('🔥');
                     if (operaio.formazioni.primo_soccorso) competenzeIcons.push('🚑');
                     if (operaio.formazioni.preposti) competenzeIcons.push('👮');
+                    if (operaio.formazioni.generale_specifica) competenzeIcons.push('🎓');
+                    if (operaio.ruoli.rspp) competenzeIcons.push('👷‍♂️');
+                    if (operaio.ruoli.rls) competenzeIcons.push('🛡️');
+                    if (operaio.formazioni.ple) competenzeIcons.push('🏗️');
+                    if (operaio.formazioni.carrelli) competenzeIcons.push('🚜');
+                    
+                    const totaleDocs = operaio.documenti ? operaio.documenti.length : 0;
                     
                     contentHTML += `
                         <div style="background: ${hasFormazioni ? '#e8f5e8' : '#fff3cd'}; border: 1px solid ${hasFormazioni ? '#c3e6cb' : '#ffc107'}; border-radius: 4px; padding: 10px;">
@@ -4362,7 +4372,7 @@ function generateRealCantiereDetailsContent(data) {
                                     ${competenzeIcons.length > 0 ? competenzeIcons.join('') : '⚠️'}
                                 </div>
                             </div>
-                            <div style="font-size: 10px; color: #666;">
+                            <div style="font-size: 10px; color: #666; margin-bottom: 5px;">
                                 ${hasFormazioni ? 
                                     'Competenze: ' + operaio.competenze.map(c => 
                                         c === 'antincendio' ? 'Antincendio' : 
@@ -4372,6 +4382,38 @@ function generateRealCantiereDetailsContent(data) {
                                     'Nessuna formazione registrata'
                                 }
                             </div>
+                            ${totaleDocs > 0 ? `
+                                <details style="margin-top: 8px; font-size: 10px;">
+                                    <summary style="cursor: pointer; color: #007bff; font-weight: bold;">
+                                        📎 ${totaleDocs} documento${totaleDocs !== 1 ? 'i' : ''} disponibile${totaleDocs !== 1 ? 'i' : ''}
+                                    </summary>
+                                    <div style="margin-top: 5px; padding: 5px; background: white; border-radius: 3px; max-height: 150px; overflow-y: auto;">
+                                        ${operaio.documenti.map(doc => {
+                                            const scaduto = doc.expires_at && new Date(doc.expires_at) < new Date();
+                                            const inScadenza = doc.expires_at && !scaduto && 
+                                                Math.ceil((new Date(doc.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
+                                            
+                                            return `
+                                                <div style="margin-bottom: 4px; padding: 4px; background: ${scaduto ? '#f8d7da' : inScadenza ? '#fff3cd' : '#f8f9fa'}; border-radius: 2px;">
+                                                    <a href="${doc.url}" target="_blank" style="color: #007bff; text-decoration: none; font-size: 9px;">
+                                                        📄 ${doc.name}
+                                                    </a>
+                                                    ${doc.expires_at ? `
+                                                        <div style="font-size: 8px; color: ${scaduto ? '#721c24' : inScadenza ? '#856404' : '#666'}; margin-top: 2px;">
+                                                            ${scaduto ? '⚠️ Scaduto' : '📅 Scad.'}: ${new Date(doc.expires_at).toLocaleDateString('it-IT')}
+                                                        </div>
+                                                    ` : ''}
+                                                    ${doc.emission_date ? `
+                                                        <div style="font-size: 8px; color: #666; margin-top: 2px;">
+                                                            📅 Emissione: ${new Date(doc.emission_date).toLocaleDateString('it-IT')}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </details>
+                            ` : ''}
                         </div>
                     `;
                 });
@@ -4383,6 +4425,144 @@ function generateRealCantiereDetailsContent(data) {
                         Nessun operaio assegnato a questo cantiere
                     </div>
                 `;
+            }
+            
+            // 🚛 SEZIONE MEZZI
+            const mezzi = aziendaData.mezzi;
+            if (mezzi && mezzi.length > 0) {
+                contentHTML += `
+                    <div style="margin-top: 20px; padding: 12px; background: #fff9e6; border-radius: 6px; border-left: 4px solid #ffc107;">
+                        <h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">🚛 Mezzi Assegnati (${mezzi.length})</h6>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
+                `;
+                
+                mezzi.forEach(mezzo => {
+                    const tipologiaLabels = {
+                        'AUTO': '🚗 Auto',
+                        'AUTOCARRO': '🚚 Autocarro',
+                        'AUTOCARRO_GRU': '🏗️ Autocarro con Gru',
+                        'PLE': '⬆️ PLE',
+                        'MEZZI_TERRA': '🚜 Mezzi Movimenti Terra'
+                    };
+                    
+                    const tipologiaLabel = tipologiaLabels[mezzo.tipologia] || '🚗 ' + mezzo.tipologia;
+                    const needsVerifiche = ['AUTOCARRO_GRU', 'PLE', 'MEZZI_TERRA'].includes(mezzo.tipologia);
+                    
+                    // Check scadenze
+                    const oggi = new Date();
+                    let scadenzeWarning = [];
+                    
+                    if (mezzo.scadenza_revisione) {
+                        const scadenzaDate = new Date(mezzo.scadenza_revisione);
+                        const diffDays = Math.ceil((scadenzaDate - oggi) / (1000 * 60 * 60 * 24));
+                        if (diffDays < 0) scadenzeWarning.push('⚠️ Revisione scaduta');
+                        else if (diffDays <= 30) scadenzeWarning.push('⏰ Revisione in scadenza');
+                    }
+                    
+                    if (mezzo.scadenza_assicurazione) {
+                        const scadenzaDate = new Date(mezzo.scadenza_assicurazione);
+                        const diffDays = Math.ceil((scadenzaDate - oggi) / (1000 * 60 * 60 * 24));
+                        if (diffDays < 0) scadenzeWarning.push('⚠️ Assicurazione scaduta');
+                        else if (diffDays <= 30) scadenzeWarning.push('⏰ Assicurazione in scadenza');
+                    }
+                    
+                    if (needsVerifiche && mezzo.scadenza_verifiche_periodiche) {
+                        const scadenzaDate = new Date(mezzo.scadenza_verifiche_periodiche);
+                        const diffDays = Math.ceil((scadenzaDate - oggi) / (1000 * 60 * 60 * 24));
+                        if (diffDays < 0) scadenzeWarning.push('⚠️ Verifiche scadute');
+                        else if (diffDays <= 30) scadenzeWarning.push('⏰ Verifiche in scadenza');
+                    }
+                    
+                    const hasWarnings = scadenzeWarning.length > 0;
+                    const bgColor = hasWarnings ? '#fff3cd' : '#f8f9fa';
+                    const borderColor = hasWarnings ? '#dc3545' : '#6c757d';
+                    
+                    contentHTML += `
+                        <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 4px; padding: 10px;">
+                            <div style="font-weight: bold; font-size: 12px; color: #333; margin-bottom: 5px;">
+                                ${tipologiaLabel} - ${mezzo.descrizione}
+                            </div>
+                            <div style="font-size: 11px; color: #666; font-family: monospace; margin-bottom: 5px;">
+                                🏷️ Targa: <strong>${mezzo.targa}</strong>
+                            </div>
+                            
+                            ${hasWarnings ? `
+                                <div style="background: #f8d7da; border: 1px solid #dc3545; border-radius: 3px; padding: 5px; margin-bottom: 5px;">
+                                    <div style="font-size: 10px; color: #721c24;">
+                                        ${scadenzeWarning.join(' • ')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            <div style="font-size: 10px; color: #666; margin-top: 5px;">
+                                ${mezzo.scadenza_revisione ? `📅 Revisione: ${new Date(mezzo.scadenza_revisione).toLocaleDateString('it-IT')}<br>` : ''}
+                                ${mezzo.scadenza_assicurazione ? `🛡️ Assicurazione: ${new Date(mezzo.scadenza_assicurazione).toLocaleDateString('it-IT')}<br>` : ''}
+                                ${needsVerifiche && mezzo.scadenza_verifiche_periodiche ? `🔍 Verifiche: ${new Date(mezzo.scadenza_verifiche_periodiche).toLocaleDateString('it-IT')}<br>` : ''}
+                            </div>
+                            
+                            ${mezzo.documenti && mezzo.documenti.length > 0 ? `
+                                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
+                                    <div style="font-size: 10px; font-weight: bold; color: #495057; margin-bottom: 4px;">📎 Documenti (${mezzo.documenti.length}):</div>
+                                    <div style="font-size: 9px;">
+                                        ${mezzo.documenti.map(doc => `
+                                            <div style="margin-bottom: 2px;">
+                                                • <a href="${doc.url}" target="_blank" style="color: #007bff; text-decoration: none;">${doc.name}</a>
+                                                ${doc.expires_at ? ` (Scad: ${new Date(doc.expires_at).toLocaleDateString('it-IT')})` : ''}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                contentHTML += `</div></div>`;
+            }
+            
+            // 🔧 SEZIONE ATTREZZATURE
+            const attrezzature = aziendaData.attrezzature;
+            if (attrezzature && attrezzature.length > 0) {
+                contentHTML += `
+                    <div style="margin-top: 20px; padding: 12px; background: #e8f4f8; border-radius: 6px; border-left: 4px solid #17a2b8;">
+                        <h6 style="margin: 0 0 10px 0; color: #0c5460; font-size: 13px;">🔧 Attrezzature Assegnate (${attrezzature.length})</h6>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+                `;
+                
+                attrezzature.forEach(attrezzo => {
+                    // Check scadenza revisione
+                    let revisioneWarning = '';
+                    if (attrezzo.data_revisione) {
+                        const oggi = new Date();
+                        const revisioneDate = new Date(attrezzo.data_revisione);
+                        const diffDays = Math.ceil((revisioneDate - oggi) / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays < 0) {
+                            revisioneWarning = `<div style="background: #f8d7da; color: #721c24; padding: 3px 6px; border-radius: 3px; font-size: 9px; margin-top: 4px;">⚠️ Revisione scaduta da ${Math.abs(diffDays)} giorni</div>`;
+                        } else if (diffDays <= 30) {
+                            revisioneWarning = `<div style="background: #fff3cd; color: #856404; padding: 3px 6px; border-radius: 3px; font-size: 9px; margin-top: 4px;">⏰ Revisione tra ${diffDays} giorni</div>`;
+                        }
+                    }
+                    
+                    contentHTML += `
+                        <div style="background: #f8f9fa; border: 1px solid #6c757d; border-radius: 4px; padding: 10px;">
+                            <div style="font-weight: bold; font-size: 12px; color: #333; margin-bottom: 5px;">
+                                🔧 ${attrezzo.descrizione}
+                            </div>
+                            ${attrezzo.data_revisione ? `
+                                <div style="font-size: 10px; color: #666;">
+                                    📅 Prossima revisione: ${new Date(attrezzo.data_revisione).toLocaleDateString('it-IT')}
+                                </div>
+                            ` : ''}
+                            ${revisioneWarning}
+                            <div style="font-size: 9px; color: #888; margin-top: 5px;">
+                                Assegnato: ${new Date(attrezzo.data_assegnazione).toLocaleDateString('it-IT')}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                contentHTML += `</div></div>`;
             }
             
             // Note azienda se presenti
