@@ -4940,42 +4940,326 @@ async function generateCantierePDF(data) {
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(0, 102, 162);
-        pdf.text(`🏢 Aziende Assegnate (${aziende.length})`, margin, currentY);
-        currentY += 7;
+        pdf.text(`Aziende e Risorse Assegnate (${aziende.length})`, margin, currentY);
+        currentY += 10;
         
-        aziende.forEach((azienda, index) => {
-            // Check if we need a new page
-            if (currentY > pageHeight - 50) {
+        aziende.forEach((aziendaData, index) => {
+            const azienda = aziendaData.azienda;
+            const operai = aziendaData.operai;
+            const mezzi = aziendaData.mezzi;
+            const attrezzature = aziendaData.attrezzature;
+            
+            // Check if we need a new page for company header
+            if (currentY > pageHeight - 40) {
                 pdf.addPage();
                 currentY = margin;
             }
             
-            pdf.setFontSize(11);
+            // Company header
+            pdf.setFillColor(33, 150, 243);
+            pdf.rect(margin, currentY, contentWidth, 25, 'F');
+            
+            pdf.setFontSize(12);
             pdf.setFont('helvetica', 'bold');
-            pdf.setTextColor(0, 0, 0);
-            pdf.text(`${index + 1}. ${azienda.ragione_sociale}`, margin, currentY);
-            currentY += 5;
+            pdf.setTextColor(255, 255, 255);
+            pdf.text(`${index + 1}. ${azienda.nome}`, margin + 3, currentY + 6);
             
             pdf.setFontSize(9);
             pdf.setFont('helvetica', 'normal');
-            pdf.setTextColor(100, 100, 100);
+            pdf.text(`Email: ${azienda.email}`, margin + 3, currentY + 12);
+            pdf.text(`Tipologia: ${azienda.tipo}`, margin + 3, currentY + 17);
+            pdf.text(`Conformita: ${azienda.conformita_percentuale}%`, margin + 3, currentY + 22);
             
-            const aziendaInfo = [];
-            if (azienda.email) aziendaInfo.push(`Email: ${azienda.email}`);
-            if (azienda.tipo) aziendaInfo.push(`Tipo: ${azienda.tipo}`);
-            if (azienda.operai && azienda.operai.length > 0) {
-                aziendaInfo.push(`Operai: ${azienda.operai.length}`);
-            }
-            if (azienda.mezzi && azienda.mezzi.length > 0) {
-                aziendaInfo.push(`Mezzi: ${azienda.mezzi.length}`);
+            currentY += 28;
+            
+            // OPERAI section
+            if (operai && operai.length > 0) {
+                if (currentY > pageHeight - 30) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+                
+                pdf.setFontSize(11);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setTextColor(0, 102, 162);
+                pdf.text(`OPERAI ASSEGNATI (${operai.length})`, margin + 2, currentY);
+                currentY += 6;
+                
+                operai.forEach((operaio, idx) => {
+                    if (currentY > pageHeight - 35) {
+                        pdf.addPage();
+                        currentY = margin;
+                    }
+                    
+                    pdf.setFontSize(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setTextColor(0, 0, 0);
+                    pdf.text(`${idx + 1}. ${operaio.nome_completo}`, margin + 5, currentY);
+                    currentY += 5;
+                    
+                    pdf.setFontSize(8);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(60, 60, 60);
+                    
+                    const operaioDetails = [
+                        `   Eta: ${operaio.eta} anni`,
+                        `   Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}`
+                    ];
+                    
+                    if (operaio.ha_formazioni && operaio.competenze.length > 0) {
+                        const competenzeText = operaio.competenze.map(c => {
+                            if (c === 'antincendio') return 'Antincendio';
+                            if (c === 'primo_soccorso') return 'Primo Soccorso';
+                            if (c === 'preposti') return 'Preposti';
+                            return c;
+                        }).join(', ');
+                        operaioDetails.push(`   Competenze: ${competenzeText}`);
+                    } else {
+                        operaioDetails.push(`   Competenze: Nessuna formazione registrata`);
+                    }
+                    
+                    // Add roles if present
+                    const ruoli = [];
+                    if (operaio.ruoli.rspp) ruoli.push('RSPP');
+                    if (operaio.ruoli.rls) ruoli.push('RLS');
+                    if (ruoli.length > 0) {
+                        operaioDetails.push(`   Ruoli: ${ruoli.join(', ')}`);
+                    }
+                    
+                    // Add additional formations
+                    const altreFormazioni = [];
+                    if (operaio.formazioni.generale_specifica) altreFormazioni.push('Formazione Generale/Specifica');
+                    if (operaio.formazioni.ple) altreFormazioni.push('PLE');
+                    if (operaio.formazioni.carrelli) altreFormazioni.push('Carrelli');
+                    if (altreFormazioni.length > 0) {
+                        operaioDetails.push(`   Altre formazioni: ${altreFormazioni.join(', ')}`);
+                    }
+                    
+                    // Add documents count
+                    if (operaio.documenti && operaio.documenti.length > 0) {
+                        operaioDetails.push(`   Documenti: ${operaio.documenti.length} disponibili`);
+                        
+                        // Add important expired/expiring docs
+                        operaio.documenti.forEach(doc => {
+                            if (doc.expires_at) {
+                                const scaduto = new Date(doc.expires_at) < new Date();
+                                const inScadenza = !scaduto && 
+                                    Math.ceil((new Date(doc.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) <= 30;
+                                
+                                if (scaduto || inScadenza) {
+                                    const status = scaduto ? 'SCADUTO' : 'In scadenza';
+                                    operaioDetails.push(`     - ${doc.name}: ${status} (${new Date(doc.expires_at).toLocaleDateString('it-IT')})`);
+                                }
+                            }
+                        });
+                    }
+                    
+                    operaioDetails.forEach(detail => {
+                        if (currentY > pageHeight - 10) {
+                            pdf.addPage();
+                            currentY = margin;
+                        }
+                        pdf.text(detail, margin + 5, currentY);
+                        currentY += 4;
+                    });
+                    
+                    currentY += 2;
+                });
+                
+                currentY += 3;
             }
             
-            aziendaInfo.forEach(info => {
-                pdf.text(`  • ${info}`, margin + 2, currentY);
+            // MEZZI section
+            if (mezzi && mezzi.length > 0) {
+                if (currentY > pageHeight - 30) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+                
+                pdf.setFontSize(11);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setTextColor(245, 124, 0);
+                pdf.text(`MEZZI ASSEGNATI (${mezzi.length})`, margin + 2, currentY);
+                currentY += 6;
+                
+                mezzi.forEach((mezzo, idx) => {
+                    if (currentY > pageHeight - 30) {
+                        pdf.addPage();
+                        currentY = margin;
+                    }
+                    
+                    pdf.setFontSize(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setTextColor(0, 0, 0);
+                    
+                    const tipologiaLabels = {
+                        'AUTO': 'Auto',
+                        'AUTOCARRO': 'Autocarro',
+                        'AUTOCARRO_GRU': 'Autocarro con Gru',
+                        'PLE': 'PLE',
+                        'MEZZI_TERRA': 'Mezzi Movimenti Terra'
+                    };
+                    const tipologia = tipologiaLabels[mezzo.tipologia] || mezzo.tipologia;
+                    
+                    pdf.text(`${idx + 1}. ${tipologia} - ${mezzo.descrizione}`, margin + 5, currentY);
+                    currentY += 5;
+                    
+                    pdf.setFontSize(8);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(60, 60, 60);
+                    
+                    const mezzoDetails = [
+                        `   Targa: ${mezzo.targa}`
+                    ];
+                    
+                    // Check for expiring dates
+                    const oggi = new Date();
+                    const warnings = [];
+                    
+                    if (mezzo.scadenza_revisione) {
+                        const scadenzaDate = new Date(mezzo.scadenza_revisione);
+                        const diffDays = Math.ceil((scadenzaDate - oggi) / (1000 * 60 * 60 * 24));
+                        let status = '';
+                        if (diffDays < 0) status = ' (SCADUTA!)';
+                        else if (diffDays <= 30) status = ' (In scadenza)';
+                        mezzoDetails.push(`   Revisione: ${scadenzaDate.toLocaleDateString('it-IT')}${status}`);
+                    }
+                    
+                    if (mezzo.scadenza_assicurazione) {
+                        const scadenzaDate = new Date(mezzo.scadenza_assicurazione);
+                        const diffDays = Math.ceil((scadenzaDate - oggi) / (1000 * 60 * 60 * 24));
+                        let status = '';
+                        if (diffDays < 0) status = ' (SCADUTA!)';
+                        else if (diffDays <= 30) status = ' (In scadenza)';
+                        mezzoDetails.push(`   Assicurazione: ${scadenzaDate.toLocaleDateString('it-IT')}${status}`);
+                    }
+                    
+                    if (mezzo.scadenza_verifiche_periodiche) {
+                        const scadenzaDate = new Date(mezzo.scadenza_verifiche_periodiche);
+                        const diffDays = Math.ceil((scadenzaDate - oggi) / (1000 * 60 * 60 * 24));
+                        let status = '';
+                        if (diffDays < 0) status = ' (SCADUTE!)';
+                        else if (diffDays <= 30) status = ' (In scadenza)';
+                        mezzoDetails.push(`   Verifiche Periodiche: ${scadenzaDate.toLocaleDateString('it-IT')}${status}`);
+                    }
+                    
+                    if (mezzo.documenti && mezzo.documenti.length > 0) {
+                        mezzoDetails.push(`   Documenti: ${mezzo.documenti.length} disponibili`);
+                    }
+                    
+                    mezzoDetails.forEach(detail => {
+                        if (currentY > pageHeight - 10) {
+                            pdf.addPage();
+                            currentY = margin;
+                        }
+                        pdf.text(detail, margin + 5, currentY);
+                        currentY += 4;
+                    });
+                    
+                    currentY += 2;
+                });
+                
+                currentY += 3;
+            }
+            
+            // ATTREZZATURE section
+            if (attrezzature && attrezzature.length > 0) {
+                if (currentY > pageHeight - 30) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+                
+                pdf.setFontSize(11);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setTextColor(0, 131, 143);
+                pdf.text(`ATTREZZATURE ASSEGNATE (${attrezzature.length})`, margin + 2, currentY);
+                currentY += 6;
+                
+                attrezzature.forEach((attrezzo, idx) => {
+                    if (currentY > pageHeight - 25) {
+                        pdf.addPage();
+                        currentY = margin;
+                    }
+                    
+                    pdf.setFontSize(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setTextColor(0, 0, 0);
+                    pdf.text(`${idx + 1}. ${attrezzo.descrizione}`, margin + 5, currentY);
+                    currentY += 5;
+                    
+                    pdf.setFontSize(8);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(60, 60, 60);
+                    
+                    const attrezzoDetails = [
+                        `   Assegnato: ${new Date(attrezzo.data_assegnazione).toLocaleDateString('it-IT')}`
+                    ];
+                    
+                    if (attrezzo.data_revisione) {
+                        const revisioneDate = new Date(attrezzo.data_revisione);
+                        const oggi = new Date();
+                        const diffDays = Math.ceil((revisioneDate - oggi) / (1000 * 60 * 60 * 24));
+                        let status = '';
+                        if (diffDays < 0) status = ` (SCADUTA da ${Math.abs(diffDays)} giorni!)`;
+                        else if (diffDays <= 30) status = ` (Tra ${diffDays} giorni)`;
+                        attrezzoDetails.push(`   Prossima revisione: ${revisioneDate.toLocaleDateString('it-IT')}${status}`);
+                    }
+                    
+                    attrezzoDetails.forEach(detail => {
+                        if (currentY > pageHeight - 10) {
+                            pdf.addPage();
+                            currentY = margin;
+                        }
+                        pdf.text(detail, margin + 5, currentY);
+                        currentY += 4;
+                    });
+                    
+                    currentY += 2;
+                });
+                
+                currentY += 3;
+            }
+            
+            // Add notes if present
+            if (azienda.note) {
+                if (currentY > pageHeight - 20) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+                
+                pdf.setFontSize(9);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setTextColor(21, 101, 192);
+                pdf.text(`Note:`, margin + 2, currentY);
                 currentY += 4;
-            });
+                
+                pdf.setFontSize(8);
+                pdf.setFont('helvetica', 'normal');
+                pdf.setTextColor(60, 60, 60);
+                const noteLines = pdf.splitTextToSize(azienda.note, contentWidth - 10);
+                noteLines.forEach(line => {
+                    if (currentY > pageHeight - 10) {
+                        pdf.addPage();
+                        currentY = margin;
+                    }
+                    pdf.text(line, margin + 5, currentY);
+                    currentY += 4;
+                });
+            }
             
-            currentY += 3;
+            currentY += 5;
+            
+            // Add separator between companies
+            if (index < aziende.length - 1) {
+                if (currentY > pageHeight - 15) {
+                    pdf.addPage();
+                    currentY = margin;
+                }
+                pdf.setDrawColor(200, 200, 200);
+                pdf.setLineWidth(0.5);
+                pdf.line(margin, currentY, pageWidth - margin, currentY);
+                currentY += 8;
+            }
         });
     }
     
