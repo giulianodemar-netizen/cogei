@@ -6148,9 +6148,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 this.parentNode.insertBefore(hse_fileInfo, this.nextSibling);
                 
                 if (this.name === 'hse_dvr_file') {
+                    console.log('📄 DVR file detected:', this.name);
                     const dvrDataInput = document.querySelector('input[name="hse_dvr_data_emissione"]');
-                    if (dvrDataInput && !dvrDataInput.value) {
-                        // Usa la data di oggi (fix timezone: usa date locali invece di UTC)
+                    console.log('📅 DVR date input found:', dvrDataInput ? dvrDataInput.name : 'NOT FOUND');
+                    console.log('📅 Current DVR value:', dvrDataInput ? dvrDataInput.value : 'N/A');
+                    if (dvrDataInput) {
+                        // Sempre aggiorna la data quando un nuovo file viene caricato
                         const today = new Date();
                         const year = today.getFullYear();
                         const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -6159,6 +6162,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         dvrDataInput.value = formattedDate;
                         dvrDataInput.style.borderColor = '#28a745';
                         dvrDataInput.style.background = '#f8fff8';
+                        console.log('✅ DVR date set to:', formattedDate);
                         hse_showToast('✅ Data di emissione DVR impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
                     }
                 }
@@ -6170,9 +6174,9 @@ document.addEventListener("DOMContentLoaded", function() {
                     console.log('🔑 Cantiere ID extracted:', cantiereId);
                     const posDataInput = document.querySelector('input[name="hse_pos_data_emissione_' + cantiereId + '"]');
                     console.log('📅 POS date input found:', posDataInput ? posDataInput.name : 'NOT FOUND');
-                    console.log('📅 Current value:', posDataInput ? posDataInput.value : 'N/A');
-                    if (posDataInput && !posDataInput.value) {
-                        // Usa la data di oggi (fix timezone: usa date locali invece di UTC)
+                    console.log('📅 Current POS value:', posDataInput ? posDataInput.value : 'N/A');
+                    if (posDataInput) {
+                        // Sempre aggiorna la data quando un nuovo file viene caricato
                         const today = new Date();
                         const year = today.getFullYear();
                         const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -6183,8 +6187,6 @@ document.addEventListener("DOMContentLoaded", function() {
                         posDataInput.style.background = '#f8fff8';
                         console.log('✅ POS date set to:', formattedDate);
                         hse_showToast('✅ Data di emissione POS impostata automaticamente a ' + formattedDate + ' (data odierna)', 'success');
-                    } else if (posDataInput && posDataInput.value) {
-                        console.log('⚠️ POS date already has value, skipping auto-fill');
                     }
                 }
             } else {
