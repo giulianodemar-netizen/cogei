@@ -2988,6 +2988,9 @@ echo '</div>';
 
 // ================== JAVASCRIPT ESTESO ==================
 ?>
+<!-- PDF Export Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 // TAB MANAGEMENT
 function showTab(tabName) {
@@ -4198,6 +4201,9 @@ function fetchCantiereDetailsFromServer(cantiereId) {
 }
 
 function displayCantiereDetailsContent(data) {
+    // Store data globally for PDF export
+    window.currentCantiereData = data;
+    
     // Aggiorna header con dati reali
     const headerInfo = document.getElementById('cantiere-details-info');
     const cantiere = data.cantiere;
@@ -4715,8 +4721,322 @@ function generateFallbackCantiereDetails(cantiereId) {
 }
 
 // 🚀 FUNZIONE PER EXPORT REPORT CANTIERE
+// ================== PDF EXPORT FUNCTIONALITY ==================
+
+// Global variable to store cantiere data for export
+window.currentCantiereData = null;
+
 function exportCantiereDetails(cantiereId) {
-    alert(`🚀 Funzionalità export report per cantiere ${cantiereId} in sviluppo!\n\nQuesta funzione genererebbe un PDF o Excel con:\n• Dettagli cantiere\n• Lista aziende\n• Operai e qualifiche\n• Statistiche conformità`);
+    console.log('📊 Avvio esportazione PDF per cantiere:', cantiereId);
+    
+    // Check if jsPDF and html2canvas are loaded
+    if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
+        console.error('❌ Librerie PDF non caricate');
+        alert('⚠️ Errore: Le librerie necessarie per l\'esportazione PDF non sono state caricate.\n\nRiprova tra qualche secondo.');
+        return;
+    }
+    
+    // Check if we have data
+    if (!window.currentCantiereData || window.currentCantiereData.cantiere.id != cantiereId) {
+        console.error('❌ Dati cantiere non disponibili');
+        alert('⚠️ Errore: Dati del cantiere non disponibili.\n\nChiudi e riapri il modal per ricaricare i dati.');
+        return;
+    }
+    
+    // Show loading indicator
+    const originalButton = event.target;
+    const originalText = originalButton.innerHTML;
+    originalButton.innerHTML = '⏳ Generazione PDF...';
+    originalButton.disabled = true;
+    
+    // Generate PDF
+    generateCantierePDF(window.currentCantiereData)
+        .then(() => {
+            console.log('✅ PDF generato con successo');
+            originalButton.innerHTML = originalText;
+            originalButton.disabled = false;
+        })
+        .catch(error => {
+            console.error('❌ Errore generazione PDF:', error);
+            alert('⚠️ Errore durante la generazione del PDF.\n\nDettagli: ' + error.message);
+            originalButton.innerHTML = originalText;
+            originalButton.disabled = false;
+        });
+}
+
+async function generateCantierePDF(data) {
+    const { jsPDF } = window.jspdf;
+    const cantiere = data.cantiere;
+    const stats = data.statistiche_globali;
+    const aziende = data.aziende;
+    
+    // Create PDF document (A4 format)
+    const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+    });
+    
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - (2 * margin);
+    let currentY = margin;
+    
+    console.log('📄 Creazione PDF - Dimensioni pagina:', pageWidth, 'x', pageHeight);
+    
+    // === HEADER WITH LOGO ===
+    try {
+        const logoUrl = 'https://cogei.provasiti.it/cogei/wp-content/uploads/2023/01/logo_blu.png';
+        console.log('🖼️ Caricamento logo da:', logoUrl);
+        
+        // Load logo as base64
+        const logoData = await loadImageAsBase64(logoUrl);
+        
+        // Add logo (centered, 40mm width)
+        const logoWidth = 40;
+        const logoHeight = 15; // Approximate ratio
+        const logoX = (pageWidth - logoWidth) / 2;
+        pdf.addImage(logoData, 'PNG', logoX, currentY, logoWidth, logoHeight);
+        currentY += logoHeight + 10;
+    } catch (error) {
+        console.warn('⚠️ Impossibile caricare il logo:', error);
+        // Continue without logo
+        currentY += 5;
+    }
+    
+    // === TITLE ===
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 102, 162); // #0066a2
+    pdf.text('Report Cantiere', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 10;
+    
+    // === METADATA ===
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    
+    const metadata = [
+        `Cantiere: ${cantiere.nome}`,
+        `ID: #${cantiere.id}`,
+        `Data generazione: ${new Date().toLocaleDateString('it-IT')} ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
+    ];
+    
+    metadata.forEach(line => {
+        pdf.text(line, pageWidth / 2, currentY, { align: 'center' });
+        currentY += 5;
+    });
+    
+    currentY += 5;
+    
+    // Add separator line
+    pdf.setDrawColor(0, 102, 162);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, currentY, pageWidth - margin, currentY);
+    currentY += 8;
+    
+    // === INFORMAZIONI GENERALI ===
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 102, 162);
+    pdf.text('📋 Informazioni Generali', margin, currentY);
+    currentY += 7;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(0, 0, 0);
+    
+    const generalInfo = [
+        ['Nome Cantiere:', cantiere.nome],
+        ['Descrizione:', cantiere.descrizione || 'Nessuna descrizione'],
+        ['Stato:', cantiere.stato.toUpperCase()],
+        ['Data Inizio:', cantiere.data_inizio ? new Date(cantiere.data_inizio).toLocaleDateString('it-IT') : 'Non definita'],
+        ['Data Fine:', cantiere.data_fine ? new Date(cantiere.data_fine).toLocaleDateString('it-IT') : 'Non definita'],
+        ['Data Creazione:', new Date(cantiere.data_creazione).toLocaleDateString('it-IT')]
+    ];
+    
+    generalInfo.forEach(([label, value]) => {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(label, margin, currentY);
+        pdf.setFont('helvetica', 'normal');
+        
+        // Handle long text with wrapping
+        const labelWidth = pdf.getTextWidth(label) + 2;
+        const maxWidth = contentWidth - labelWidth;
+        const lines = pdf.splitTextToSize(value, maxWidth);
+        pdf.text(lines, margin + labelWidth, currentY);
+        currentY += 5 * lines.length;
+        
+        if (currentY > pageHeight - 30) {
+            pdf.addPage();
+            currentY = margin;
+        }
+    });
+    
+    currentY += 5;
+    
+    // === STATISTICHE ===
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 102, 162);
+    pdf.text('📊 Statistiche', margin, currentY);
+    currentY += 7;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(0, 0, 0);
+    
+    const statsInfo = [
+        ['Aziende Assegnate:', `${stats.totale_aziende}`],
+        ['Operai Totali:', `${stats.totale_operai}`],
+        ['Operai con Formazione:', `${stats.operai_con_formazioni} (${stats.conformita_percentuale}%)`],
+        ['Mezzi:', `${stats.totale_mezzi || 0}`],
+        ['Attrezzature:', `${stats.totale_attrezzature || 0}`]
+    ];
+    
+    statsInfo.forEach(([label, value]) => {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(label, margin, currentY);
+        pdf.setFont('helvetica', 'normal');
+        const labelWidth = pdf.getTextWidth(label) + 2;
+        pdf.text(value, margin + labelWidth, currentY);
+        currentY += 5;
+    });
+    
+    currentY += 5;
+    
+    // === CONFORMITÀ ===
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    const isConforme = stats.conforme;
+    pdf.setTextColor(isConforme ? 21, 87, 36 : 133, 100, 4);
+    pdf.text(isConforme ? '✓ CANTIERE CONFORME' : '⚠ ATTENZIONE: VERIFICA CONFORMITÀ', margin, currentY);
+    currentY += 7;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(0, 0, 0);
+    
+    const conformitaInfo = [
+        ['Antincendio:', `${stats.percentuali.antincendio}% (${stats.competenze_conteggi.antincendio}/${stats.totale_operai}) ${stats.percentuali.antincendio >= 30 ? '✓' : '✗'}`],
+        ['Primo Soccorso:', `${stats.percentuali.primo_soccorso}% (${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai}) ${stats.percentuali.primo_soccorso >= 30 ? '✓' : '✗'}`],
+        ['Preposti:', `${stats.percentuali.preposti}% (${stats.competenze_conteggi.preposti}/${stats.totale_operai}) ${stats.percentuali.preposti >= 30 ? '✓' : '✗'}`]
+    ];
+    
+    conformitaInfo.forEach(([label, value]) => {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(label, margin, currentY);
+        pdf.setFont('helvetica', 'normal');
+        const labelWidth = pdf.getTextWidth(label) + 2;
+        pdf.text(value, margin + labelWidth, currentY);
+        currentY += 5;
+    });
+    
+    currentY += 5;
+    
+    // === AZIENDE ASSEGNATE ===
+    if (aziende && aziende.length > 0) {
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(0, 102, 162);
+        pdf.text(`🏢 Aziende Assegnate (${aziende.length})`, margin, currentY);
+        currentY += 7;
+        
+        aziende.forEach((azienda, index) => {
+            // Check if we need a new page
+            if (currentY > pageHeight - 50) {
+                pdf.addPage();
+                currentY = margin;
+            }
+            
+            pdf.setFontSize(11);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(`${index + 1}. ${azienda.ragione_sociale}`, margin, currentY);
+            currentY += 5;
+            
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(100, 100, 100);
+            
+            const aziendaInfo = [];
+            if (azienda.email) aziendaInfo.push(`Email: ${azienda.email}`);
+            if (azienda.tipo) aziendaInfo.push(`Tipo: ${azienda.tipo}`);
+            if (azienda.operai && azienda.operai.length > 0) {
+                aziendaInfo.push(`Operai: ${azienda.operai.length}`);
+            }
+            if (azienda.mezzi && azienda.mezzi.length > 0) {
+                aziendaInfo.push(`Mezzi: ${azienda.mezzi.length}`);
+            }
+            
+            aziendaInfo.forEach(info => {
+                pdf.text(`  • ${info}`, margin + 2, currentY);
+                currentY += 4;
+            });
+            
+            currentY += 3;
+        });
+    }
+    
+    // === FOOTER ===
+    const totalPages = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(
+            `Report generato da Cogei HSE - Pagina ${i} di ${totalPages}`,
+            pageWidth / 2,
+            pageHeight - 10,
+            { align: 'center' }
+        );
+    }
+    
+    // === SAVE PDF ===
+    const fileName = `report_cantiere_${cantiere.nome.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    console.log('💾 Salvataggio PDF:', fileName);
+    pdf.save(fileName);
+}
+
+// Helper function to load image as base64
+function loadImageAsBase64(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            
+            try {
+                const dataURL = canvas.toDataURL('image/png');
+                resolve(dataURL);
+            } catch (e) {
+                console.warn('Errore conversione immagine:', e);
+                reject(e);
+            }
+        };
+        
+        img.onerror = function(e) {
+            console.warn('Errore caricamento immagine:', e);
+            reject(new Error('Impossibile caricare l\'immagine'));
+        };
+        
+        // Try to load the image
+        img.src = url;
+        
+        // Timeout after 5 seconds
+        setTimeout(() => {
+            if (!img.complete) {
+                reject(new Error('Timeout caricamento immagine'));
+            }
+        }, 5000);
+    });
 }
 
 // ================== TEST CONNESSIONE AJAX ==================
