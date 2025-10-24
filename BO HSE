@@ -6189,15 +6189,16 @@ function cancelDocumentRequest(userId, aziendaName) {
     gap: 18px;
 }
 
-/* Card singola */
+/* Card singola - MIGLIORATA per leggibilità */
 .assignments-summary-style .summary-card {
     background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
     border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 18px;
+    border-radius: 10px;
+    padding: 22px;
     position: relative;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     transition: all 0.3s ease;
+    line-height: 1.8;
 }
 
 .assignments-summary-style .summary-card:hover {
@@ -6206,25 +6207,34 @@ function cancelDocumentRequest(userId, aziendaName) {
     border-color: #2196f3;
 }
 
-/* Titolo card */
+/* Titolo card - Font più grande e spacing migliorato */
 .assignments-summary-style .summary-card-title {
-    margin: 0 0 10px 0;
+    margin: 0 0 14px 0;
     color: #0066a2;
     padding-right: 30px;
-    font-size: 17px;
+    font-size: 19px;
     font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: 0.3px;
 }
 
-/* Info testo in card */
+/* Info testo in card - Font più leggibile */
 .assignments-summary-style .summary-card-info {
-    font-size: 13px;
+    font-size: 15px;
     color: #495057;
-    line-height: 1.6;
+    line-height: 1.8;
+    margin-bottom: 8px;
 }
 
 .assignments-summary-style .summary-card-info div {
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     color: #212529;
+    font-size: 15px;
+}
+
+.assignments-summary-style .summary-card-info strong {
+    font-weight: 600;
+    color: #333;
 }
 
 /* Box operai assegnati */
@@ -7274,15 +7284,15 @@ echo '        modal.id = "mezzo-details-modal";';
 echo '        modal.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001;";';
 echo '        ';
 echo '        modal.innerHTML = `';
-echo '            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
-echo '                <div style="background: #ffc107; color: #000; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '            <div class="assignments-summary-style" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto; margin-bottom: 0;">';
+echo '                <div class="summary-header" style="background: linear-gradient(135deg, #ffc107, #f9a825); border-radius: 10px 10px 0 0;">';
 echo '                    <div style="display: flex; justify-content: space-between; align-items: center;">';
-echo '                        <h4 style="margin: 0;">🚛 Dettagli Mezzo Meccanico</h4>';
+echo '                        <h4 class="summary-title" style="color: #000;">🚛 Dettagli Mezzo Meccanico</h4>';
 echo '                        <button onclick="closeMezzoDetailsModal()" style="background: transparent; color: #000; border: none; font-size: 20px; cursor: pointer;">✕</button>';
 echo '                    </div>';
-echo '                    <p id="mezzo-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>';
+echo '                    <p id="mezzo-name" class="summary-description" style="color: #000;"></p>';
 echo '                </div>';
-echo '                <div id="mezzo-details-content" style="padding: 20px;"></div>';
+echo '                <div id="mezzo-details-content" class="summary-body"></div>';
 echo '            </div>';
 echo '        `;';
 echo '        ';
@@ -7305,42 +7315,42 @@ echo '    ';
 echo '    const needsVerifiche = ["AUTOCARRO_GRU", "PLE", "MEZZI_TERRA"].includes(mezzoData.tipologia);';
 echo '    ';
 echo '    let content = `';
-echo '        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px;">';
-echo '            <h5 style="margin: 0 0 15px 0; color: #856404;">📋 Informazioni Generali</h5>';
-echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px;">';
-echo '                <div>';
-echo '                    <strong style="color: #666;">Tipologia:</strong><br>';
-echo '                    <span style="font-size: 14px;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
+echo '        <div class="summary-card" style="margin-bottom: 20px;">';
+echo '            <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">📋 Informazioni Generali</h5>';
+echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">';
+echo '                <div class="summary-card-info">';
+echo '                    <strong style="color: #666; font-size: 14px;">Tipologia:</strong><br>';
+echo '                    <span style="font-size: 16px; font-weight: 600; color: #333;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
 echo '                </div>';
-echo '                <div>';
-echo '                    <strong style="color: #666;">🏷️ Targa:</strong><br>';
-echo '                    <span style="font-family: monospace; font-size: 14px; font-weight: bold;">${mezzoData.targa}</span>';
+echo '                <div class="summary-card-info">';
+echo '                    <strong style="color: #666; font-size: 14px;">🏷️ Targa:</strong><br>';
+echo '                    <span style="font-family: monospace; font-size: 17px; font-weight: bold; color: #333;">${mezzoData.targa}</span>';
 echo '                </div>';
 echo '            </div>';
 echo '        </div>';
 echo '        ';
-echo '        <div style="background: #fff; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #ddd;">';
-echo '            <h5 style="margin: 0 0 15px 0; color: #17a2b8;">📄 Documenti e Scadenze</h5>';
-echo '            <div style="display: grid; gap: 12px; font-size: 12px;">';
+echo '        <div class="summary-card" style="margin-bottom: 20px;">';
+echo '            <h5 class="summary-card-title" style="color: #17a2b8; font-size: 18px;">📄 Documenti e Scadenze</h5>';
+echo '            <div style="display: grid; gap: 14px;">';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.file_targa ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"};">';
-echo '                    <strong>📎 File Targa:</strong><br>';
-echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_targa ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">📎 File Targa:</strong><br>';
+echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_revisione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"};">';
-echo '                    <strong>🔧 Scadenza Revisione:</strong><br>';
-echo '                    ${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_revisione ? "#fff3cd" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">🔧 Scadenza Revisione:</strong><br>';
+echo '                    <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_assicurazione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"};">';
-echo '                    <strong>🛡️ Scadenza Assicurazione:</strong><br>';
-echo '                    ${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_assicurazione ? "#fff3cd" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">🛡️ Scadenza Assicurazione:</strong><br>';
+echo '                    <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.file_assicurazione ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"};">';
-echo '                    <strong>📋 File Assicurazione:</strong><br>';
-echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_assicurazione ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">📋 File Assicurazione:</strong><br>';
+echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
 echo '                </div>';
 echo '            </div>';
 echo '        </div>';
@@ -7348,16 +7358,16 @@ echo '    `;';
 echo '    ';
 echo '    if (needsVerifiche) {';
 echo '        content += `';
-echo '            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border: 2px solid #ffc107;">';
-echo '                <h5 style="margin: 0 0 15px 0; color: #856404;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
-echo '                <div style="display: grid; gap: 12px; font-size: 12px;">';
-echo '                    <div style="padding: 10px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong>📅 Scadenza Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '            <div class="summary-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; margin-bottom: 20px;">';
+echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
+echo '                <div style="display: grid; gap: 14px;">';
+echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
+echo '                        <strong style="font-size: 15px;">📅 Scadenza Verifiche Periodiche:</strong><br>';
+echo '                        <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
 echo '                    </div>';
-echo '                    <div style="padding: 10px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong>📄 File Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
+echo '                        <strong style="font-size: 15px;">📄 File Verifiche Periodiche:</strong><br>';
+echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
 echo '                    </div>';
 echo '                </div>';
 echo '            </div>';
