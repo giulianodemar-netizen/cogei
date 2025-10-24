@@ -1999,20 +1999,20 @@ foreach ($richieste as $richiesta) {
             $bgColor = $isAssigned ? '#f0f9f3' : '#fff';
             
             echo '<div class="summary-card" style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; min-width: 320px; max-width: 500px;">';
-            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px;">';
-            echo '<h5 class="summary-card-title" style="margin: 0; color: #333; font-size: 14px; padding-right: 0;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
+            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 10px;">';
+            echo '<h5 class="summary-card-title" style="margin: 0; color: #333; padding-right: 0;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
             if ($isAssigned) {
-                echo '<span class="summary-badge" style="background: #28a745; padding: 2px 6px; font-size: 9px; white-space: nowrap;">🏗️ ASSEGNATO</span>';
+                echo '<span class="summary-badge" style="background: #28a745; color: white; padding: 4px 10px; font-size: 11px; white-space: nowrap;">🏗️ ASSEGNATO</span>';
             }
             echo '</div>';
             
-            echo '<div class="summary-card-info" style="font-size: 11px; margin-bottom: 8px;">';
-            echo '<div>📅 Nato il: ' . htmlspecialchars($persona['data_nascita']) . '</div>';
+            echo '<div class="summary-card-info" style="margin-bottom: 12px;">';
+            echo '<div style="font-size: 14px;">📅 <strong>Nato il:</strong> ' . htmlspecialchars($persona['data_nascita']) . '</div>';
             echo '</div>';
             
-            // Mostra formazioni in modo più compatto
-            echo '<div class="summary-card-info" style="margin-top: 8px; border-top: 1px solid #e0e0e0; padding-top: 8px;">';
-            echo '<p style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold; color: #555;">📚 Formazioni:</p>';
+            // Mostra formazioni con layout migliorato
+            echo '<div class="summary-card-info" style="margin-top: 12px; padding-top: 12px; border-top: 2px solid #e0e0e0;">';
+            echo '<p style="margin: 0 0 10px 0; font-size: 15px; font-weight: 700; color: #0066a2;">📚 Formazioni</p>';
             
             $formazioni = [];
             if (!empty($persona['formazione_antincendio_file'])) {
@@ -2027,7 +2027,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $antincendio_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2;">' . $antincendio_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $antincendio_text . '</a>';
             }
             if (!empty($persona['formazione_primo_soccorso_file'])) {
                 $primo_soccorso_text = '🚑 Primo Soccorso';
@@ -2041,7 +2041,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $primo_soccorso_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2;">' . $primo_soccorso_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $primo_soccorso_text . '</a>';
             }
             if (!empty($persona['formazione_preposti_file'])) {
                 $preposti_text = '👮 Preposti';
@@ -2055,7 +2055,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $preposti_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">' . $preposti_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $preposti_text . '</a>';
             }
             
             // 📚 NUOVE FORMAZIONI: Generale e Specifica + Nomine
@@ -2072,7 +2072,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $gen_spec_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2;">' . $gen_spec_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $gen_spec_text . '</a>';
             }
             
             if (!empty($persona['rspp_file'])) {
@@ -2087,7 +2087,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $rspp_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-weight: bold;">' . $rspp_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rspp_text . '</a>';
             }
             
             if (!empty($persona['rls_file'])) {
@@ -2102,7 +2102,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $rls_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-weight: bold;">' . $rls_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rls_text . '</a>';
             }
             
             if (!empty($persona['aspp_file'])) {
@@ -2117,7 +2117,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $aspp_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2;">' . $aspp_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $aspp_text . '</a>';
             }
             
             if (!empty($persona['formazione_ple_file'])) {
@@ -2132,7 +2132,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $ple_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2;">' . $ple_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $ple_text . '</a>';
             }
             
             if (!empty($persona['formazione_carrelli_file'])) {
@@ -2147,43 +2147,43 @@ foreach ($richieste as $richiesta) {
                     }
                     $carrelli_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2;">' . $carrelli_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $carrelli_text . '</a>';
             }
             
             // 🎯 FORMAZIONI LEGACY AGGIUNTIVE
             $formazioni_aggiuntive = [];
             if (!empty($persona['formazione_lavori_quota_file'])) {
-                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2;">🏗️ Lavori in Quota</a>';
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">🏗️ Lavori in Quota</a>';
             }
             if (!empty($persona['formazione_dpi_terza_categoria_file'])) {
-                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" style="color: #0066a2;">🦺 DPI 3° Categoria</a>';
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">🦺 DPI 3° Categoria</a>';
             }
             if (!empty($persona['formazione_ambienti_confinati_file'])) {
-                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_ambienti_confinati_file']) . '" target="_blank" style="color: #0066a2;">🕳️ Ambienti Confinati</a>';
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_ambienti_confinati_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">🕳️ Ambienti Confinati</a>';
             }
             
             if (!empty($formazioni)) {
-                echo '<div style="font-size: 10px; margin-bottom: 6px; line-height: 1.4;"><strong style="color: #17a2b8;">Base:</strong> ' . implode(' • ', $formazioni) . '</div>';
+                echo '<div style="font-size: 14px; margin-bottom: 10px; padding: 10px; background: rgba(23, 162, 184, 0.08); border-left: 3px solid #17a2b8; border-radius: 4px; line-height: 1.6;"><strong style="color: #17a2b8;">Base:</strong><br>' . implode('<br>', $formazioni) . '</div>';
             }
             
             if (!empty($formazioni_nuove)) {
-                echo '<div style="font-size: 10px; margin-bottom: 6px; padding: 4px 6px; background: rgba(33, 150, 243, 0.08); border-left: 2px solid #2196f3; border-radius: 2px; line-height: 1.4;"><strong style="color: #1976d2;">Specifiche:</strong> ' . implode(' • ', $formazioni_nuove) . '</div>';
+                echo '<div style="font-size: 14px; margin-bottom: 10px; padding: 10px; background: rgba(33, 150, 243, 0.08); border-left: 3px solid #2196f3; border-radius: 4px; line-height: 1.6;"><strong style="color: #1976d2;">Specifiche:</strong><br>' . implode('<br>', $formazioni_nuove) . '</div>';
             }
             
             if (!empty($formazioni_aggiuntive)) {
-                echo '<div style="font-size: 10px; padding: 4px 6px; background: rgba(255, 193, 7, 0.08); border-left: 2px solid #ffc107; border-radius: 2px; line-height: 1.4;"><strong style="color: #f57c00;">Aggiuntive:</strong> ' . implode(' • ', $formazioni_aggiuntive) . '</div>';
+                echo '<div style="font-size: 14px; padding: 10px; background: rgba(255, 193, 7, 0.08); border-left: 3px solid #ffc107; border-radius: 4px; line-height: 1.6;"><strong style="color: #f57c00;">Aggiuntive:</strong><br>' . implode('<br>', $formazioni_aggiuntive) . '</div>';
             }
             
             if (empty($formazioni) && empty($formazioni_nuove) && empty($formazioni_aggiuntive)) {
-                echo '<div style="font-size: 10px; color: #dc3545; font-style: italic;">⚠️ Nessuna formazione caricata</div>';
+                echo '<div style="font-size: 14px; color: #dc3545; font-style: italic; padding: 10px; background: rgba(220, 53, 69, 0.1); border-radius: 4px;">⚠️ Nessuna formazione caricata</div>';
             }
             echo '</div>';
             
-            // 🚀 SEZIONE: Mostra cantieri assegnati per questa persona (compatta)
+            // 🚀 SEZIONE: Mostra cantieri assegnati per questa persona
             if ($isAssigned) {
-                echo '<div style="margin-top: 8px; padding: 6px 8px; background: rgba(40, 167, 69, 0.08); border-radius: 4px; border-left: 2px solid #28a745;">';
-                echo '<div style="font-size: 10px; font-weight: bold; color: #155724; margin-bottom: 3px;">🏗️ Cantieri:</div>';
-                echo '<div style="font-size: 9px; color: #155724; line-height: 1.3;">';
+                echo '<div style="margin-top: 12px; padding: 10px 12px; background: rgba(40, 167, 69, 0.08); border-radius: 6px; border-left: 3px solid #28a745;">';
+                echo '<div style="font-size: 14px; font-weight: 700; color: #155724; margin-bottom: 6px;">🏗️ Cantieri Assegnati:</div>';
+                echo '<div style="font-size: 13px; color: #155724; line-height: 1.6;">';
                 
                 $cantieri_persona = array();
                 foreach ($persona_assegnazioni as $assegnazione) {
