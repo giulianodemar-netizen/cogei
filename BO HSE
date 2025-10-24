@@ -7229,13 +7229,11 @@ echo '                <h5 style="margin: 0 0 18px 0; color: #0066a2; font-size: 
 echo '                <div style="display: grid; gap: 12px;">';
 echo '        `;';
 echo '        mezzoData.cantieri.forEach(function(cantiere) {';
-echo '            const statoColor = cantiere.stato === "attivo" ? "#28a745" : (cantiere.stato === "sospeso" ? "#ffc107" : "#6c757d");';
-echo '            const statoLabel = cantiere.stato === "attivo" ? "✅ Attivo" : (cantiere.stato === "sospeso" ? "⏸️ Sospeso" : "⚫ Completato");';
 echo '            content += `';
-echo '                <div style="background: white; padding: 14px; border-radius: 6px; border-left: 4px solid ${statoColor}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                <div style="background: white; padding: 14px; border-radius: 6px; border-left: 4px solid ${cantiere.stato === "attivo" ? "#28a745" : (cantiere.stato === "sospeso" ? "#ffc107" : "#6c757d")}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
 echo '                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">';
 echo '                        <strong style="color: #212529; font-size: 15px;">🏗️ ${cantiere.nome}</strong>';
-echo '                        <span style="background: ${statoColor}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">${statoLabel}</span>';
+echo '                        <span style="background: ${cantiere.stato === "attivo" ? "#28a745" : (cantiere.stato === "sospeso" ? "#ffc107" : "#6c757d")}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">${cantiere.stato === "attivo" ? "✅ Attivo" : (cantiere.stato === "sospeso" ? "⏸️ Sospeso" : "⚫ Completato")}</span>';
 echo '                    </div>';
 echo '                    <div style="font-size: 13px; color: #495057; margin-top: 6px;">';
 echo '                        📅 Assegnato il: <strong>${new Date(cantiere.data_assegnazione).toLocaleDateString("it-IT")}</strong>';
