@@ -4790,14 +4790,17 @@ async function generateCantierePDF(data) {
         const logoUrl = 'https://cogei.provasiti.it/cogei/wp-content/uploads/2023/01/logo_blu.png';
         console.log('🖼️ Caricamento logo da:', logoUrl);
         
-        // Load logo as base64
-        const logoData = await loadImageAsBase64(logoUrl);
+        // Load logo with proper dimensions
+        const logoResult = await loadImageAsBase64WithDimensions(logoUrl);
         
-        // Add logo (centered, 40mm width)
-        const logoWidth = 40;
-        const logoHeight = 15; // Approximate ratio
+        // Calculate proper aspect ratio - max width 50mm
+        const maxLogoWidth = 50;
+        const aspectRatio = logoResult.height / logoResult.width;
+        const logoWidth = maxLogoWidth;
+        const logoHeight = logoWidth * aspectRatio;
         const logoX = (pageWidth - logoWidth) / 2;
-        pdf.addImage(logoData, 'PNG', logoX, currentY, logoWidth, logoHeight);
+        
+        pdf.addImage(logoResult.dataURL, 'PNG', logoX, currentY, logoWidth, logoHeight);
         currentY += logoHeight + 10;
     } catch (error) {
         console.warn('⚠️ Impossibile caricare il logo:', error);
@@ -4806,46 +4809,54 @@ async function generateCantierePDF(data) {
     }
     
     // === TITLE ===
-    pdf.setFontSize(24);
+    pdf.setFontSize(22);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(0, 102, 162); // #0066a2
     pdf.text('Report Cantiere', pageWidth / 2, currentY, { align: 'center' });
-    currentY += 10;
+    currentY += 8;
     
     // === METADATA ===
-    pdf.setFontSize(10);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(33, 37, 41); // Darker text for better readability
+    pdf.text(cantiere.nome, pageWidth / 2, currentY, { align: 'center' });
+    currentY += 6;
+    
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(100, 100, 100);
+    pdf.setTextColor(108, 117, 125); // #6c757d - gray
     
     const metadata = [
-        `Cantiere: ${cantiere.nome}`,
         `ID: #${cantiere.id}`,
         `Data generazione: ${new Date().toLocaleDateString('it-IT')} ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
     ];
     
     metadata.forEach(line => {
         pdf.text(line, pageWidth / 2, currentY, { align: 'center' });
-        currentY += 5;
+        currentY += 4;
     });
     
-    currentY += 5;
+    currentY += 6;
     
-    // Add separator line
-    pdf.setDrawColor(0, 102, 162);
-    pdf.setLineWidth(0.5);
+    // Add separator line with gradient effect
+    pdf.setDrawColor(23, 162, 184); // #17a2b8 - info color
+    pdf.setLineWidth(0.8);
     pdf.line(margin, currentY, pageWidth - margin, currentY);
-    currentY += 8;
+    currentY += 10;
     
     // === INFORMAZIONI GENERALI ===
-    pdf.setFontSize(14);
+    pdf.setFillColor(248, 249, 250); // Light gray background
+    pdf.rect(margin, currentY - 3, contentWidth, 8, 'F');
+    
+    pdf.setFontSize(12);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(0, 102, 162);
-    pdf.text('INFORMAZIONI GENERALI', margin, currentY);
-    currentY += 7;
+    pdf.text('INFORMAZIONI GENERALI', margin + 2, currentY + 2);
+    currentY += 9;
     
-    pdf.setFontSize(10);
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(33, 37, 41);
     
     const generalInfo = [
         ['Nome Cantiere:', cantiere.nome],
@@ -4858,14 +4869,16 @@ async function generateCantierePDF(data) {
     
     generalInfo.forEach(([label, value]) => {
         pdf.setFont('helvetica', 'bold');
-        pdf.text(label, margin, currentY);
+        pdf.setTextColor(73, 80, 87); // Darker gray for labels
+        pdf.text(label, margin + 2, currentY);
         pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(33, 37, 41); // Dark for values
         
         // Handle long text with wrapping
-        const labelWidth = pdf.getTextWidth(label) + 2;
-        const maxWidth = contentWidth - labelWidth;
+        const labelWidth = pdf.getTextWidth(label) + 3;
+        const maxWidth = contentWidth - labelWidth - 2;
         const lines = pdf.splitTextToSize(value, maxWidth);
-        pdf.text(lines, margin + labelWidth, currentY);
+        pdf.text(lines, margin + labelWidth + 2, currentY);
         currentY += 5 * lines.length;
         
         if (currentY > pageHeight - 30) {
@@ -4874,18 +4887,20 @@ async function generateCantierePDF(data) {
         }
     });
     
-    currentY += 5;
+    currentY += 6;
     
     // === STATISTICHE ===
-    pdf.setFontSize(14);
+    pdf.setFillColor(248, 249, 250);
+    pdf.rect(margin, currentY - 3, contentWidth, 8, 'F');
+    
+    pdf.setFontSize(12);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(0, 102, 162);
-    pdf.text('STATISTICHE', margin, currentY);
-    currentY += 7;
+    pdf.text('STATISTICHE', margin + 2, currentY + 2);
+    currentY += 9;
     
-    pdf.setFontSize(10);
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(0, 0, 0);
     
     const statsInfo = [
         ['Aziende Assegnate:', `${stats.totale_aziende}`],
@@ -4897,51 +4912,69 @@ async function generateCantierePDF(data) {
     
     statsInfo.forEach(([label, value]) => {
         pdf.setFont('helvetica', 'bold');
-        pdf.text(label, margin, currentY);
+        pdf.setTextColor(73, 80, 87);
+        pdf.text(label, margin + 2, currentY);
         pdf.setFont('helvetica', 'normal');
-        const labelWidth = pdf.getTextWidth(label) + 2;
-        pdf.text(value, margin + labelWidth, currentY);
+        pdf.setTextColor(0, 123, 255); // Blue for numbers
+        const labelWidth = pdf.getTextWidth(label) + 3;
+        pdf.text(value, margin + labelWidth + 2, currentY);
         currentY += 5;
     });
     
-    currentY += 5;
+    currentY += 6;
     
     // === CONFORMITÀ ===
-    pdf.setFontSize(14);
-    pdf.setFont('helvetica', 'bold');
     const isConforme = stats.conforme;
-    pdf.setTextColor(isConforme ? 21 : 133, isConforme ? 87 : 100, isConforme ? 36 : 4);
-    pdf.text(isConforme ? 'CANTIERE CONFORME' : 'ATTENZIONE: VERIFICA CONFORMITA', margin, currentY);
-    currentY += 7;
+    pdf.setFillColor(isConforme ? 212 : 255, isConforme ? 237 : 243, isConforme ? 218 : 205);
+    pdf.rect(margin, currentY - 3, contentWidth, 8, 'F');
     
-    pdf.setFontSize(10);
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(isConforme ? 21 : 133, isConforme ? 87 : 100, isConforme ? 36 : 4);
+    pdf.text(isConforme ? 'CANTIERE CONFORME' : 'ATTENZIONE: VERIFICA CONFORMITA', margin + 2, currentY + 2);
+    currentY += 9;
+    
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(0, 0, 0);
     
     const conformitaInfo = [
-        ['Antincendio:', `${stats.percentuali.antincendio}% (${stats.competenze_conteggi.antincendio}/${stats.totale_operai}) ${stats.percentuali.antincendio >= 30 ? 'OK' : 'NON CONFORME'}`],
-        ['Primo Soccorso:', `${stats.percentuali.primo_soccorso}% (${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai}) ${stats.percentuali.primo_soccorso >= 30 ? 'OK' : 'NON CONFORME'}`],
-        ['Preposti:', `${stats.percentuali.preposti}% (${stats.competenze_conteggi.preposti}/${stats.totale_operai}) ${stats.percentuali.preposti >= 30 ? 'OK' : 'NON CONFORME'}`]
+        ['Antincendio:', `${stats.percentuali.antincendio}% (${stats.competenze_conteggi.antincendio}/${stats.totale_operai})`, stats.percentuali.antincendio >= 30],
+        ['Primo Soccorso:', `${stats.percentuali.primo_soccorso}% (${stats.competenze_conteggi.primo_soccorso}/${stats.totale_operai})`, stats.percentuali.primo_soccorso >= 30],
+        ['Preposti:', `${stats.percentuali.preposti}% (${stats.competenze_conteggi.preposti}/${stats.totale_operai})`, stats.percentuali.preposti >= 30]
     ];
     
-    conformitaInfo.forEach(([label, value]) => {
+    conformitaInfo.forEach(([label, value, ok]) => {
         pdf.setFont('helvetica', 'bold');
-        pdf.text(label, margin, currentY);
+        pdf.setTextColor(73, 80, 87);
+        pdf.text(label, margin + 2, currentY);
         pdf.setFont('helvetica', 'normal');
-        const labelWidth = pdf.getTextWidth(label) + 2;
-        pdf.text(value, margin + labelWidth, currentY);
+        pdf.setTextColor(33, 37, 41);
+        const labelWidth = pdf.getTextWidth(label) + 3;
+        pdf.text(value, margin + labelWidth + 2, currentY);
+        
+        // Add status badge
+        const valueWidth = pdf.getTextWidth(value);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(ok ? 40 : 220, ok ? 167 : 53, ok ? 69 : 69);
+        pdf.text(ok ? '[OK]' : '[NON CONFORME]', margin + labelWidth + valueWidth + 5, currentY);
+        pdf.setFontSize(9);
+        
         currentY += 5;
     });
     
-    currentY += 5;
+    currentY += 6;
     
     // === AZIENDE ASSEGNATE ===
     if (aziende && aziende.length > 0) {
-        pdf.setFontSize(14);
+        pdf.setFillColor(248, 249, 250);
+        pdf.rect(margin, currentY - 3, contentWidth, 8, 'F');
+        
+        pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(0, 102, 162);
-        pdf.text(`AZIENDE E RISORSE ASSEGNATE (${aziende.length})`, margin, currentY);
-        currentY += 10;
+        pdf.text(`AZIENDE E RISORSE ASSEGNATE (${aziende.length})`, margin + 2, currentY + 2);
+        currentY += 12;
         
         aziende.forEach((aziendaData, index) => {
             const azienda = aziendaData.azienda;
@@ -4955,22 +4988,30 @@ async function generateCantierePDF(data) {
                 currentY = margin;
             }
             
-            // Company header
+            // Company header with gradient-style
             pdf.setFillColor(33, 150, 243);
-            pdf.rect(margin, currentY, contentWidth, 25, 'F');
+            pdf.rect(margin, currentY, contentWidth, 22, 'F');
             
-            pdf.setFontSize(12);
+            pdf.setFontSize(11);
             pdf.setFont('helvetica', 'bold');
             pdf.setTextColor(255, 255, 255);
-            pdf.text(`${index + 1}. ${azienda.nome}`, margin + 3, currentY + 6);
+            pdf.text(`${index + 1}. ${azienda.nome}`, margin + 3, currentY + 5);
             
-            pdf.setFontSize(9);
+            pdf.setFontSize(8);
             pdf.setFont('helvetica', 'normal');
-            pdf.text(`Email: ${azienda.email}`, margin + 3, currentY + 12);
-            pdf.text(`Tipologia: ${azienda.tipo}`, margin + 3, currentY + 17);
-            pdf.text(`Conformita: ${azienda.conformita_percentuale}%`, margin + 3, currentY + 22);
+            pdf.text(`Email: ${azienda.email}  |  Tipo: ${azienda.tipo}`, margin + 3, currentY + 11);
             
-            currentY += 28;
+            // Conformity badge
+            const conformityColor = azienda.conformita_percentuale >= 70 ? [40, 167, 69] : 
+                                   azienda.conformita_percentuale >= 40 ? [255, 193, 7] : [220, 53, 69];
+            pdf.setFillColor(...conformityColor);
+            pdf.roundedRect(margin + 3, currentY + 14, 35, 5, 1, 1, 'F');
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(255, 255, 255);
+            pdf.text(`Conformita: ${azienda.conformita_percentuale}%`, margin + 5, currentY + 17.5);
+            
+            currentY += 25;
             
             // OPERAI section
             if (operai && operai.length > 0) {
@@ -4979,11 +5020,17 @@ async function generateCantierePDF(data) {
                     currentY = margin;
                 }
                 
-                pdf.setFontSize(11);
+                pdf.setFontSize(10);
                 pdf.setFont('helvetica', 'bold');
                 pdf.setTextColor(0, 102, 162);
                 pdf.text(`OPERAI ASSEGNATI (${operai.length})`, margin + 2, currentY);
-                currentY += 6;
+                
+                // Underline
+                pdf.setDrawColor(23, 162, 184);
+                pdf.setLineWidth(0.5);
+                pdf.line(margin + 2, currentY + 1, margin + 2 + pdf.getTextWidth(`OPERAI ASSEGNATI (${operai.length})`), currentY + 1);
+                
+                currentY += 7;
                 
                 operai.forEach((operaio, idx) => {
                     if (currentY > pageHeight - 35) {
@@ -5086,11 +5133,17 @@ async function generateCantierePDF(data) {
                     currentY = margin;
                 }
                 
-                pdf.setFontSize(11);
+                pdf.setFontSize(10);
                 pdf.setFont('helvetica', 'bold');
                 pdf.setTextColor(245, 124, 0);
                 pdf.text(`MEZZI ASSEGNATI (${mezzi.length})`, margin + 2, currentY);
-                currentY += 6;
+                
+                // Underline
+                pdf.setDrawColor(255, 193, 7);
+                pdf.setLineWidth(0.5);
+                pdf.line(margin + 2, currentY + 1, margin + 2 + pdf.getTextWidth(`MEZZI ASSEGNATI (${mezzi.length})`), currentY + 1);
+                
+                currentY += 7;
                 
                 mezzi.forEach((mezzo, idx) => {
                     if (currentY > pageHeight - 30) {
@@ -5179,11 +5232,17 @@ async function generateCantierePDF(data) {
                     currentY = margin;
                 }
                 
-                pdf.setFontSize(11);
+                pdf.setFontSize(10);
                 pdf.setFont('helvetica', 'bold');
                 pdf.setTextColor(0, 131, 143);
                 pdf.text(`ATTREZZATURE ASSEGNATE (${attrezzature.length})`, margin + 2, currentY);
-                currentY += 6;
+                
+                // Underline
+                pdf.setDrawColor(23, 162, 184);
+                pdf.setLineWidth(0.5);
+                pdf.line(margin + 2, currentY + 1, margin + 2 + pdf.getTextWidth(`ATTREZZATURE ASSEGNATE (${attrezzature.length})`), currentY + 1);
+                
+                currentY += 7;
                 
                 attrezzature.forEach((attrezzo, idx) => {
                     if (currentY > pageHeight - 25) {
@@ -5294,8 +5353,8 @@ async function generateCantierePDF(data) {
     pdf.save(fileName);
 }
 
-// Helper function to load image as base64
-function loadImageAsBase64(url) {
+// Helper function to load image as base64 with dimensions
+function loadImageAsBase64WithDimensions(url) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = 'Anonymous';
@@ -5309,7 +5368,11 @@ function loadImageAsBase64(url) {
             
             try {
                 const dataURL = canvas.toDataURL('image/png');
-                resolve(dataURL);
+                resolve({
+                    dataURL: dataURL,
+                    width: img.width,
+                    height: img.height
+                });
             } catch (e) {
                 console.warn('Errore conversione immagine:', e);
                 reject(e);
@@ -5331,6 +5394,11 @@ function loadImageAsBase64(url) {
             }
         }, 5000);
     });
+}
+
+// Helper function to load image as base64 (legacy)
+function loadImageAsBase64(url) {
+    return loadImageAsBase64WithDimensions(url).then(result => result.dataURL);
 }
 
 // ================== TEST CONNESSIONE AJAX ==================
