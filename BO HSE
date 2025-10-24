@@ -1998,21 +1998,21 @@ foreach ($richieste as $richiesta) {
             $borderColor = $isAssigned ? '#28a745' : '#ddd';
             $bgColor = $isAssigned ? '#f0f9f3' : '#fff';
             
-            echo '<div style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; padding: 12px; border-radius: 8px; min-width: 320px; max-width: 500px;">';
-            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px;">';
-            echo '<h5 style="margin: 0; color: #333; font-size: 14px;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
+            echo '<div class="summary-card" style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; min-width: 320px; max-width: 500px;">';
+            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 10px;">';
+            echo '<h5 class="summary-card-title" style="margin: 0; color: #333; padding-right: 0;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
             if ($isAssigned) {
-                echo '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 9px; white-space: nowrap;">🏗️ ASSEGNATO</span>';
+                echo '<span class="summary-badge" style="background: #28a745; color: white; padding: 4px 10px; font-size: 11px; white-space: nowrap;">🏗️ ASSEGNATO</span>';
             }
             echo '</div>';
             
-            echo '<div style="font-size: 11px; color: #666; margin-bottom: 8px;">';
-            echo '<div>📅 Nato il: ' . htmlspecialchars($persona['data_nascita']) . '</div>';
+            echo '<div class="summary-card-info" style="margin-bottom: 12px;">';
+            echo '<div style="font-size: 14px;">📅 <strong>Nato il:</strong> ' . htmlspecialchars($persona['data_nascita']) . '</div>';
             echo '</div>';
             
-            // Mostra formazioni in modo più compatto
-            echo '<div style="margin-top: 8px; border-top: 1px solid #e0e0e0; padding-top: 8px;">';
-            echo '<p style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold; color: #555;">📚 Formazioni:</p>';
+            // Mostra formazioni con layout migliorato
+            echo '<div class="summary-card-info" style="margin-top: 12px; padding-top: 12px; border-top: 2px solid #e0e0e0;">';
+            echo '<p style="margin: 0 0 10px 0; font-size: 15px; font-weight: 700; color: #0066a2;">📚 Formazioni</p>';
             
             $formazioni = [];
             if (!empty($persona['formazione_antincendio_file'])) {
@@ -2027,7 +2027,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $antincendio_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2;">' . $antincendio_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $antincendio_text . '</a>';
             }
             if (!empty($persona['formazione_primo_soccorso_file'])) {
                 $primo_soccorso_text = '🚑 Primo Soccorso';
@@ -2041,7 +2041,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $primo_soccorso_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2;">' . $primo_soccorso_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $primo_soccorso_text . '</a>';
             }
             if (!empty($persona['formazione_preposti_file'])) {
                 $preposti_text = '👮 Preposti';
@@ -2055,7 +2055,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $preposti_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">' . $preposti_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $preposti_text . '</a>';
             }
             
             // 📚 NUOVE FORMAZIONI: Generale e Specifica + Nomine
@@ -2072,7 +2072,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $gen_spec_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2;">' . $gen_spec_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $gen_spec_text . '</a>';
             }
             
             if (!empty($persona['rspp_file'])) {
@@ -2087,7 +2087,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $rspp_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-weight: bold;">' . $rspp_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rspp_text . '</a>';
             }
             
             if (!empty($persona['rls_file'])) {
@@ -2102,7 +2102,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $rls_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-weight: bold;">' . $rls_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rls_text . '</a>';
             }
             
             if (!empty($persona['aspp_file'])) {
@@ -2117,7 +2117,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $aspp_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2;">' . $aspp_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $aspp_text . '</a>';
             }
             
             if (!empty($persona['formazione_ple_file'])) {
@@ -2132,7 +2132,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $ple_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2;">' . $ple_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $ple_text . '</a>';
             }
             
             if (!empty($persona['formazione_carrelli_file'])) {
@@ -2147,43 +2147,43 @@ foreach ($richieste as $richiesta) {
                     }
                     $carrelli_text .= ')';
                 }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2;">' . $carrelli_text . '</a>';
+                $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $carrelli_text . '</a>';
             }
             
             // 🎯 FORMAZIONI LEGACY AGGIUNTIVE
             $formazioni_aggiuntive = [];
             if (!empty($persona['formazione_lavori_quota_file'])) {
-                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2;">🏗️ Lavori in Quota</a>';
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_lavori_quota_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">🏗️ Lavori in Quota</a>';
             }
             if (!empty($persona['formazione_dpi_terza_categoria_file'])) {
-                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" style="color: #0066a2;">🦺 DPI 3° Categoria</a>';
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">🦺 DPI 3° Categoria</a>';
             }
             if (!empty($persona['formazione_ambienti_confinati_file'])) {
-                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_ambienti_confinati_file']) . '" target="_blank" style="color: #0066a2;">🕳️ Ambienti Confinati</a>';
+                $formazioni_aggiuntive[] = '<a href="' . esc_url($persona['formazione_ambienti_confinati_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">🕳️ Ambienti Confinati</a>';
             }
             
             if (!empty($formazioni)) {
-                echo '<div style="font-size: 10px; margin-bottom: 6px; line-height: 1.4;"><strong style="color: #17a2b8;">Base:</strong> ' . implode(' • ', $formazioni) . '</div>';
+                echo '<div style="font-size: 14px; margin-bottom: 10px; padding: 10px; background: rgba(23, 162, 184, 0.08); border-left: 3px solid #17a2b8; border-radius: 4px; line-height: 1.6;"><strong style="color: #17a2b8;">Base:</strong><br>' . implode('<br>', $formazioni) . '</div>';
             }
             
             if (!empty($formazioni_nuove)) {
-                echo '<div style="font-size: 10px; margin-bottom: 6px; padding: 4px 6px; background: rgba(33, 150, 243, 0.08); border-left: 2px solid #2196f3; border-radius: 2px; line-height: 1.4;"><strong style="color: #1976d2;">Specifiche:</strong> ' . implode(' • ', $formazioni_nuove) . '</div>';
+                echo '<div style="font-size: 14px; margin-bottom: 10px; padding: 10px; background: rgba(33, 150, 243, 0.08); border-left: 3px solid #2196f3; border-radius: 4px; line-height: 1.6;"><strong style="color: #1976d2;">Specifiche:</strong><br>' . implode('<br>', $formazioni_nuove) . '</div>';
             }
             
             if (!empty($formazioni_aggiuntive)) {
-                echo '<div style="font-size: 10px; padding: 4px 6px; background: rgba(255, 193, 7, 0.08); border-left: 2px solid #ffc107; border-radius: 2px; line-height: 1.4;"><strong style="color: #f57c00;">Aggiuntive:</strong> ' . implode(' • ', $formazioni_aggiuntive) . '</div>';
+                echo '<div style="font-size: 14px; padding: 10px; background: rgba(255, 193, 7, 0.08); border-left: 3px solid #ffc107; border-radius: 4px; line-height: 1.6;"><strong style="color: #f57c00;">Aggiuntive:</strong><br>' . implode('<br>', $formazioni_aggiuntive) . '</div>';
             }
             
             if (empty($formazioni) && empty($formazioni_nuove) && empty($formazioni_aggiuntive)) {
-                echo '<div style="font-size: 10px; color: #dc3545; font-style: italic;">⚠️ Nessuna formazione caricata</div>';
+                echo '<div style="font-size: 14px; color: #dc3545; font-style: italic; padding: 10px; background: rgba(220, 53, 69, 0.1); border-radius: 4px;">⚠️ Nessuna formazione caricata</div>';
             }
             echo '</div>';
             
-            // 🚀 SEZIONE: Mostra cantieri assegnati per questa persona (compatta)
+            // 🚀 SEZIONE: Mostra cantieri assegnati per questa persona
             if ($isAssigned) {
-                echo '<div style="margin-top: 8px; padding: 6px 8px; background: rgba(40, 167, 69, 0.08); border-radius: 4px; border-left: 2px solid #28a745;">';
-                echo '<div style="font-size: 10px; font-weight: bold; color: #155724; margin-bottom: 3px;">🏗️ Cantieri:</div>';
-                echo '<div style="font-size: 9px; color: #155724; line-height: 1.3;">';
+                echo '<div style="margin-top: 12px; padding: 10px 12px; background: rgba(40, 167, 69, 0.08); border-radius: 6px; border-left: 3px solid #28a745;">';
+                echo '<div style="font-size: 14px; font-weight: 700; color: #155724; margin-bottom: 6px;">🏗️ Cantieri Assegnati:</div>';
+                echo '<div style="font-size: 13px; color: #155724; line-height: 1.6;">';
                 
                 $cantieri_persona = array();
                 foreach ($persona_assegnazioni as $assegnazione) {
@@ -3710,15 +3710,15 @@ function showStatusDetails(richiestaId, aziendaNome) {
         modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
         
         modal.innerHTML = `
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto;">
-                <div style="background: #17a2b8; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+            <div class="assignments-summary-style" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto; margin-bottom: 0;">
+                <div class="summary-header" style="border-radius: 8px 8px 0 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h4 style="margin: 0;">📊 Dettaglio Stato Richiesta HSE</h4>
+                        <h4 class="summary-title">📊 Dettaglio Stato Richiesta HSE</h4>
                         <button onclick="closeStatusDetailsModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
                     </div>
-                    <p id="status-azienda-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                    <p id="status-azienda-name" class="summary-description"></p>
                 </div>
-                <div id="status-details-content" style="padding: 20px;">
+                <div id="status-details-content" class="summary-body">
                     <div style="text-align: center; padding: 20px;">
                         <div style="font-size: 16px;">🔄 Caricamento dettagli...</div>
                     </div>
@@ -3886,15 +3886,15 @@ function showCantiereWorkers(cantiereId, userId, cantiereName, aziendaNome) {
         modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
         
         modal.innerHTML = `
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">
-                <div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+            <div class="assignments-summary-style" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto; margin-bottom: 0;">
+                <div class="summary-header" style="border-radius: 8px 8px 0 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h4 style="margin: 0;">🏗️ Dettagli Cantiere Assegnato</h4>
+                        <h4 class="summary-title">🏗️ Dettagli Cantiere Assegnato</h4>
                         <button onclick="closeCantiereWorkersModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
                     </div>
-                    <p id="workers-cantiere-info" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                    <p id="workers-cantiere-info" class="summary-description"></p>
                 </div>
-                <div id="workers-details-content" style="padding: 20px;">
+                <div id="workers-details-content" class="summary-body">
                     <div style="text-align: center; padding: 20px;">
                         <div style="font-size: 16px;">🔄 Caricamento operai...</div>
                     </div>
@@ -4031,20 +4031,20 @@ function loadCantiereWorkers(cantiereId, userId) {
                         if (operaio.formazione_carrelli) formazioniExtra.push('🚜 Carrelli');
                         
                         return `
-                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
+                        <div class="summary-card" style="border-left: 4px solid ${borderColor};">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                                 <div>
-                                    <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
+                                    <div class="summary-card-title" style="font-size: 14px; padding-right: 0;">${operaio.nome} ${operaio.cognome}</div>
                                     <div style="font-size: 11px; color: #666;">Età: ${eta} anni</div>
                                     <div style="font-size: 10px; color: #888;">Assegnato: ${new Date(operaio.data_assegnazione).toLocaleDateString('it-IT')}</div>
                                 </div>
                                 <div style="font-size: 16px;">${operaio.icons || '⚠️'}</div>
                             </div>
-                            <div style="font-size: 10px; color: #666; margin-bottom: 5px;">
+                            <div class="summary-card-info" style="font-size: 10px; margin-bottom: 5px;">
                                 <strong>Formazioni Base:</strong> ${operaio.competenze.length > 0 ? operaio.competenze.join(', ') : 'Nessuna'}
                             </div>
                             ${formazioniExtra.length > 0 ? `
-                            <div style="font-size: 10px; color: #666; background: #e3f2fd; padding: 5px; border-radius: 3px;">
+                            <div class="summary-card-info" style="font-size: 10px; background: #e3f2fd; padding: 5px; border-radius: 3px;">
                                 <strong>Formazioni Specifiche:</strong> ${formazioniExtra.join(' • ')}
                             </div>
                             ` : ''}
@@ -6119,7 +6119,160 @@ function cancelDocumentRequest(userId, aziendaName) {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* STILI CANTIERI */
+/* ==================================================================
+   CLASSE RIUTILIZZABILE: STILE ASSIGNMENTS-SUMMARY
+   Questa classe è stata estratta dalla sezione #assignments-summary
+   per garantire coerenza visiva tra:
+   - #assignments-summary (sezione assegnazioni cantieri)
+   - #cantiere-workers-modal (popup dettagli operai)
+   - #status-details-modal (popup dettagli stato richiesta)
+   - Schede operai in "Dettaglio Personale"
+   ================================================================== */
+
+/* Container principale con stile assignments-summary */
+.assignments-summary-style {
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    margin-bottom: 25px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.assignments-summary-style:hover {
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    transform: translateY(-3px);
+}
+
+/* Header con gradiente blu */
+.assignments-summary-style .summary-header {
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    color: white;
+    padding: 20px;
+}
+
+/* Titolo header */
+.assignments-summary-style .summary-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+/* Badge informazioni */
+.assignments-summary-style .summary-badge {
+    background: rgba(255,255,255,0.25);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Descrizione nel header */
+.assignments-summary-style .summary-description {
+    margin: 10px 0 0 0;
+    font-size: 15px;
+    opacity: 0.95;
+    line-height: 1.5;
+}
+
+/* Contenuto body con padding */
+.assignments-summary-style .summary-body {
+    padding: 25px;
+}
+
+/* Grid per card */
+.assignments-summary-style .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+/* Card singola - MIGLIORATA per leggibilità */
+.assignments-summary-style .summary-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 22px;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    line-height: 1.8;
+}
+
+.assignments-summary-style .summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    border-color: #2196f3;
+}
+
+/* Titolo card - Font più grande e spacing migliorato */
+.assignments-summary-style .summary-card-title {
+    margin: 0 0 14px 0;
+    color: #0066a2;
+    padding-right: 30px;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: 0.3px;
+}
+
+/* Info testo in card - Font più leggibile */
+.assignments-summary-style .summary-card-info {
+    font-size: 15px;
+    color: #495057;
+    line-height: 1.8;
+    margin-bottom: 8px;
+}
+
+.assignments-summary-style .summary-card-info div {
+    margin-bottom: 8px;
+    color: #212529;
+    font-size: 15px;
+}
+
+.assignments-summary-style .summary-card-info strong {
+    font-weight: 600;
+    color: #333;
+}
+
+/* Box operai assegnati */
+.assignments-summary-style .summary-workers-box {
+    margin-top: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+    border-radius: 6px;
+    border-left: 4px solid #66bb6a;
+    box-shadow: 0 2px 6px rgba(102,187,106,0.15);
+}
+
+.assignments-summary-style .summary-workers-title {
+    font-weight: 700;
+    color: #2e7d32;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.assignments-summary-style .summary-worker-item {
+    font-size: 12px;
+    color: #212529;
+    margin-bottom: 5px;
+    padding: 4px 0;
+}
+
+/* Box note */
+.assignments-summary-style .summary-notes-box {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0,123,255,0.08);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #004085;
+    border-left: 3px solid #007bff;
+}
+
+/* STILI ORIGINALI CANTIERI - Mantenuti per retrocompatibilità */
 .assignment-group {
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -7131,15 +7284,15 @@ echo '        modal.id = "mezzo-details-modal";';
 echo '        modal.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001;";';
 echo '        ';
 echo '        modal.innerHTML = `';
-echo '            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
-echo '                <div style="background: #ffc107; color: #000; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '            <div class="assignments-summary-style" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto; margin-bottom: 0;">';
+echo '                <div class="summary-header" style="background: linear-gradient(135deg, #ffc107, #f9a825); border-radius: 10px 10px 0 0;">';
 echo '                    <div style="display: flex; justify-content: space-between; align-items: center;">';
-echo '                        <h4 style="margin: 0;">🚛 Dettagli Mezzo Meccanico</h4>';
+echo '                        <h4 class="summary-title" style="color: #000;">🚛 Dettagli Mezzo Meccanico</h4>';
 echo '                        <button onclick="closeMezzoDetailsModal()" style="background: transparent; color: #000; border: none; font-size: 20px; cursor: pointer;">✕</button>';
 echo '                    </div>';
-echo '                    <p id="mezzo-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>';
+echo '                    <p id="mezzo-name" class="summary-description" style="color: #000;"></p>';
 echo '                </div>';
-echo '                <div id="mezzo-details-content" style="padding: 20px;"></div>';
+echo '                <div id="mezzo-details-content" class="summary-body"></div>';
 echo '            </div>';
 echo '        `;';
 echo '        ';
@@ -7162,42 +7315,42 @@ echo '    ';
 echo '    const needsVerifiche = ["AUTOCARRO_GRU", "PLE", "MEZZI_TERRA"].includes(mezzoData.tipologia);';
 echo '    ';
 echo '    let content = `';
-echo '        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px;">';
-echo '            <h5 style="margin: 0 0 15px 0; color: #856404;">📋 Informazioni Generali</h5>';
-echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px;">';
-echo '                <div>';
-echo '                    <strong style="color: #666;">Tipologia:</strong><br>';
-echo '                    <span style="font-size: 14px;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
+echo '        <div class="summary-card" style="margin-bottom: 20px;">';
+echo '            <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">📋 Informazioni Generali</h5>';
+echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">';
+echo '                <div class="summary-card-info">';
+echo '                    <strong style="color: #666; font-size: 14px;">Tipologia:</strong><br>';
+echo '                    <span style="font-size: 16px; font-weight: 600; color: #333;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
 echo '                </div>';
-echo '                <div>';
-echo '                    <strong style="color: #666;">🏷️ Targa:</strong><br>';
-echo '                    <span style="font-family: monospace; font-size: 14px; font-weight: bold;">${mezzoData.targa}</span>';
+echo '                <div class="summary-card-info">';
+echo '                    <strong style="color: #666; font-size: 14px;">🏷️ Targa:</strong><br>';
+echo '                    <span style="font-family: monospace; font-size: 17px; font-weight: bold; color: #333;">${mezzoData.targa}</span>';
 echo '                </div>';
 echo '            </div>';
 echo '        </div>';
 echo '        ';
-echo '        <div style="background: #fff; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #ddd;">';
-echo '            <h5 style="margin: 0 0 15px 0; color: #17a2b8;">📄 Documenti e Scadenze</h5>';
-echo '            <div style="display: grid; gap: 12px; font-size: 12px;">';
+echo '        <div class="summary-card" style="margin-bottom: 20px;">';
+echo '            <h5 class="summary-card-title" style="color: #17a2b8; font-size: 18px;">📄 Documenti e Scadenze</h5>';
+echo '            <div style="display: grid; gap: 14px;">';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.file_targa ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"};">';
-echo '                    <strong>📎 File Targa:</strong><br>';
-echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_targa ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">📎 File Targa:</strong><br>';
+echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_revisione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"};">';
-echo '                    <strong>🔧 Scadenza Revisione:</strong><br>';
-echo '                    ${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_revisione ? "#fff3cd" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">🔧 Scadenza Revisione:</strong><br>';
+echo '                    <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_assicurazione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"};">';
-echo '                    <strong>🛡️ Scadenza Assicurazione:</strong><br>';
-echo '                    ${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_assicurazione ? "#fff3cd" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">🛡️ Scadenza Assicurazione:</strong><br>';
+echo '                    <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.file_assicurazione ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"};">';
-echo '                    <strong>📋 File Assicurazione:</strong><br>';
-echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_assicurazione ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"};">';
+echo '                    <strong style="font-size: 15px;">📋 File Assicurazione:</strong><br>';
+echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
 echo '                </div>';
 echo '            </div>';
 echo '        </div>';
@@ -7205,16 +7358,16 @@ echo '    `;';
 echo '    ';
 echo '    if (needsVerifiche) {';
 echo '        content += `';
-echo '            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border: 2px solid #ffc107;">';
-echo '                <h5 style="margin: 0 0 15px 0; color: #856404;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
-echo '                <div style="display: grid; gap: 12px; font-size: 12px;">';
-echo '                    <div style="padding: 10px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong>📅 Scadenza Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '            <div class="summary-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; margin-bottom: 20px;">';
+echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
+echo '                <div style="display: grid; gap: 14px;">';
+echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
+echo '                        <strong style="font-size: 15px;">📅 Scadenza Verifiche Periodiche:</strong><br>';
+echo '                        <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
 echo '                    </div>';
-echo '                    <div style="padding: 10px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong>📄 File Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
+echo '                        <strong style="font-size: 15px;">📄 File Verifiche Periodiche:</strong><br>';
+echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
 echo '                    </div>';
 echo '                </div>';
 echo '            </div>';
