@@ -1981,12 +1981,12 @@ foreach ($richieste as $richiesta) {
     echo '</tr>';
     
     // 🚀 RIGA DETTAGLI PERSONALE MIGLIORATA (CON ASSEGNAZIONI CANTIERI)
-    echo '<tr id="personale-details-' . $richiesta['id'] . '" style="display: none; background: #f8f9fa;">';
-    echo '<td colspan="16" style="padding: 15px; border: 1px solid #ddd;">';
-    echo '<h4 style="margin: 0 0 10px 0; color: #0066a2;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
+    echo '<tr id="personale-details-' . $richiesta['id'] . '" style="display: none; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">';
+    echo '<td colspan="16" style="padding: 20px; border: 2px solid #dee2e6; box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);">';
+    echo '<h4 style="margin: 0 0 18px 0; color: #0066a2; font-size: 20px; font-weight: 700; border-bottom: 3px solid #17a2b8; padding-bottom: 10px;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
     
     if (!empty($personale)) {
-        echo '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; max-width: 100%;">';
+        echo '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; max-width: 100%;">';
         
         foreach ($personale as $index => $persona) {
             // Verifica se questa persona è assegnata a cantieri
@@ -1995,24 +1995,24 @@ foreach ($richieste as $richiesta) {
             });
             
             $isAssigned = !empty($persona_assegnazioni);
-            $borderColor = $isAssigned ? '#28a745' : '#ddd';
-            $bgColor = $isAssigned ? '#f0f9f3' : '#fff';
+            $borderColor = $isAssigned ? '#28a745' : '#dee2e6';
+            $bgGradient = $isAssigned ? 'linear-gradient(135deg, #f0f9f3, #e8f5e9)' : 'linear-gradient(135deg, #ffffff, #f8f9fa)';
             
-            echo '<div style="border: 2px solid ' . $borderColor . '; background: ' . $bgColor . '; padding: 12px; border-radius: 8px; min-width: 320px; max-width: 500px;">';
-            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px;">';
-            echo '<h5 style="margin: 0; color: #333; font-size: 14px;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
+            echo '<div style="border: 2px solid ' . $borderColor . '; background: ' . $bgGradient . '; padding: 16px; border-radius: 10px; min-width: 340px; max-width: 520px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.3s ease;">';
+            echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 10px;">';
+            echo '<h5 style="margin: 0; color: #212529; font-size: 16px; font-weight: 700;">👤 ' . htmlspecialchars($persona['nome']) . ' ' . htmlspecialchars($persona['cognome']) . '</h5>';
             if ($isAssigned) {
-                echo '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 9px; white-space: nowrap;">🏗️ ASSEGNATO</span>';
+                echo '<span style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 6px rgba(40,167,69,0.3);">🏗️ ASSEGNATO</span>';
             }
             echo '</div>';
             
-            echo '<div style="font-size: 11px; color: #666; margin-bottom: 8px;">';
-            echo '<div>📅 Nato il: ' . htmlspecialchars($persona['data_nascita']) . '</div>';
+            echo '<div style="font-size: 13px; color: #495057; margin-bottom: 10px; font-weight: 500;">';
+            echo '<div>📅 Nato il: <span style="color: #212529; font-weight: 600;">' . htmlspecialchars($persona['data_nascita']) . '</span></div>';
             echo '</div>';
             
             // Mostra formazioni in modo più compatto
-            echo '<div style="margin-top: 8px; border-top: 1px solid #e0e0e0; padding-top: 8px;">';
-            echo '<p style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold; color: #555;">📚 Formazioni:</p>';
+            echo '<div style="margin-top: 12px; border-top: 2px solid #dee2e6; padding-top: 12px;">';
+            echo '<p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0066a2;">📚 Formazioni:</p>';
             
             $formazioni = [];
             if (!empty($persona['formazione_antincendio_file'])) {
@@ -2027,7 +2027,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $antincendio_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2;">' . $antincendio_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_antincendio_file']) . '" target="_blank" style="color: #0066a2; font-weight: 600; text-decoration: none; transition: all 0.2s;">' . $antincendio_text . '</a>';
             }
             if (!empty($persona['formazione_primo_soccorso_file'])) {
                 $primo_soccorso_text = '🚑 Primo Soccorso';
@@ -2041,7 +2041,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $primo_soccorso_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2;">' . $primo_soccorso_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_primo_soccorso_file']) . '" target="_blank" style="color: #0066a2; font-weight: 600; text-decoration: none; transition: all 0.2s;">' . $primo_soccorso_text . '</a>';
             }
             if (!empty($persona['formazione_preposti_file'])) {
                 $preposti_text = '👮 Preposti';
@@ -2055,7 +2055,7 @@ foreach ($richieste as $richiesta) {
                     }
                     $preposti_text .= ')';
                 }
-                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2;">' . $preposti_text . '</a>';
+                $formazioni[] = '<a href="' . esc_url($persona['formazione_preposti_file']) . '" target="_blank" style="color: #0066a2; font-weight: 600; text-decoration: none; transition: all 0.2s;">' . $preposti_text . '</a>';
             }
             
             // 📚 NUOVE FORMAZIONI: Generale e Specifica + Nomine
@@ -2461,6 +2461,9 @@ $all_richieste_for_mezzi = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}cant
 foreach ($all_richieste_for_mezzi as $richiesta) {
     $mezzi = hse_getAutomezziByRichiestaId($richiesta['id']);
     foreach ($mezzi as $mezzo) {
+        // Get cantieri where this mezzo is assigned
+        $mezzo_cantieri = getAutomezzoCantieriAssegnazioni($mezzo['id'], $richiesta['user_id']);
+        
         echo $mezzo['id'] . ': {';
         echo 'id: ' . $mezzo['id'] . ',';
         echo 'tipologia: "' . addslashes($mezzo['tipologia'] ?? 'AUTO') . '",';
@@ -2471,7 +2474,19 @@ foreach ($all_richieste_for_mezzi as $richiesta) {
         echo 'scadenza_assicurazione: "' . addslashes($mezzo['scadenza_assicurazione'] ?? '') . '",';
         echo 'file_assicurazione: "' . addslashes($mezzo['file_assicurazione'] ?? '') . '",';
         echo 'scadenza_verifiche_periodiche: "' . addslashes($mezzo['scadenza_verifiche_periodiche'] ?? '') . '",';
-        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '"';
+        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '",';
+        echo 'cantieri: [';
+        if (!empty($mezzo_cantieri)) {
+            foreach ($mezzo_cantieri as $cantiere) {
+                echo '{';
+                echo 'id: ' . $cantiere['cantiere_id'] . ',';
+                echo 'nome: "' . addslashes($cantiere['cantiere_nome']) . '",';
+                echo 'stato: "' . addslashes($cantiere['cantiere_stato']) . '",';
+                echo 'data_assegnazione: "' . addslashes($cantiere['data_assegnazione']) . '"';
+                echo '},';
+            }
+        }
+        echo ']';
         echo '},';
     }
 }
@@ -3886,17 +3901,17 @@ function showCantiereWorkers(cantiereId, userId, cantiereName, aziendaNome) {
         modal.style.cssText = 'display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;';
         
         modal.innerHTML = `
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">
-                <div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 10px; width: 90%; max-width: 800px; max-height: 85%; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                <div style="background: linear-gradient(135deg, #2196f3, #1976d2); color: white; padding: 25px; border-radius: 10px 10px 0 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h4 style="margin: 0;">🏗️ Dettagli Cantiere Assegnato</h4>
-                        <button onclick="closeCantiereWorkersModal()" style="background: transparent; color: white; border: none; font-size: 20px; cursor: pointer;">✕</button>
+                        <h4 style="margin: 0; font-size: 22px; font-weight: 700;">🏗️ Dettagli Cantiere Assegnato</h4>
+                        <button onclick="closeCantiereWorkersModal()" style="background: transparent; color: white; border: none; font-size: 24px; cursor: pointer; font-weight: 700;">✕</button>
                     </div>
-                    <p id="workers-cantiere-info" style="margin: 8px 0 0 0; opacity: 0.9;"></p>
+                    <p id="workers-cantiere-info" style="margin: 12px 0 0 0; opacity: 0.95; font-size: 16px; line-height: 1.5;"></p>
                 </div>
-                <div id="workers-details-content" style="padding: 20px;">
-                    <div style="text-align: center; padding: 20px;">
-                        <div style="font-size: 16px;">🔄 Caricamento operai...</div>
+                <div id="workers-details-content" style="padding: 25px;">
+                    <div style="text-align: center; padding: 30px;">
+                        <div style="font-size: 18px; font-weight: 600; color: #495057;">🔄 Caricamento operai...</div>
                     </div>
                 </div>
             </div>
@@ -3967,46 +3982,46 @@ function loadCantiereWorkers(cantiereId, userId) {
         const operaiConPreposti = cantiereData.operai.filter(o => o.competenze.includes('Preposti')).length;
         
         contentDiv.innerHTML = `
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-                <h5 style="margin: 0 0 10px 0; color: #2196f3;">📊 Riepilogo Risorse Cantiere</h5>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 12px;">
-                    <div style="text-align: center; padding: 8px; background: #28a745; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${operaiTotali}</div>
-                        <div>👷 Operai</div>
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 10px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+                <h5 style="margin: 0 0 18px 0; color: #0066a2; font-size: 18px; font-weight: 700; border-bottom: 2px solid #2196f3; padding-bottom: 8px;">📊 Riepilogo Risorse Cantiere</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; font-size: 14px;">
+                    <div style="text-align: center; padding: 14px; background: linear-gradient(135deg, #28a745, #20c997); color: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(40,167,69,0.3);">
+                        <div style="font-size: 28px; font-weight: 700;">${operaiTotali}</div>
+                        <div style="font-size: 13px; margin-top: 4px;">👷 Operai</div>
                     </div>
-                    <div style="text-align: center; padding: 8px; background: #ffc107; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${automezziTotali}</div>
-                        <div>🚛 Automezzi</div>
+                    <div style="text-align: center; padding: 14px; background: linear-gradient(135deg, #ffc107, #ff9800); color: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(255,193,7,0.3);">
+                        <div style="font-size: 28px; font-weight: 700;">${automezziTotali}</div>
+                        <div style="font-size: 13px; margin-top: 4px;">🚛 Automezzi</div>
                     </div>
-                    <div style="text-align: center; padding: 8px; background: #17a2b8; color: white; border-radius: 4px;">
-                        <div style="font-size: 16px; font-weight: bold;">${attrezziTotali}</div>
-                        <div>🔧 Attrezzi</div>
+                    <div style="text-align: center; padding: 14px; background: linear-gradient(135deg, #17a2b8, #138496); color: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(23,162,184,0.3);">
+                        <div style="font-size: 28px; font-weight: 700;">${attrezziTotali}</div>
+                        <div style="font-size: 13px; margin-top: 4px;">🔧 Attrezzi</div>
                     </div>
-                    <div style="text-align: center; padding: 8px; background: ${hasPOS ? '#28a745' : '#dc3545'}; color: white; border-radius: 4px; cursor: ${hasPOS ? 'pointer' : 'default'};" onclick="${hasPOS ? `window.open('${cantiereData.pos_file}', '_blank')` : ''}">
-                        <div style="font-size: 16px; font-weight: bold;">${hasPOS ? '✅' : '❌'}</div>
-                        <div>📋 POS</div>
-                        ${hasPOS && cantiereData.pos_data_emissione ? `<div style="font-size: 10px; margin-top: 4px; opacity: 0.9;">📅 ${new Date(cantiereData.pos_data_emissione).toLocaleDateString('it-IT')}</div>` : ''}
+                    <div style="text-align: center; padding: 14px; background: linear-gradient(135deg, ${hasPOS ? '#28a745, #20c997' : '#dc3545, #c82333'}); color: white; border-radius: 8px; cursor: ${hasPOS ? 'pointer' : 'default'}; box-shadow: 0 2px 8px ${hasPOS ? 'rgba(40,167,69,0.3)' : 'rgba(220,53,69,0.3)'}; transition: all 0.3s ease;" onclick="${hasPOS ? `window.open('${cantiereData.pos_file}', '_blank')` : ''}" ${hasPOS ? 'onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'"' : ''}>
+                        <div style="font-size: 28px; font-weight: 700;">${hasPOS ? '✅' : '❌'}</div>
+                        <div style="font-size: 13px; margin-top: 4px;">📋 POS</div>
+                        ${hasPOS && cantiereData.pos_data_emissione ? `<div style="font-size: 11px; margin-top: 4px; opacity: 0.9;">📅 ${new Date(cantiereData.pos_data_emissione).toLocaleDateString('it-IT')}</div>` : ''}
                     </div>
                 </div>
             </div>
             
             ${operaiTotali > 0 ? `
-            <div style="margin-bottom: 20px;">
-                <h5 style="color: #2196f3; margin-bottom: 15px;">👷 Operai Assegnati (${operaiTotali})</h5>
-                <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; font-size: 11px;">
-                        <div style="text-align: center; padding: 6px; background: #ff5722; color: white; border-radius: 4px;">
-                            <strong>${operaiConAntincendio}</strong> 🔥 Antincendio
+            <div style="margin-bottom: 25px;">
+                <h5 style="color: #0066a2; margin-bottom: 18px; font-size: 18px; font-weight: 700; border-bottom: 2px solid #2196f3; padding-bottom: 8px;">👷 Operai Assegnati (${operaiTotali})</h5>
+                <div style="background: linear-gradient(135deg, #e3f2fd, #f1f8ff); padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(33,150,243,0.15);">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; font-size: 13px;">
+                        <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #ff5722, #f44336); color: white; border-radius: 6px; box-shadow: 0 2px 6px rgba(255,87,34,0.3);">
+                            <strong style="font-size: 20px;">${operaiConAntincendio}</strong> 🔥 Antincendio
                         </div>
-                        <div style="text-align: center; padding: 6px; background: #4caf50; color: white; border-radius: 4px;">
-                            <strong>${operaiConPrimoSoccorso}</strong> 🚑 P. Soccorso
+                        <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #4caf50, #43a047); color: white; border-radius: 6px; box-shadow: 0 2px 6px rgba(76,175,80,0.3);">
+                            <strong style="font-size: 20px;">${operaiConPrimoSoccorso}</strong> 🚑 P. Soccorso
                         </div>
-                        <div style="text-align: center; padding: 6px; background: #673ab7; color: white; border-radius: 4px;">
-                            <strong>${operaiConPreposti}</strong> 👮 Preposti
+                        <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #673ab7, #5e35b1); color: white; border-radius: 6px; box-shadow: 0 2px 6px rgba(103,58,183,0.3);">
+                            <strong style="font-size: 20px;">${operaiConPreposti}</strong> 👮 Preposti
                         </div>
                     </div>
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
                     ${cantiereData.operai.map(operaio => {
                         // Calcola età
                         const oggi = new Date();
@@ -4015,10 +4030,13 @@ function loadCantiereWorkers(cantiereId, userId) {
                         
                         // Determina il colore del bordo in base alle competenze
                         let borderColor = '#dc3545'; // rosso per nessuna competenza
+                        let bgGradient = 'linear-gradient(135deg, #fff5f5, #ffebee)';
                         if (operaio.competenze.length >= 3) {
                             borderColor = '#28a745'; // verde per molte competenze
+                            bgGradient = 'linear-gradient(135deg, #f0f9f3, #e8f5e9)';
                         } else if (operaio.competenze.length >= 1) {
                             borderColor = '#ffc107'; // giallo per alcune competenze
+                            bgGradient = 'linear-gradient(135deg, #fffef5, #fff8e1)';
                         }
                         
                         // 📚 Prepara lista formazioni con date (nuovi campi implementati)
@@ -4031,8 +4049,8 @@ function loadCantiereWorkers(cantiereId, userId) {
                         if (operaio.formazione_carrelli) formazioniExtra.push('🚜 Carrelli');
                         
                         return `
-                        <div style="background: white; border: 1px solid #ddd; border-radius: 6px; padding: 15px; border-left: 4px solid ${borderColor};">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div style="background: ${bgGradient}; border: 2px solid ${borderColor}; border-radius: 8px; padding: 18px; border-left: 5px solid ${borderColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: all 0.3s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                                 <div>
                                     <div style="font-weight: bold; color: #333;">${operaio.nome} ${operaio.cognome}</div>
                                     <div style="font-size: 11px; color: #666;">Età: ${eta} anni</div>
@@ -7131,15 +7149,15 @@ echo '        modal.id = "mezzo-details-modal";';
 echo '        modal.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001;";';
 echo '        ';
 echo '        modal.innerHTML = `';
-echo '            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
-echo '                <div style="background: #ffc107; color: #000; padding: 20px; border-radius: 8px 8px 0 0;">';
+echo '            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 10px; width: 90%; max-width: 800px; max-height: 85%; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">';
+echo '                <div style="background: linear-gradient(135deg, #ffc107, #ff9800); color: #000; padding: 25px; border-radius: 10px 10px 0 0;">';
 echo '                    <div style="display: flex; justify-content: space-between; align-items: center;">';
-echo '                        <h4 style="margin: 0;">🚛 Dettagli Mezzo Meccanico</h4>';
-echo '                        <button onclick="closeMezzoDetailsModal()" style="background: transparent; color: #000; border: none; font-size: 20px; cursor: pointer;">✕</button>';
+echo '                        <h4 style="margin: 0; font-size: 22px; font-weight: 700;">🚛 Dettagli Mezzo Meccanico</h4>';
+echo '                        <button onclick="closeMezzoDetailsModal()" style="background: transparent; color: #000; border: none; font-size: 24px; cursor: pointer; font-weight: 700;">✕</button>';
 echo '                    </div>';
-echo '                    <p id="mezzo-name" style="margin: 8px 0 0 0; opacity: 0.9;"></p>';
+echo '                    <p id="mezzo-name" style="margin: 12px 0 0 0; opacity: 0.95; font-size: 16px; line-height: 1.5;"></p>';
 echo '                </div>';
-echo '                <div id="mezzo-details-content" style="padding: 20px;"></div>';
+echo '                <div id="mezzo-details-content" style="padding: 25px;"></div>';
 echo '            </div>';
 echo '        `;';
 echo '        ';
@@ -7162,59 +7180,87 @@ echo '    ';
 echo '    const needsVerifiche = ["AUTOCARRO_GRU", "PLE", "MEZZI_TERRA"].includes(mezzoData.tipologia);';
 echo '    ';
 echo '    let content = `';
-echo '        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px;">';
-echo '            <h5 style="margin: 0 0 15px 0; color: #856404;">📋 Informazioni Generali</h5>';
-echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px;">';
+echo '        <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">';
+echo '            <h5 style="margin: 0 0 18px 0; color: #856404; font-size: 18px; font-weight: 700; border-bottom: 2px solid #ffc107; padding-bottom: 8px;">📋 Informazioni Generali</h5>';
+echo '            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; font-size: 14px;">';
 echo '                <div>';
-echo '                    <strong style="color: #666;">Tipologia:</strong><br>';
-echo '                    <span style="font-size: 14px;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
+echo '                    <strong style="color: #495057; font-size: 13px;">Tipologia:</strong><br>';
+echo '                    <span style="font-size: 16px; color: #212529; font-weight: 600;">${tipologiaLabels[mezzoData.tipologia] || mezzoData.tipologia}</span>';
 echo '                </div>';
 echo '                <div>';
-echo '                    <strong style="color: #666;">🏷️ Targa:</strong><br>';
-echo '                    <span style="font-family: monospace; font-size: 14px; font-weight: bold;">${mezzoData.targa}</span>';
+echo '                    <strong style="color: #495057; font-size: 13px;">🏷️ Targa:</strong><br>';
+echo '                    <span style="font-family: monospace; font-size: 16px; font-weight: 700; color: #212529;">${mezzoData.targa}</span>';
 echo '                </div>';
 echo '            </div>';
 echo '        </div>';
 echo '        ';
-echo '        <div style="background: #fff; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #ddd;">';
-echo '            <h5 style="margin: 0 0 15px 0; color: #17a2b8;">📄 Documenti e Scadenze</h5>';
-echo '            <div style="display: grid; gap: 12px; font-size: 12px;">';
+echo '        <div style="background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #dee2e6; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">';
+echo '            <h5 style="margin: 0 0 18px 0; color: #0066a2; font-size: 18px; font-weight: 700; border-bottom: 2px solid #17a2b8; padding-bottom: 8px;">📄 Documenti e Scadenze</h5>';
+echo '            <div style="display: grid; gap: 15px; font-size: 14px;">';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.file_targa ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"};">';
-echo '                    <strong>📎 File Targa:</strong><br>';
-echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                <div style="padding: 14px; background: ${mezzoData.file_targa ? "linear-gradient(135deg, #d4edda, #e8f5e9)" : "linear-gradient(135deg, #f8d7da, #ffebee)"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_targa ? "#28a745" : "#dc3545"}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                    <strong style="color: #212529; font-size: 14px;">📎 File Targa:</strong><br>';
+echo '                    ${mezzoData.file_targa ? `<a href="${mezzoData.file_targa}" target="_blank" style="color: #155724; font-weight: 600; text-decoration: none;">📄 Visualizza documento</a>` : "<span style=\"color: #721c24; font-weight: 600;\">❌ Non caricato</span>"}';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_revisione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"};">';
-echo '                    <strong>🔧 Scadenza Revisione:</strong><br>';
-echo '                    ${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                <div style="padding: 14px; background: ${mezzoData.scadenza_revisione ? "linear-gradient(135deg, #fff3cd, #fff8e1)" : "linear-gradient(135deg, #f8d7da, #ffebee)"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_revisione ? "#ffc107" : "#dc3545"}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                    <strong style="color: #212529; font-size: 14px;">🔧 Scadenza Revisione:</strong><br>';
+echo '                    <span style="font-weight: 600; color: ${mezzoData.scadenza_revisione ? "#856404" : "#721c24"};">${mezzoData.scadenza_revisione ? new Date(mezzoData.scadenza_revisione).toLocaleDateString("it-IT") : "❌ Non impostata"}</span>';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.scadenza_assicurazione ? "#fff3cd" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"};">';
-echo '                    <strong>🛡️ Scadenza Assicurazione:</strong><br>';
-echo '                    ${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '                <div style="padding: 14px; background: ${mezzoData.scadenza_assicurazione ? "linear-gradient(135deg, #fff3cd, #fff8e1)" : "linear-gradient(135deg, #f8d7da, #ffebee)"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_assicurazione ? "#ffc107" : "#dc3545"}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                    <strong style="color: #212529; font-size: 14px;">🛡️ Scadenza Assicurazione:</strong><br>';
+echo '                    <span style="font-weight: 600; color: ${mezzoData.scadenza_assicurazione ? "#856404" : "#721c24"};">${mezzoData.scadenza_assicurazione ? new Date(mezzoData.scadenza_assicurazione).toLocaleDateString("it-IT") : "❌ Non impostata"}</span>';
 echo '                </div>';
 echo '                ';
-echo '                <div style="padding: 10px; background: ${mezzoData.file_assicurazione ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"};">';
-echo '                    <strong>📋 File Assicurazione:</strong><br>';
-echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                <div style="padding: 14px; background: ${mezzoData.file_assicurazione ? "linear-gradient(135deg, #d4edda, #e8f5e9)" : "linear-gradient(135deg, #f8d7da, #ffebee)"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_assicurazione ? "#28a745" : "#dc3545"}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                    <strong style="color: #212529; font-size: 14px;">📋 File Assicurazione:</strong><br>';
+echo '                    ${mezzoData.file_assicurazione ? `<a href="${mezzoData.file_assicurazione}" target="_blank" style="color: #155724; font-weight: 600; text-decoration: none;">📄 Visualizza documento</a>` : "<span style=\"color: #721c24; font-weight: 600;\">❌ Non caricato</span>"}';
 echo '                </div>';
 echo '            </div>';
 echo '        </div>';
 echo '    `;';
 echo '    ';
+echo '    // Add cantieri information';
+echo '    if (mezzoData.cantieri && mezzoData.cantieri.length > 0) {';
+echo '        content += `';
+echo '            <div style="background: linear-gradient(135deg, #e3f2fd, #f1f8ff); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #2196f3; box-shadow: 0 2px 10px rgba(33,150,243,0.15);">';
+echo '                <h5 style="margin: 0 0 18px 0; color: #0066a2; font-size: 18px; font-weight: 700; border-bottom: 2px solid #2196f3; padding-bottom: 8px;">🏗️ Cantieri Assegnati (${mezzoData.cantieri.length})</h5>';
+echo '                <div style="display: grid; gap: 12px;">';
+echo '        `;';
+echo '        mezzoData.cantieri.forEach(function(cantiere) {';
+echo '            const statoColor = cantiere.stato === "attivo" ? "#28a745" : (cantiere.stato === "sospeso" ? "#ffc107" : "#6c757d");';
+echo '            const statoLabel = cantiere.stato === "attivo" ? "✅ Attivo" : (cantiere.stato === "sospeso" ? "⏸️ Sospeso" : "⚫ Completato");';
+echo '            content += `';
+echo '                <div style="background: white; padding: 14px; border-radius: 6px; border-left: 4px solid ${statoColor}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">';
+echo '                        <strong style="color: #212529; font-size: 15px;">🏗️ ${cantiere.nome}</strong>';
+echo '                        <span style="background: ${statoColor}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">${statoLabel}</span>';
+echo '                    </div>';
+echo '                    <div style="font-size: 13px; color: #495057; margin-top: 6px;">';
+echo '                        📅 Assegnato il: <strong>${new Date(cantiere.data_assegnazione).toLocaleDateString("it-IT")}</strong>';
+echo '                    </div>';
+echo '                </div>';
+echo '            `;';
+echo '        });';
+echo '        content += `';
+echo '                </div>';
+echo '            </div>';
+echo '        `;';
+echo '    }';
+echo '    ';
 echo '    if (needsVerifiche) {';
 echo '        content += `';
-echo '            <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border: 2px solid #ffc107;">';
-echo '                <h5 style="margin: 0 0 15px 0; color: #856404;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
-echo '                <div style="display: grid; gap: 12px; font-size: 12px;">';
-echo '                    <div style="padding: 10px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong>📅 Scadenza Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}';
+echo '            <div style="background: linear-gradient(135deg, #fff3cd, #fff8e1); padding: 20px; border-radius: 10px; border: 2px solid #ffc107; box-shadow: 0 2px 10px rgba(255,193,7,0.15);">';
+echo '                <h5 style="margin: 0 0 18px 0; color: #856404; font-size: 18px; font-weight: 700;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
+echo '                <div style="display: grid; gap: 15px; font-size: 14px;">';
+echo '                    <div style="padding: 14px; background: ${mezzoData.scadenza_verifiche_periodiche ? "white" : "linear-gradient(135deg, #f8d7da, #ffebee)"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                        <strong style="color: #212529; font-size: 14px;">📅 Scadenza Verifiche Periodiche:</strong><br>';
+echo '                        <span style="font-weight: 600; color: ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#721c24"};">${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "❌ Non impostata"}</span>';
 echo '                    </div>';
-echo '                    <div style="padding: 10px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong>📄 File Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724;">Visualizza documento</a>` : "<span style=\"color: #721c24;\">Non caricato</span>"}';
+echo '                    <div style="padding: 14px; background: ${mezzoData.file_verifiche_periodiche ? "linear-gradient(135deg, #d4edda, #e8f5e9)" : "linear-gradient(135deg, #f8d7da, #ffebee)"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"}; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">';
+echo '                        <strong style="color: #212529; font-size: 14px;">📄 File Verifiche Periodiche:</strong><br>';
+echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724; font-weight: 600; text-decoration: none;">📄 Visualizza documento</a>` : "<span style=\"color: #721c24; font-weight: 600;\">❌ Non caricato</span>"}';
 echo '                    </div>';
 echo '                </div>';
 echo '            </div>';
