@@ -3175,13 +3175,13 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         
         // Header accordion cantiere
         echo '<div class="hse_cantiere_accordion_header" onclick="hse_toggleCantiereAccordion(' . $hse_cantiere['id'] . ')" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #2196f3, #1976d2); color: white; transition: all 0.3s ease;">';
-        echo '<div class="hse_cantiere_header_left">';
-        echo '<h4 class="hse_cantiere_section_title" style="margin: 0;">🏗️ ' . htmlspecialchars($hse_cantiere['nome']) . '</h4>';
+        echo '<div class="hse_cantiere_header_left" style="color: white;">';
+        echo '<h4 class="hse_cantiere_section_title" style="margin: 0; color: white;">🏗️ ' . htmlspecialchars($hse_cantiere['nome']) . '</h4>';
         if ($hse_cantiere['descrizione']) {
-            echo '<p class="hse_cantiere_section_desc" style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">' . htmlspecialchars($hse_cantiere['descrizione']) . '</p>';
+            echo '<p class="hse_cantiere_section_desc" style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; color: white;">' . htmlspecialchars($hse_cantiere['descrizione']) . '</p>';
         }
         echo '</div>';
-        echo '<span class="hse_cantiere_accordion_arrow" id="hse_arrow_cantiere_' . $hse_cantiere['id'] . '" style="font-size: 18px; font-weight: bold; transition: transform 0.3s ease;">▼</span>';
+        echo '<span class="hse_cantiere_accordion_arrow" id="hse_arrow_cantiere_' . $hse_cantiere['id'] . '" style="font-size: 18px; font-weight: bold; transition: transform 0.3s ease; color: white;">▼</span>';
         echo '</div>';
         
         // Content accordion cantiere (chiuso di default)
