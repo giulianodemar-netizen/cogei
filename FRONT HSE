@@ -8073,13 +8073,23 @@ body.hse_font_adjusted p,
 body.hse_font_adjusted .hse_operai_help,
 body.hse_font_adjusted .hse_automezzi_help,
 body.hse_font_adjusted .hse_attrezzi_help,
-body.hse_font_adjusted .hse_cantiere_section_desc {
+body.hse_font_adjusted .hse_cantiere_section_desc,
+body.hse_font_adjusted .hse_cantiere_descrizione,
+body.hse_font_adjusted .hse_note_content,
+body.hse_font_adjusted .hse_dvr_warning_text,
+body.hse_font_adjusted .hse_warning_text,
+body.hse_font_adjusted .hse_rct_scadenza {
     font-size: var(--hse-text-size, 14px) !important;
 }
 
 body.hse_font_adjusted small,
 body.hse_font_adjusted .hse_success_date,
-body.hse_font_adjusted .hse_scadenza_date {
+body.hse_font_adjusted .hse_scadenza_date,
+body.hse_font_adjusted .hse_rct_info,
+body.hse_font_adjusted .hse_replace_hint,
+body.hse_font_adjusted .hse_progress_header,
+body.hse_font_adjusted .hse_note_label,
+body.hse_font_adjusted .hse_cantiere_info {
     font-size: var(--hse-small-size, 13px) !important;
 }
 
