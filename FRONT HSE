@@ -6569,6 +6569,240 @@ function hse_showDebugInfo() {
     return debugInfo;
 }
 </script>
+
+<!-- Font Size Accessibility Control Widget -->
+<div id="hse_font_size_control" class="collapsed">
+    <button id="hse_font_toggle_btn" title="Controllo dimensione caratteri" aria-label="Apri controllo dimensione caratteri">
+        Aa
+    </button>
+    <div id="hse_font_control_panel">
+        <div class="hse_font_control_title">
+            🔤 Dimensione Caratteri
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">📝 Etichette (Label)</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('label', -1)" title="Diminuisci dimensione etichette">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_label_value">15px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('label', 1)" title="Aumenta dimensione etichette">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">📌 Titoli</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('title', -1)" title="Diminuisci dimensione titoli">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_title_value">18px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('title', 1)" title="Aumenta dimensione titoli">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">✏️ Campi Input</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('input', -1)" title="Diminuisci dimensione campi">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_input_value">16px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('input', 1)" title="Aumenta dimensione campi">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">📄 Testo Normale</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('text', -1)" title="Diminuisci dimensione testo">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_text_value">14px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('text', 1)" title="Aumenta dimensione testo">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">🔘 Pulsanti</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('button', -1)" title="Diminuisci dimensione pulsanti">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_button_value">16px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('button', 1)" title="Aumenta dimensione pulsanti">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">🔍 Testo Piccolo</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('small', -1)" title="Diminuisci dimensione testo piccolo">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_small_value">13px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('small', 1)" title="Aumenta dimensione testo piccolo">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <button class="hse_font_control_reset" onclick="hseFontReset()" title="Ripristina tutte le dimensioni predefinite">
+            🔄 Ripristina Predefinite
+        </button>
+    </div>
+</div>
+
+<script>
+// Font Size Accessibility Control
+(function() {
+    // Default font sizes
+    const defaultSizes = {
+        label: 15,
+        title: 18,
+        input: 16,
+        button: 16,
+        text: 14,
+        small: 13
+    };
+    
+    // Current font sizes (loaded from localStorage or defaults)
+    let currentSizes = { ...defaultSizes };
+    
+    // Min/Max limits
+    const limits = {
+        label: { min: 12, max: 22 },
+        title: { min: 14, max: 28 },
+        input: { min: 14, max: 22 },
+        button: { min: 14, max: 22 },
+        text: { min: 12, max: 20 },
+        small: { min: 11, max: 18 }
+    };
+    
+    // Load saved preferences
+    function loadPreferences() {
+        const saved = localStorage.getItem('hse_font_sizes');
+        if (saved) {
+            try {
+                currentSizes = { ...defaultSizes, ...JSON.parse(saved) };
+            } catch (e) {
+                console.error('Error loading font size preferences:', e);
+            }
+        }
+        applyFontSizes();
+        updateDisplay();
+    }
+    
+    // Save preferences
+    function savePreferences() {
+        localStorage.setItem('hse_font_sizes', JSON.stringify(currentSizes));
+    }
+    
+    // Apply font sizes to document
+    function applyFontSizes() {
+        document.body.classList.add('hse_font_adjusted');
+        document.documentElement.style.setProperty('--hse-label-size', currentSizes.label + 'px');
+        document.documentElement.style.setProperty('--hse-title-size', currentSizes.title + 'px');
+        document.documentElement.style.setProperty('--hse-input-size', currentSizes.input + 'px');
+        document.documentElement.style.setProperty('--hse-button-size', currentSizes.button + 'px');
+        document.documentElement.style.setProperty('--hse-text-size', currentSizes.text + 'px');
+        document.documentElement.style.setProperty('--hse-small-size', currentSizes.small + 'px');
+    }
+    
+    // Update display values
+    function updateDisplay() {
+        document.getElementById('hse_label_value').textContent = currentSizes.label + 'px';
+        document.getElementById('hse_title_value').textContent = currentSizes.title + 'px';
+        document.getElementById('hse_input_value').textContent = currentSizes.input + 'px';
+        document.getElementById('hse_button_value').textContent = currentSizes.button + 'px';
+        document.getElementById('hse_text_value').textContent = currentSizes.text + 'px';
+        document.getElementById('hse_small_value').textContent = currentSizes.small + 'px';
+    }
+    
+    // Adjust font size
+    window.hseFontAdjust = function(type, delta) {
+        const newSize = currentSizes[type] + delta;
+        if (newSize >= limits[type].min && newSize <= limits[type].max) {
+            currentSizes[type] = newSize;
+            applyFontSizes();
+            updateDisplay();
+            savePreferences();
+            
+            // Show feedback
+            const action = delta > 0 ? 'aumentata' : 'diminuita';
+            const typeNames = {
+                label: 'Etichette',
+                title: 'Titoli',
+                input: 'Campi Input',
+                button: 'Pulsanti',
+                text: 'Testo',
+                small: 'Testo Piccolo'
+            };
+            hse_enhancedToast(`✓ ${typeNames[type]}: dimensione ${action} a ${newSize}px`, 'success', 2000, false);
+        } else {
+            const limit = delta > 0 ? 'massima' : 'minima';
+            hse_enhancedToast(`⚠️ Dimensione ${limit} raggiunta`, 'warning', 2000, false);
+        }
+    };
+    
+    // Reset all font sizes
+    window.hseFontReset = function() {
+        currentSizes = { ...defaultSizes };
+        applyFontSizes();
+        updateDisplay();
+        savePreferences();
+        hse_enhancedToast('✓ Dimensioni caratteri ripristinate ai valori predefiniti', 'success', 3000, true);
+    };
+    
+    // Toggle panel
+    const toggleBtn = document.getElementById('hse_font_toggle_btn');
+    const control = document.getElementById('hse_font_size_control');
+    
+    toggleBtn.addEventListener('click', function() {
+        control.classList.toggle('collapsed');
+        control.classList.toggle('expanded');
+        
+        if (control.classList.contains('expanded')) {
+            toggleBtn.innerHTML = '✕';
+            toggleBtn.title = 'Chiudi';
+        } else {
+            toggleBtn.innerHTML = 'Aa';
+            toggleBtn.title = 'Controllo dimensione caratteri';
+        }
+    });
+    
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+        if (control.classList.contains('expanded') && 
+            !control.contains(e.target)) {
+            control.classList.remove('expanded');
+            control.classList.add('collapsed');
+            toggleBtn.innerHTML = 'Aa';
+            toggleBtn.title = 'Controllo dimensione caratteri';
+        }
+    });
+    
+    // Prevent closing when clicking inside
+    control.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Initialize on load
+    loadPreferences();
+})();
+</script>
+
 <style>
 /* ================== STILI CSS HSE CON ACCORDION + NUOVI CAMPI ================== */
 
@@ -7652,5 +7886,213 @@ html {
 .hse_cantiere_form input.hse_field_warning {
     border-color: #ffc107 !important;
     background: rgba(255, 193, 7, 0.05);
+}
+
+/* ===== FONT SIZE ACCESSIBILITY CONTROL ===== */
+#hse_font_size_control {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 9999;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+#hse_font_size_control.collapsed {
+    width: 56px;
+    height: 56px;
+}
+
+#hse_font_size_control.expanded {
+    width: 320px;
+    padding: 20px;
+}
+
+#hse_font_toggle_btn {
+    width: 56px;
+    height: 56px;
+    border: none;
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+#hse_font_toggle_btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 24px rgba(33, 150, 243, 0.4);
+}
+
+#hse_font_control_panel {
+    display: none;
+    padding-top: 15px;
+}
+
+#hse_font_size_control.expanded #hse_font_control_panel {
+    display: block;
+}
+
+#hse_font_size_control.expanded #hse_font_toggle_btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+}
+
+.hse_font_control_title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #222;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hse_font_control_group {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.hse_font_control_group:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.hse_font_control_label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.hse_font_control_buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.hse_font_control_btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.hse_font_control_btn:hover {
+    border-color: #2196f3;
+    background: #e3f2fd;
+    transform: translateY(-1px);
+}
+
+.hse_font_control_btn:active {
+    transform: translateY(0);
+}
+
+.hse_font_control_reset {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ff9800;
+    background: #fff3e0;
+    color: #e65100;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+}
+
+.hse_font_control_reset:hover {
+    background: #ffe0b2;
+    border-color: #f57c00;
+    transform: translateY(-1px);
+}
+
+.hse_font_current_value {
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #2196f3;
+}
+
+/* Font size adjustments applied to elements */
+body.hse_font_adjusted label,
+body.hse_font_adjusted .hse_operai_label,
+body.hse_font_adjusted .hse_automezzi_label,
+body.hse_font_adjusted .hse_attrezzi_label,
+body.hse_font_adjusted .hse_pos_label,
+body.hse_font_adjusted .hse_pos_data_label {
+    font-size: var(--hse-label-size, 15px) !important;
+}
+
+body.hse_font_adjusted h3,
+body.hse_font_adjusted h4,
+body.hse_font_adjusted .hse_cantiere_section_title,
+body.hse_font_adjusted .hse_persona_title {
+    font-size: var(--hse-title-size, 18px) !important;
+}
+
+body.hse_font_adjusted input,
+body.hse_font_adjusted select,
+body.hse_font_adjusted textarea {
+    font-size: var(--hse-input-size, 16px) !important;
+}
+
+body.hse_font_adjusted button,
+body.hse_font_adjusted .hse_button,
+body.hse_font_adjusted input[type="submit"] {
+    font-size: var(--hse-button-size, 16px) !important;
+}
+
+body.hse_font_adjusted p,
+body.hse_font_adjusted .hse_operai_help,
+body.hse_font_adjusted .hse_automezzi_help,
+body.hse_font_adjusted .hse_attrezzi_help,
+body.hse_font_adjusted .hse_cantiere_section_desc {
+    font-size: var(--hse-text-size, 14px) !important;
+}
+
+body.hse_font_adjusted small,
+body.hse_font_adjusted .hse_success_date,
+body.hse_font_adjusted .hse_scadenza_date {
+    font-size: var(--hse-small-size, 13px) !important;
+}
+
+/* Responsive per mobile */
+@media (max-width: 768px) {
+    #hse_font_size_control.expanded {
+        width: calc(100vw - 40px);
+        max-width: 320px;
+    }
+    
+    #hse_font_size_control {
+        bottom: 10px;
+        left: 10px;
+    }
 }
 </style>
