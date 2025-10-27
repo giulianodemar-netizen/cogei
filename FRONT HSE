@@ -1845,7 +1845,7 @@ if ($hse_existing_data && $hse_existing_data['dvr_file']) {
     echo '<div class="hse_success_info" style="flex: 1;">';
     echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📄 File DVR Caricato</div>';
     if ($hse_existing_data['dvr_data_emissione']) {
-        echo '<div class="hse_success_date" style="font-size: 11px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_existing_data['dvr_data_emissione'])) . '</div>';
+        echo '<div class="hse_success_date" style="font-size: 14px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_existing_data['dvr_data_emissione'])) . '</div>';
     }
     echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
     echo '<a href="' . esc_url($hse_existing_data['dvr_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza Documento</a>';
@@ -3225,7 +3225,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             echo '<div class="hse_success_info" style="flex: 1;">';
             echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📋 File POS Caricato</div>';
             if ($hse_pos_data['pos_data_emissione']) {
-                echo '<div class="hse_success_date" style="font-size: 11px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_pos_data['pos_data_emissione'])) . '</div>';
+                echo '<div class="hse_success_date" style="font-size: 14px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_pos_data['pos_data_emissione'])) . '</div>';
             }
             echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
             echo '<a href="' . esc_url($hse_pos_data['pos_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza POS</a>';
@@ -3245,8 +3245,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             $hse_operai_assegnati = hse_getOperaiAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
             $hse_operai_assegnati_ids = array_map(function($op) { return $op['operaio_id']; }, $hse_operai_assegnati);
             
-            echo '<div class="hse_operai_selection_container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">';
-            echo '<p class="hse_operai_help" style="color: #666; margin-bottom: 15px;">Seleziona gli operai che lavoreranno in questo cantiere specifico:</p>';
+            echo '<div class="hse_operai_selection_container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 10px;">';
+            echo '<p class="hse_operai_help" style="color: #666; margin-bottom: 15px; width: 100%;">Seleziona gli operai che lavoreranno in questo cantiere specifico:</p>';
             
             foreach ($hse_existing_data['personale'] as $index => $hse_persona) {
                 $hse_fullName = $hse_persona['nome'] . ' ' . $hse_persona['cognome'];
@@ -3300,8 +3300,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
                 
                 $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
                 
-                echo '<label class="hse_operaio_checkbox" style="display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px; cursor: pointer; background: rgba(227, 242, 253, 0.3); border-radius: 6px; border: 2px solid #2196f3; transition: all 0.3s ease; ' . $hse_label_style . '">';
-                echo '<input type="checkbox" name="hse_operai_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_persona['id'] . '" ' . $hse_isSelected . ' onchange="hse_updateSkillsForCantiere(' . $hse_cantiere['id'] . ')" class="hse_operaio_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196f3;">';
+                echo '<label class="hse_operaio_checkbox" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 0; cursor: pointer; background: rgba(227, 242, 253, 0.3); border-radius: 6px; border: 2px solid #2196f3; transition: all 0.3s ease; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_operai_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_persona['id'] . '" ' . $hse_isSelected . ' onchange="hse_updateSkillsForCantiere(' . $hse_cantiere['id'] . ')" class="hse_operaio_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196f3; flex-shrink: 0;">';
                 echo '<span class="hse_operaio_name" style="font-size: 15px; font-weight: 600;">👷 ' . htmlspecialchars($hse_fullName) . $hse_warning_text . $hse_assignment_info . '</span>';
                 echo '</label>';
             }
@@ -3322,8 +3322,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             $hse_automezzi_assegnati = hse_getAutomezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
             $hse_automezzi_assegnati_ids = array_map(function($au) { return $au['automezzo_id']; }, $hse_automezzi_assegnati);
             
-            echo '<div class="hse_automezzi_selection_container" style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffc107;">';
-            echo '<p class="hse_automezzi_help" style="color: #856404; margin-bottom: 15px;">Seleziona gli automezzi che utilizzerai in questo cantiere specifico:</p>';
+            echo '<div class="hse_automezzi_selection_container" style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffc107; display: flex; flex-wrap: wrap; gap: 10px;">';
+            echo '<p class="hse_automezzi_help" style="color: #856404; margin-bottom: 15px; width: 100%;">Seleziona gli automezzi che utilizzerai in questo cantiere specifico:</p>';
             
             foreach ($hse_existing_data['automezzi'] as $index => $hse_automezzo) {
                 $hse_automezzoName = $hse_automezzo['descrizione_automezzo'] . ' (' . $hse_automezzo['targa'] . ')';
@@ -3342,8 +3342,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
                 $hse_label_style = 'color: #856404;';
                 $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
                 
-                echo '<label class="hse_automezzo_checkbox" style="display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px; cursor: pointer; background: rgba(255, 243, 205, 0.5); border-radius: 6px; border: 2px solid #ffc107; transition: all 0.3s ease; ' . $hse_label_style . '">';
-                echo '<input type="checkbox" name="hse_automezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_automezzo['id'] . '" ' . $hse_isSelected . ' class="hse_automezzo_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ffc107;">';
+                echo '<label class="hse_automezzo_checkbox" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 0; cursor: pointer; background: rgba(255, 243, 205, 0.5); border-radius: 6px; border: 2px solid #ffc107; transition: all 0.3s ease; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_automezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_automezzo['id'] . '" ' . $hse_isSelected . ' class="hse_automezzo_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ffc107; flex-shrink: 0;">';
                 echo '<span class="hse_automezzo_name" style="font-size: 15px; font-weight: 600;">🚛 ' . htmlspecialchars($hse_automezzoName) . $hse_assignment_info . '</span>';
                 echo '</label>';
             }
@@ -3364,8 +3364,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             $hse_attrezzi_assegnati = hse_getAttrezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
             $hse_attrezzi_assegnati_ids = array_map(function($at) { return $at['attrezzo_id']; }, $hse_attrezzi_assegnati);
             
-            echo '<div class="hse_attrezzi_selection_container" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #2196f3;">';
-            echo '<p class="hse_attrezzi_help" style="color: #1565c0; margin-bottom: 15px;">Seleziona gli attrezzi che utilizzerai in questo cantiere specifico:</p>';
+            echo '<div class="hse_attrezzi_selection_container" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #2196f3; display: flex; flex-wrap: wrap; gap: 10px;">';
+            echo '<p class="hse_attrezzi_help" style="color: #1565c0; margin-bottom: 15px; width: 100%;">Seleziona gli attrezzi che utilizzerai in questo cantiere specifico:</p>';
             
             foreach ($hse_existing_data['attrezzi'] as $index => $hse_attrezzo) {
                 $hse_attrezzoName = $hse_attrezzo['descrizione_attrezzo'];
@@ -3398,8 +3398,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
                 
                 $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
                 
-                echo '<label class="hse_attrezzo_checkbox" style="display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px; cursor: pointer; background: rgba(227, 242, 253, 0.5); border-radius: 6px; border: 2px solid #2196f3; transition: all 0.3s ease; ' . $hse_label_style . '">';
-                echo '<input type="checkbox" name="hse_attrezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_attrezzo['id'] . '" ' . $hse_isSelected . ' class="hse_attrezzo_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196f3;">';
+                echo '<label class="hse_attrezzo_checkbox" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 0; cursor: pointer; background: rgba(227, 242, 253, 0.5); border-radius: 6px; border: 2px solid #2196f3; transition: all 0.3s ease; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_attrezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_attrezzo['id'] . '" ' . $hse_isSelected . ' class="hse_attrezzo_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196f3; flex-shrink: 0;">';
                 echo '<span class="hse_attrezzo_name" style="font-size: 15px; font-weight: 600;">🔧 ' . htmlspecialchars($hse_attrezzoName) . $hse_warning_text . $hse_assignment_info . '</span>';
                 echo '</label>';
             }
