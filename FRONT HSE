@@ -1845,7 +1845,7 @@ if ($hse_existing_data && $hse_existing_data['dvr_file']) {
     echo '<div class="hse_success_info" style="flex: 1;">';
     echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📄 File DVR Caricato</div>';
     if ($hse_existing_data['dvr_data_emissione']) {
-        echo '<div class="hse_success_date" style="font-size: 11px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_existing_data['dvr_data_emissione'])) . '</div>';
+        echo '<div class="hse_success_date" style="font-size: 14px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_existing_data['dvr_data_emissione'])) . '</div>';
     }
     echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
     echo '<a href="' . esc_url($hse_existing_data['dvr_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza Documento</a>';
@@ -1927,7 +1927,7 @@ if ($rct_has_data) {
     echo '</div>';
     echo '<div class="hse_rct_info" style="font-size: 11px; color: #6c757d; margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px;">';
     echo '<div>📋 <strong>Documento importato dall\'iscrizione fornitore</strong></div>';
-    echo '<div style="margin-top: 4px;">Per aggiornare questo documento, modifica la tua iscrizione nella sezione "I Miei Dati"</div>';
+    echo '<div style="margin-top: 6px;">Per aggiornare questo documento, modifica la tua iscrizione nella sezione "I Miei Dati"</div>';
     echo '</div>';
     echo '</div>';
 } else {
@@ -2023,17 +2023,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         // Content accordion persona (chiuso di default)
         echo '<div class="hse_persona_accordion_content" id="hse_content_persona_' . $index . '" style="display: none; padding: 20px; transition: all 0.3s ease;">';
         
-        // Mostra cantieri assegnati se presente
+        // Mostra cantieri assegnati se presente - INLINE
         if ($hse_is_assigned) {
             echo '<div class="hse_operaio_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
-            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            echo '<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">';
+            echo '<span style="color: #856404; font-size: 15px; font-weight: bold; margin-right: 4px;">🏗️ Cantieri Assegnati:</span>';
             foreach ($hse_operaio_cantieri as $cantiere_info) {
                 $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
-                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
-                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
-                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
-                echo '</div>';
+                echo '<span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 193, 7, 0.2); padding: 4px 10px; border-radius: 12px; font-size: 14px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: 600;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</span>';
             }
+            echo '</div>';
             echo '</div>';
         }
         
@@ -2052,15 +2054,15 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>';
         echo '<div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
         echo '<div class="hse_nome_field">';
-        echo '<label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome *:</label>';
+        echo '<label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">Nome *:</label>';
         echo '<input type="text" name="hse_personale_nome[]" value="' . esc_attr($hse_persona['nome']) . '" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">';
         echo '</div>';
         echo '<div class="hse_cognome_field">';
-        echo '<label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome *:</label>';
+        echo '<label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">Cognome *:</label>';
         echo '<input type="text" name="hse_personale_cognome[]" value="' . esc_attr($hse_persona['cognome']) . '" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">';
         echo '</div>';
         echo '<div class="hse_data_nascita_field">';
-        echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita *:</label>';
+        echo '<label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">Data di Nascita *:</label>';
         echo '<input type="date" name="hse_personale_data_nascita[]" value="' . esc_attr($hse_persona['data_nascita']) . '" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">';
         echo '</div>';
         echo '</div>'; // Fine hse_dati_personali_grid
@@ -2107,7 +2109,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // UNILAV File
         echo '<div class="hse_unilav_file_field">';
-        echo '<label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV *:</label>';
+        echo '<label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">📄 File UNILAV *:</label>';
         if (!empty($hse_persona['unilav_file'])) {
             echo '<div class="hse_unilav_file_success" style="margin-bottom: 6px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 6px;">';
@@ -2115,7 +2117,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '<div class="hse_file_success_info" style="flex: 1;">';
             echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">📄 UNILAV caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 4px; align-items: center;">';
-            echo '<a href="' . esc_url($hse_persona['unilav_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 9px;">👁️ Visualizza</a>';
+            echo '<a href="' . esc_url($hse_persona['unilav_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '<button type="button" onclick="hse_deleteDocumentoFile(\'unilav\', ' . $index . ')" class="hse_delete_documento_btn" style="background: #dc3545; color: white; border: none; padding: 1px 4px; border-radius: 2px; font-size: 8px; cursor: pointer;">🗑️</button>';
             echo '</div>';
             echo '</div>';
@@ -2135,7 +2137,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Idoneità Sanitaria Scadenza
         echo '<div class="hse_idoneita_sanitaria_field">';
-        echo '<label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza *:</label>';
+        echo '<label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">⏰ Scadenza *:</label>';
         $hse_idoneita_scadenza_value = !empty($hse_persona['idoneita_sanitaria_scadenza']) ? $hse_persona['idoneita_sanitaria_scadenza'] : '';
         $hse_idoneita_scadenza_style = 'width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;';
         
@@ -2158,7 +2160,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Idoneità Sanitaria File
         echo '<div class="hse_idoneita_file_field">';
-        echo '<label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità *:</label>';
+        echo '<label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">📄 File Idoneità *:</label>';
         if (!empty($hse_persona['idoneita_sanitaria_file'])) {
             echo '<div class="hse_idoneita_file_success" style="margin-bottom: 6px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
             echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 6px;">';
@@ -2166,7 +2168,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '<div class="hse_file_success_info" style="flex: 1;">';
             echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">🏥 Idoneità caricata</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 4px; align-items: center;">';
-            echo '<a href="' . esc_url($hse_persona['idoneita_sanitaria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 9px;">👁️ Visualizza</a>';
+            echo '<a href="' . esc_url($hse_persona['idoneita_sanitaria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '<button type="button" onclick="hse_deleteDocumentoFile(\'idoneita_sanitaria\', ' . $index . ')" class="hse_delete_documento_btn" style="background: #dc3545; color: white; border: none; padding: 1px 4px; border-radius: 2px; font-size: 8px; cursor: pointer;">🗑️</button>';
             echo '</div>';
             echo '</div>';
@@ -2191,20 +2193,20 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_antincendio_field">';
         echo '<label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione e nomina Antincendio:</label>';
         if (!empty($hse_persona['formazione_antincendio_file'])) {
-            echo '<div class="hse_antincendio_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_antincendio_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🔥 File Antincendio Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🔥 File Antincendio Caricato</div>';
             if (!empty($hse_persona['formazione_antincendio_data_emissione'])) {
-                echo '<div class="hse_file_success_date" style="font-size: 10px; color: #155724;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_antincendio_data_emissione'])) . '</div>';
+                echo '<div class="hse_file_success_date" style="font-size: 14px; color: #155724; font-weight: 600;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_antincendio_data_emissione'])) . '</div>';
             }
             if (!empty($hse_persona['formazione_antincendio_data_scadenza'])) {
-                echo '<div class="hse_file_success_expiry" style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_antincendio_data_scadenza'])) . '</div>';
+                echo '<div class="hse_file_success_expiry" style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_antincendio_data_scadenza'])) . '</div>';
             }
-            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_antincendio_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
-            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_antincendio\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_antincendio_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_antincendio\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2214,12 +2216,12 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Data emissione Antincendio
         $hse_antincendio_emissione_value = !empty($hse_persona['formazione_antincendio_data_emissione']) ? $hse_persona['formazione_antincendio_data_emissione'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
         echo '<input type="date" name="hse_formazione_antincendio_emissione_' . $index . '" id="hse_formazione_antincendio_emissione_' . $index . '" value="' . esc_attr($hse_antincendio_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 3, document.getElementById(\'hse_formazione_antincendio_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         
         // Data scadenza Antincendio (readonly - calcolata)
         $hse_antincendio_scadenza_value = !empty($hse_persona['formazione_antincendio_data_scadenza']) ? $hse_persona['formazione_antincendio_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 3 anni):</label>';
         echo '<input type="date" name="hse_formazione_antincendio_scadenza_' . $index . '" id="hse_formazione_antincendio_scadenza_' . $index . '" value="' . esc_attr($hse_antincendio_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '</div>';
         
@@ -2237,20 +2239,20 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_primo_soccorso_field">';
         echo '<label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione e nomina Primo Soccorso:</label>';
         if (!empty($hse_persona['formazione_primo_soccorso_file'])) {
-            echo '<div class="hse_primo_soccorso_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_primo_soccorso_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🚑 File Primo Soccorso Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🚑 File Primo Soccorso Caricato</div>';
             if (!empty($hse_persona['formazione_primo_soccorso_data_emissione'])) {
-                echo '<div class="hse_file_success_date" style="font-size: 10px; color: #155724;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_primo_soccorso_data_emissione'])) . '</div>';
+                echo '<div class="hse_file_success_date" style="font-size: 14px; color: #155724; font-weight: 600;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_primo_soccorso_data_emissione'])) . '</div>';
             }
             if (!empty($hse_persona['formazione_primo_soccorso_data_scadenza'])) {
-                echo '<div class="hse_file_success_expiry" style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_primo_soccorso_data_scadenza'])) . '</div>';
+                echo '<div class="hse_file_success_expiry" style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_primo_soccorso_data_scadenza'])) . '</div>';
             }
-            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_primo_soccorso_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
-            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_primo_soccorso\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_primo_soccorso_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_primo_soccorso\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2260,12 +2262,12 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Data emissione Primo Soccorso
         $hse_primo_soccorso_emissione_value = !empty($hse_persona['formazione_primo_soccorso_data_emissione']) ? $hse_persona['formazione_primo_soccorso_data_emissione'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
         echo '<input type="date" name="hse_formazione_primo_soccorso_emissione_' . $index . '" id="hse_formazione_primo_soccorso_emissione_' . $index . '" value="' . esc_attr($hse_primo_soccorso_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 3, document.getElementById(\'hse_formazione_primo_soccorso_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         
         // Data scadenza Primo Soccorso (readonly - calcolata)
         $hse_primo_soccorso_scadenza_value = !empty($hse_persona['formazione_primo_soccorso_data_scadenza']) ? $hse_persona['formazione_primo_soccorso_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 3 anni):</label>';
         echo '<input type="date" name="hse_formazione_primo_soccorso_scadenza_' . $index . '" id="hse_formazione_primo_soccorso_scadenza_' . $index . '" value="' . esc_attr($hse_primo_soccorso_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '</div>';
         
@@ -2283,20 +2285,20 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_preposti_field">';
         echo '<label class="hse_preposti_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👮 Formazione e nomina Preposti:</label>';
         if (!empty($hse_persona['formazione_preposti_file'])) {
-            echo '<div class="hse_preposti_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_preposti_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">👮 File Preposti Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👮 File Preposti Caricato</div>';
             if (!empty($hse_persona['formazione_preposti_data_nomina'])) {
                 echo '<div class="hse_file_success_date" style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['formazione_preposti_data_nomina'])) . '</div>';
             }
             if (!empty($hse_persona['formazione_preposti_data_scadenza'])) {
-                echo '<div class="hse_file_success_expiry" style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_preposti_data_scadenza'])) . '</div>';
+                echo '<div class="hse_file_success_expiry" style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_preposti_data_scadenza'])) . '</div>';
             }
-            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_preposti_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
-            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_preposti\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer;">🗑️</button>';
+            echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_preposti_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_deleteFormazioneFile(\'formazione_preposti\', ' . $index . ')" class="hse_delete_formazione_btn" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2311,7 +2313,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Data scadenza Preposti (readonly - calcolata)
         $hse_preposti_scadenza_value = !empty($hse_persona['formazione_preposti_data_scadenza']) ? $hse_persona['formazione_preposti_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 2 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 2 anni):</label>';
         echo '<input type="date" name="hse_formazione_preposti_scadenza_' . $index . '" id="hse_formazione_preposti_scadenza_' . $index . '" value="' . esc_attr($hse_preposti_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '</div>';
         
@@ -2336,19 +2338,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_formazione_generale_specifica_field">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🎓 Formazione Generale e Specifica:</label>';
         if (!empty($hse_persona['formazione_generale_specifica_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🎓 File Caricato</div>';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🎓 File Caricato</div>';
             if (!empty($hse_persona['formazione_generale_specifica_data_emissione'])) {
-                echo '<div style="font-size: 10px; color: #155724;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_generale_specifica_data_emissione'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_generale_specifica_data_emissione'])) . '</div>';
             }
             if (!empty($hse_persona['formazione_generale_specifica_data_scadenza'])) {
-                echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_generale_specifica_data_scadenza'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_generale_specifica_data_scadenza'])) . '</div>';
             }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2356,10 +2358,10 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         }
         echo '<input type="file" name="hse_formazione_generale_specifica_' . $index . '" id="hse_formazione_generale_specifica_file_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
         $hse_gen_spec_emissione = !empty($hse_persona['formazione_generale_specifica_data_emissione']) ? $hse_persona['formazione_generale_specifica_data_emissione'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
         echo '<input type="date" name="hse_formazione_generale_specifica_emissione_' . $index . '" id="hse_formazione_generale_specifica_emissione_' . $index . '" value="' . esc_attr($hse_gen_spec_emissione) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_generale_specifica_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         $hse_gen_spec_scadenza = !empty($hse_persona['formazione_generale_specifica_data_scadenza']) ? $hse_persona['formazione_generale_specifica_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
         echo '<input type="date" name="hse_formazione_generale_specifica_scadenza_' . $index . '" id="hse_formazione_generale_specifica_scadenza_' . $index . '" value="' . esc_attr($hse_gen_spec_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_generale_specifica_file_' . $index . '"),document.getElementById("hse_formazione_generale_specifica_emissione_' . $index . '"),5,document.getElementById("hse_formazione_generale_specifica_scadenza_' . $index . '"));</script>';
         echo '</div>';
@@ -2368,19 +2370,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_rspp_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RSPP (OBBLIGATORIO) *:</label>';
         if (!empty($hse_persona['rspp_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">👷 RSPP Caricato</div>';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👷 RSPP Caricato</div>';
             if (!empty($hse_persona['rspp_data_nomina'])) {
                 echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['rspp_data_nomina'])) . '</div>';
             }
             if (!empty($hse_persona['rspp_data_scadenza'])) {
-                echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['rspp_data_scadenza'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['rspp_data_scadenza'])) . '</div>';
             }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['rspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['rspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2391,7 +2393,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
         echo '<input type="date" name="hse_rspp_nomina_' . $index . '" id="hse_rspp_nomina_' . $index . '" value="' . esc_attr($hse_rspp_nomina) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_rspp_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         $hse_rspp_scadenza = !empty($hse_persona['rspp_data_scadenza']) ? $hse_persona['rspp_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
         echo '<input type="date" name="hse_rspp_scadenza_' . $index . '" id="hse_rspp_scadenza_' . $index . '" value="' . esc_attr($hse_rspp_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rspp_file_' . $index . '"),document.getElementById("hse_rspp_nomina_' . $index . '"),5,document.getElementById("hse_rspp_scadenza_' . $index . '"));</script>';
         echo '</div>';
@@ -2400,19 +2402,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_rls_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RLS (OBBLIGATORIO) *:</label>';
         if (!empty($hse_persona['rls_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">👷 RLS Caricato</div>';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👷 RLS Caricato</div>';
             if (!empty($hse_persona['rls_data_nomina'])) {
                 echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['rls_data_nomina'])) . '</div>';
             }
             if (!empty($hse_persona['rls_data_scadenza'])) {
-                echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['rls_data_scadenza'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['rls_data_scadenza'])) . '</div>';
             }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['rls_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['rls_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2423,7 +2425,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
         echo '<input type="date" name="hse_rls_nomina_' . $index . '" id="hse_rls_nomina_' . $index . '" value="' . esc_attr($hse_rls_nomina) . '" onchange="hse_calculateExpiryDate(this, 1, document.getElementById(\'hse_rls_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         $hse_rls_scadenza = !empty($hse_persona['rls_data_scadenza']) ? $hse_persona['rls_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 1 anno):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 1 anno):</label>';
         echo '<input type="date" name="hse_rls_scadenza_' . $index . '" id="hse_rls_scadenza_' . $index . '" value="' . esc_attr($hse_rls_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rls_file_' . $index . '"),document.getElementById("hse_rls_nomina_' . $index . '"),1,document.getElementById("hse_rls_scadenza_' . $index . '"));</script>';
         echo '</div>';
@@ -2432,19 +2434,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_aspp_field">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 ASPP (opzionale):</label>';
         if (!empty($hse_persona['aspp_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">👷 ASPP Caricato</div>';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👷 ASPP Caricato</div>';
             if (!empty($hse_persona['aspp_data_nomina'])) {
                 echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['aspp_data_nomina'])) . '</div>';
             }
             if (!empty($hse_persona['aspp_data_scadenza'])) {
-                echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['aspp_data_scadenza'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['aspp_data_scadenza'])) . '</div>';
             }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['aspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['aspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2455,7 +2457,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
         echo '<input type="date" name="hse_aspp_nomina_' . $index . '" id="hse_aspp_nomina_' . $index . '" value="' . esc_attr($hse_aspp_nomina) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_aspp_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         $hse_aspp_scadenza = !empty($hse_persona['aspp_data_scadenza']) ? $hse_persona['aspp_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
         echo '<input type="date" name="hse_aspp_scadenza_' . $index . '" id="hse_aspp_scadenza_' . $index . '" value="' . esc_attr($hse_aspp_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_aspp_file_' . $index . '"),document.getElementById("hse_aspp_nomina_' . $index . '"),5,document.getElementById("hse_aspp_scadenza_' . $index . '"));</script>';
         echo '</div>';
@@ -2464,19 +2466,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_formazione_ple_field">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>';
         if (!empty($hse_persona['formazione_ple_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🏗️ File PLE Caricato</div>';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🏗️ File PLE Caricato</div>';
             if (!empty($hse_persona['formazione_ple_data_emissione'])) {
-                echo '<div style="font-size: 10px; color: #155724;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_ple_data_emissione'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_ple_data_emissione'])) . '</div>';
             }
             if (!empty($hse_persona['formazione_ple_data_scadenza'])) {
-                echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_ple_data_scadenza'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_ple_data_scadenza'])) . '</div>';
             }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_ple_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2484,10 +2486,10 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         }
         echo '<input type="file" name="hse_formazione_ple_' . $index . '" id="hse_formazione_ple_file_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
         $hse_ple_emissione = !empty($hse_persona['formazione_ple_data_emissione']) ? $hse_persona['formazione_ple_data_emissione'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
         echo '<input type="date" name="hse_formazione_ple_emissione_' . $index . '" id="hse_formazione_ple_emissione_' . $index . '" value="' . esc_attr($hse_ple_emissione) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_ple_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         $hse_ple_scadenza = !empty($hse_persona['formazione_ple_data_scadenza']) ? $hse_persona['formazione_ple_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
         echo '<input type="date" name="hse_formazione_ple_scadenza_' . $index . '" id="hse_formazione_ple_scadenza_' . $index . '" value="' . esc_attr($hse_ple_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_ple_file_' . $index . '"),document.getElementById("hse_formazione_ple_emissione_' . $index . '"),5,document.getElementById("hse_formazione_ple_scadenza_' . $index . '"));</script>';
         echo '</div>';
@@ -2496,19 +2498,19 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_formazione_carrelli_field">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚜 Formazione Utilizzo Carrelli Elevatori:</label>';
         if (!empty($hse_persona['formazione_carrelli_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🚜 File Carrelli Caricato</div>';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🚜 File Carrelli Caricato</div>';
             if (!empty($hse_persona['formazione_carrelli_data_emissione'])) {
-                echo '<div style="font-size: 10px; color: #155724;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_carrelli_data_emissione'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">📅 Emissione: ' . date('d/m/Y', strtotime($hse_persona['formazione_carrelli_data_emissione'])) . '</div>';
             }
             if (!empty($hse_persona['formazione_carrelli_data_scadenza'])) {
-                echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_carrelli_data_scadenza'])) . '</div>';
+                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['formazione_carrelli_data_scadenza'])) . '</div>';
             }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
+            echo '<a href="' . esc_url($hse_persona['formazione_carrelli_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '</div>';
             echo '</div>';
             echo '</div>';
@@ -2516,10 +2518,10 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         }
         echo '<input type="file" name="hse_formazione_carrelli_' . $index . '" id="hse_formazione_carrelli_file_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
         $hse_carrelli_emissione = !empty($hse_persona['formazione_carrelli_data_emissione']) ? $hse_persona['formazione_carrelli_data_emissione'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
         echo '<input type="date" name="hse_formazione_carrelli_emissione_' . $index . '" id="hse_formazione_carrelli_emissione_' . $index . '" value="' . esc_attr($hse_carrelli_emissione) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_carrelli_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
         $hse_carrelli_scadenza = !empty($hse_persona['formazione_carrelli_data_scadenza']) ? $hse_persona['formazione_carrelli_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
         echo '<input type="date" name="hse_formazione_carrelli_scadenza_' . $index . '" id="hse_formazione_carrelli_scadenza_' . $index . '" value="' . esc_attr($hse_carrelli_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_carrelli_file_' . $index . '"),document.getElementById("hse_formazione_carrelli_emissione_' . $index . '"),5,document.getElementById("hse_formazione_carrelli_scadenza_' . $index . '"));</script>';
         echo '</div>';
@@ -2540,13 +2542,13 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_lavori_quota_field">';
         echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
         if (!empty($hse_persona['formazione_lavori_quota_file'])) {
-            echo '<div class="hse_lavori_quota_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_lavori_quota_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🏗️ File Lavori in Quota Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🏗️ File Lavori in Quota Caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_lavori_quota_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<a href="' . esc_url($hse_persona['formazione_lavori_quota_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_lavori_quota_file']) . '\', \'formazione_lavori_quota_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
@@ -2561,13 +2563,13 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_dpi_terza_categoria_field">';
         echo '<label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>';
         if (!empty($hse_persona['formazione_dpi_terza_categoria_file'])) {
-            echo '<div class="hse_dpi_terza_categoria_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_dpi_terza_categoria_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🦺 File DPI 3° categoria Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🦺 File DPI 3° categoria Caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<a href="' . esc_url($hse_persona['formazione_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_dpi_terza_categoria_file']) . '\', \'formazione_dpi_terza_categoria_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
@@ -2582,13 +2584,13 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<div class="hse_ambienti_confinati_field">';
         echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
         if (!empty($hse_persona['formazione_ambienti_confinati_file'])) {
-            echo '<div class="hse_ambienti_confinati_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 10px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div class="hse_file_success_content" style="display: flex; align-items: center; gap: 8px;">';
-            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</span>';
+            echo '<div class="hse_ambienti_confinati_success" style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div class="hse_file_success_content" style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span class="hse_file_success_icon" style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
             echo '<div class="hse_file_success_info" style="flex: 1;">';
-            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 11px; margin-bottom: 2px;">🕳️ File Ambienti Confinati Caricato</div>';
+            echo '<div class="hse_file_success_title" style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">🕳️ File Ambienti Confinati Caricato</div>';
             echo '<div class="hse_file_success_actions" style="display: flex; gap: 6px; align-items: center;">';
-            echo '<a href="' . esc_url($hse_persona['formazione_ambienti_confinati_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: bold; font-size: 10px;">👁️ Visualizza</a>';
+            echo '<a href="' . esc_url($hse_persona['formazione_ambienti_confinati_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
             echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['formazione_ambienti_confinati_file']) . '\', \'formazione_ambienti_confinati_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
             echo '</div>';
             echo '</div>';
@@ -2694,9 +2696,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div class="hse_antincendio_field">';
     echo '<label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione e nomina Antincendio:</label>';
     echo '<input type="file" name="hse_formazione_antincendio_0" id="hse_formazione_antincendio_file_0" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
     echo '<input type="date" name="hse_formazione_antincendio_emissione_0" id="hse_formazione_antincendio_emissione_0" onchange="hse_calculateExpiryDate(this, 3, document.getElementById(\'hse_formazione_antincendio_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 3 anni):</label>';
     echo '<input type="date" name="hse_formazione_antincendio_scadenza_0" id="hse_formazione_antincendio_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_antincendio_file_0"),document.getElementById("hse_formazione_antincendio_emissione_0"),3,document.getElementById("hse_formazione_antincendio_scadenza_0"));</script>';
     echo '</div>';
@@ -2704,9 +2706,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div class="hse_primo_soccorso_field">';
     echo '<label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione e nomina Primo Soccorso:</label>';
     echo '<input type="file" name="hse_formazione_primo_soccorso_0" id="hse_formazione_primo_soccorso_file_0" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
     echo '<input type="date" name="hse_formazione_primo_soccorso_emissione_0" id="hse_formazione_primo_soccorso_emissione_0" onchange="hse_calculateExpiryDate(this, 3, document.getElementById(\'hse_formazione_primo_soccorso_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 3 anni):</label>';
     echo '<input type="date" name="hse_formazione_primo_soccorso_scadenza_0" id="hse_formazione_primo_soccorso_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_primo_soccorso_file_0"),document.getElementById("hse_formazione_primo_soccorso_emissione_0"),3,document.getElementById("hse_formazione_primo_soccorso_scadenza_0"));</script>';
     echo '</div>';
@@ -2716,7 +2718,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<input type="file" name="hse_formazione_preposti_0" id="hse_formazione_preposti_file_0" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
     echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
     echo '<input type="date" name="hse_formazione_preposti_nomina_0" id="hse_formazione_preposti_nomina_0" onchange="hse_calculateExpiryDate(this, 2, document.getElementById(\'hse_formazione_preposti_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 2 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 2 anni):</label>';
     echo '<input type="date" name="hse_formazione_preposti_scadenza_0" id="hse_formazione_preposti_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_preposti_file_0"),document.getElementById("hse_formazione_preposti_nomina_0"),2,document.getElementById("hse_formazione_preposti_scadenza_0"));</script>';
     echo '</div>';
@@ -2732,9 +2734,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div>';
     echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🎓 Formazione Generale e Specifica:</label>';
     echo '<input type="file" name="hse_formazione_generale_specifica_0" id="hse_formazione_generale_specifica_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
     echo '<input type="date" name="hse_formazione_generale_specifica_emissione_0" id="hse_formazione_generale_specifica_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_generale_specifica_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
     echo '<input type="date" name="hse_formazione_generale_specifica_scadenza_0" id="hse_formazione_generale_specifica_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_generale_specifica_file_0"),document.getElementById("hse_formazione_generale_specifica_emissione_0"),5,document.getElementById("hse_formazione_generale_specifica_scadenza_0"));</script>';
     echo '</div>';
@@ -2745,7 +2747,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<input type="file" name="hse_rspp_0" id="hse_rspp_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">';
     echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
     echo '<input type="date" name="hse_rspp_nomina_0" id="hse_rspp_nomina_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_rspp_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
     echo '<input type="date" name="hse_rspp_scadenza_0" id="hse_rspp_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rspp_file_0"),document.getElementById("hse_rspp_nomina_0"),5,document.getElementById("hse_rspp_scadenza_0"));</script>';
     echo '</div>';
@@ -2756,7 +2758,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<input type="file" name="hse_rls_0" id="hse_rls_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">';
     echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
     echo '<input type="date" name="hse_rls_nomina_0" id="hse_rls_nomina_0" onchange="hse_calculateExpiryDate(this, 1, document.getElementById(\'hse_rls_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 1 anno):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 1 anno):</label>';
     echo '<input type="date" name="hse_rls_scadenza_0" id="hse_rls_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rls_file_0"),document.getElementById("hse_rls_nomina_0"),1,document.getElementById("hse_rls_scadenza_0"));</script>';
     echo '</div>';
@@ -2767,7 +2769,7 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<input type="file" name="hse_aspp_0" id="hse_aspp_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
     echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
     echo '<input type="date" name="hse_aspp_nomina_0" id="hse_aspp_nomina_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_aspp_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
     echo '<input type="date" name="hse_aspp_scadenza_0" id="hse_aspp_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_aspp_file_0"),document.getElementById("hse_aspp_nomina_0"),5,document.getElementById("hse_aspp_scadenza_0"));</script>';
     echo '</div>';
@@ -2776,9 +2778,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div>';
     echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>';
     echo '<input type="file" name="hse_formazione_ple_0" id="hse_formazione_ple_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
     echo '<input type="date" name="hse_formazione_ple_emissione_0" id="hse_formazione_ple_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_ple_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
     echo '<input type="date" name="hse_formazione_ple_scadenza_0" id="hse_formazione_ple_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_ple_file_0"),document.getElementById("hse_formazione_ple_emissione_0"),5,document.getElementById("hse_formazione_ple_scadenza_0"));</script>';
     echo '</div>';
@@ -2787,9 +2789,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div>';
     echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚜 Formazione Utilizzo Carrelli Elevatori:</label>';
     echo '<input type="file" name="hse_formazione_carrelli_0" id="hse_formazione_carrelli_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
     echo '<input type="date" name="hse_formazione_carrelli_emissione_0" id="hse_formazione_carrelli_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_carrelli_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
     echo '<input type="date" name="hse_formazione_carrelli_scadenza_0" id="hse_formazione_carrelli_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_carrelli_file_0"),document.getElementById("hse_formazione_carrelli_emissione_0"),5,document.getElementById("hse_formazione_carrelli_scadenza_0"));</script>';
     echo '</div>';
@@ -2883,17 +2885,19 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
         
         echo '<div class="hse_automezzo_row" data-index="' . $index . '" data-automezzo-id="' . $hse_automezzo['id'] . '" style="' . $hse_assigned_style . ' padding: 15px; margin-bottom: 15px; border-radius: 8px;">';
         
-        // Mostra cantieri assegnati se presente
+        // Mostra cantieri assegnati se presente - INLINE
         if ($hse_is_assigned) {
             echo '<div class="hse_automezzo_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
-            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            echo '<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">';
+            echo '<span style="color: #856404; font-size: 15px; font-weight: bold; margin-right: 4px;">🏗️ Cantieri Assegnati:</span>';
             foreach ($hse_automezzo_cantieri as $cantiere_info) {
                 $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
-                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
-                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
-                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
-                echo '</div>';
+                echo '<span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 193, 7, 0.2); padding: 4px 10px; border-radius: 12px; font-size: 14px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: 600;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</span>';
             }
+            echo '</div>';
             echo '</div>';
         }
         
@@ -3080,17 +3084,19 @@ if ($hse_existing_data && !empty($hse_existing_data['attrezzi'])) {
         
         echo '<div class="hse_attrezzo_row" data-index="' . $index . '" data-attrezzo-id="' . $hse_attrezzo['id'] . '" style="' . $hse_assigned_style . ' padding: 15px; margin-bottom: 15px; border-radius: 8px;">';
         
-        // Mostra cantieri assegnati se presente
+        // Mostra cantieri assegnati se presente - INLINE
         if ($hse_is_assigned) {
             echo '<div class="hse_attrezzo_cantieri_info" style="background: rgba(255, 193, 7, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">';
-            echo '<h5 style="margin: 0 0 8px 0; color: #856404; font-size: 13px; font-weight: bold;">🏗️ Cantieri Assegnati:</h5>';
+            echo '<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">';
+            echo '<span style="color: #856404; font-size: 15px; font-weight: bold; margin-right: 4px;">🏗️ Cantieri Assegnati:</span>';
             foreach ($hse_attrezzo_cantieri as $cantiere_info) {
                 $cantiere_status_color = ($cantiere_info['cantiere_stato'] === 'attivo') ? '#28a745' : '#6c757d';
-                echo '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px;">';
-                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 1px 6px; border-radius: 8px; font-size: 10px;">' . $cantiere_info['cantiere_stato'] . '</span>';
-                echo '<span style="color: #856404; font-weight: bold;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
-                echo '</div>';
+                echo '<span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 193, 7, 0.2); padding: 4px 10px; border-radius: 12px; font-size: 14px;">';
+                echo '<span style="background: ' . $cantiere_status_color . '; color: white; padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600;">' . $cantiere_info['cantiere_stato'] . '</span>';
+                echo '<span style="color: #856404; font-weight: 600;">' . htmlspecialchars($cantiere_info['cantiere_nome']) . '</span>';
+                echo '</span>';
             }
+            echo '</div>';
             echo '</div>';
         }
         
@@ -3169,13 +3175,13 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
         
         // Header accordion cantiere
         echo '<div class="hse_cantiere_accordion_header" onclick="hse_toggleCantiereAccordion(' . $hse_cantiere['id'] . ')" style="padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #2196f3, #1976d2); color: white; transition: all 0.3s ease;">';
-        echo '<div class="hse_cantiere_header_left">';
-        echo '<h4 class="hse_cantiere_section_title" style="margin: 0;">🏗️ ' . htmlspecialchars($hse_cantiere['nome']) . '</h4>';
+        echo '<div class="hse_cantiere_header_left" style="color: white;">';
+        echo '<h4 class="hse_cantiere_section_title" style="margin: 0; color: white;">🏗️ ' . htmlspecialchars($hse_cantiere['nome']) . '</h4>';
         if ($hse_cantiere['descrizione']) {
-            echo '<p class="hse_cantiere_section_desc" style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">' . htmlspecialchars($hse_cantiere['descrizione']) . '</p>';
+            echo '<p class="hse_cantiere_section_desc" style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; color: white;">' . htmlspecialchars($hse_cantiere['descrizione']) . '</p>';
         }
         echo '</div>';
-        echo '<span class="hse_cantiere_accordion_arrow" id="hse_arrow_cantiere_' . $hse_cantiere['id'] . '" style="font-size: 18px; font-weight: bold; transition: transform 0.3s ease;">▼</span>';
+        echo '<span class="hse_cantiere_accordion_arrow" id="hse_arrow_cantiere_' . $hse_cantiere['id'] . '" style="font-size: 18px; font-weight: bold; transition: transform 0.3s ease; color: white;">▼</span>';
         echo '</div>';
         
         // Content accordion cantiere (chiuso di default)
@@ -3219,7 +3225,7 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             echo '<div class="hse_success_info" style="flex: 1;">';
             echo '<div class="hse_success_title" style="font-weight: bold; color: #155724; margin-bottom: 3px;">📋 File POS Caricato</div>';
             if ($hse_pos_data['pos_data_emissione']) {
-                echo '<div class="hse_success_date" style="font-size: 11px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_pos_data['pos_data_emissione'])) . '</div>';
+                echo '<div class="hse_success_date" style="font-size: 14px; color: #155724; margin-bottom: 3px;">📅 Emesso il: ' . date('d/m/Y', strtotime($hse_pos_data['pos_data_emissione'])) . '</div>';
             }
             echo '<div class="hse_success_actions" style="display: flex; gap: 8px; align-items: center;">';
             echo '<a href="' . esc_url($hse_pos_data['pos_file']) . '" target="_blank" class="hse_view_link" style="color: #0066a2; text-decoration: none; font-weight: bold; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px; font-size: 12px;">👁️ Visualizza POS</a>';
@@ -3239,8 +3245,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             $hse_operai_assegnati = hse_getOperaiAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
             $hse_operai_assegnati_ids = array_map(function($op) { return $op['operaio_id']; }, $hse_operai_assegnati);
             
-            echo '<div class="hse_operai_selection_container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">';
-            echo '<p class="hse_operai_help" style="color: #666; margin-bottom: 15px;">Seleziona gli operai che lavoreranno in questo cantiere specifico:</p>';
+            echo '<div class="hse_operai_selection_container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 10px;">';
+            echo '<p class="hse_operai_help" style="color: #666; margin-bottom: 15px; width: 100%;">Seleziona gli operai che lavoreranno in questo cantiere specifico:</p>';
             
             foreach ($hse_existing_data['personale'] as $index => $hse_persona) {
                 $hse_fullName = $hse_persona['nome'] . ' ' . $hse_persona['cognome'];
@@ -3294,9 +3300,9 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
                 
                 $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
                 
-                echo '<label class="hse_operaio_checkbox" style="display: block; margin-bottom: 10px; cursor: pointer; ' . $hse_label_style . '">';
-                echo '<input type="checkbox" name="hse_operai_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_persona['id'] . '" ' . $hse_isSelected . ' onchange="hse_updateSkillsForCantiere(' . $hse_cantiere['id'] . ')" class="hse_operaio_input" style="margin-right: 8px;">';
-                echo '<span class="hse_operaio_name">' . htmlspecialchars($hse_fullName) . $hse_warning_text . $hse_assignment_info . '</span>';
+                echo '<label class="hse_operaio_checkbox" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 0; cursor: pointer; background: rgba(227, 242, 253, 0.3); border-radius: 6px; border: 2px solid #2196f3; transition: all 0.3s ease; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_operai_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_persona['id'] . '" ' . $hse_isSelected . ' onchange="hse_updateSkillsForCantiere(' . $hse_cantiere['id'] . ')" class="hse_operaio_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196f3; flex-shrink: 0;">';
+                echo '<span class="hse_operaio_name" style="font-size: 15px; font-weight: 600;">👷 ' . htmlspecialchars($hse_fullName) . $hse_warning_text . $hse_assignment_info . '</span>';
                 echo '</label>';
             }
             
@@ -3316,8 +3322,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             $hse_automezzi_assegnati = hse_getAutomezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
             $hse_automezzi_assegnati_ids = array_map(function($au) { return $au['automezzo_id']; }, $hse_automezzi_assegnati);
             
-            echo '<div class="hse_automezzi_selection_container" style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffc107;">';
-            echo '<p class="hse_automezzi_help" style="color: #856404; margin-bottom: 15px;">Seleziona gli automezzi che utilizzerai in questo cantiere specifico:</p>';
+            echo '<div class="hse_automezzi_selection_container" style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffc107; display: flex; flex-wrap: wrap; gap: 10px;">';
+            echo '<p class="hse_automezzi_help" style="color: #856404; margin-bottom: 15px; width: 100%;">Seleziona gli automezzi che utilizzerai in questo cantiere specifico:</p>';
             
             foreach ($hse_existing_data['automezzi'] as $index => $hse_automezzo) {
                 $hse_automezzoName = $hse_automezzo['descrizione_automezzo'] . ' (' . $hse_automezzo['targa'] . ')';
@@ -3336,9 +3342,9 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
                 $hse_label_style = 'color: #856404;';
                 $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
                 
-                echo '<label class="hse_automezzo_checkbox" style="display: block; margin-bottom: 10px; cursor: pointer; ' . $hse_label_style . '">';
-                echo '<input type="checkbox" name="hse_automezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_automezzo['id'] . '" ' . $hse_isSelected . ' class="hse_automezzo_input" style="margin-right: 8px;">';
-                echo '<span class="hse_automezzo_name">🚛 ' . htmlspecialchars($hse_automezzoName) . $hse_assignment_info . '</span>';
+                echo '<label class="hse_automezzo_checkbox" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 0; cursor: pointer; background: rgba(255, 243, 205, 0.5); border-radius: 6px; border: 2px solid #ffc107; transition: all 0.3s ease; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_automezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_automezzo['id'] . '" ' . $hse_isSelected . ' class="hse_automezzo_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ffc107; flex-shrink: 0;">';
+                echo '<span class="hse_automezzo_name" style="font-size: 15px; font-weight: 600;">🚛 ' . htmlspecialchars($hse_automezzoName) . $hse_assignment_info . '</span>';
                 echo '</label>';
             }
             
@@ -3358,8 +3364,8 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
             $hse_attrezzi_assegnati = hse_getAttrezziAssegnatiCantiere($hse_cantiere['id'], $hse_current_user_id);
             $hse_attrezzi_assegnati_ids = array_map(function($at) { return $at['attrezzo_id']; }, $hse_attrezzi_assegnati);
             
-            echo '<div class="hse_attrezzi_selection_container" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #2196f3;">';
-            echo '<p class="hse_attrezzi_help" style="color: #1565c0; margin-bottom: 15px;">Seleziona gli attrezzi che utilizzerai in questo cantiere specifico:</p>';
+            echo '<div class="hse_attrezzi_selection_container" style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #2196f3; display: flex; flex-wrap: wrap; gap: 10px;">';
+            echo '<p class="hse_attrezzi_help" style="color: #1565c0; margin-bottom: 15px; width: 100%;">Seleziona gli attrezzi che utilizzerai in questo cantiere specifico:</p>';
             
             foreach ($hse_existing_data['attrezzi'] as $index => $hse_attrezzo) {
                 $hse_attrezzoName = $hse_attrezzo['descrizione_attrezzo'];
@@ -3392,9 +3398,9 @@ if ($hse_abilita_cantiere == '1' && !empty($hse_cantieri_assegnati)) {
                 
                 $hse_assignment_info = $hse_is_assigned_elsewhere ? ' 🏗️ (Assegnato ad altri cantieri)' : '';
                 
-                echo '<label class="hse_attrezzo_checkbox" style="display: block; margin-bottom: 10px; cursor: pointer; ' . $hse_label_style . '">';
-                echo '<input type="checkbox" name="hse_attrezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_attrezzo['id'] . '" ' . $hse_isSelected . ' class="hse_attrezzo_input" style="margin-right: 8px;">';
-                echo '<span class="hse_attrezzo_name">🔧 ' . htmlspecialchars($hse_attrezzoName) . $hse_warning_text . $hse_assignment_info . '</span>';
+                echo '<label class="hse_attrezzo_checkbox" style="display: inline-flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 0; cursor: pointer; background: rgba(227, 242, 253, 0.5); border-radius: 6px; border: 2px solid #2196f3; transition: all 0.3s ease; ' . $hse_label_style . '">';
+                echo '<input type="checkbox" name="hse_attrezzi_selezionati_' . $hse_cantiere['id'] . '[]" value="' . $hse_attrezzo['id'] . '" ' . $hse_isSelected . ' class="hse_attrezzo_input" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196f3; flex-shrink: 0;">';
+                echo '<span class="hse_attrezzo_name" style="font-size: 15px; font-weight: 600;">🔧 ' . htmlspecialchars($hse_attrezzoName) . $hse_warning_text . $hse_assignment_info . '</span>';
                 echo '</label>';
             }
             
@@ -5183,15 +5189,15 @@ function hse_addPersona() {
                 <h5 class="hse_dati_personali_title" style="margin: 0 0 15px 0; color: #0066a2;">👤 Dati Personali</h5>
                 <div class="hse_dati_personali_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                     <div class="hse_nome_field">
-                        <label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Nome *:</label>
+                        <label class="hse_nome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">Nome *:</label>
                         <input type="text" name="hse_personale_nome[]" required class="hse_nome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci nome">
                     </div>
                     <div class="hse_cognome_field">
-                        <label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Cognome *:</label>
+                        <label class="hse_cognome_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">Cognome *:</label>
                         <input type="text" name="hse_personale_cognome[]" required class="hse_cognome_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Inserisci cognome">
                     </div>
                     <div class="hse_data_nascita_field">
-                        <label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">Data di Nascita *:</label>
+                        <label class="hse_data_nascita_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">Data di Nascita *:</label>
                         <input type="date" name="hse_personale_data_nascita[]" required class="hse_data_nascita_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="hse_validateAgeImmediately(this)">
                     </div>
                 </div>
@@ -5212,7 +5218,7 @@ function hse_addPersona() {
                             <input type="date" name="hse_personale_unilav_scadenza[]" class="hse_unilav_scadenza_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
                         </div>
                         <div class="hse_unilav_file_field">
-                            <label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File UNILAV *:</label>
+                            <label class="hse_unilav_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">📄 File UNILAV *:</label>
                             <input type="file" name="hse_unilav_file_${hse_newIndex}" accept=".pdf" class="hse_unilav_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
                         </div>
                     </div>
@@ -5222,11 +5228,11 @@ function hse_addPersona() {
                     <h6 style="margin: 0 0 10px 0; color: #28a745; font-size: 13px; font-weight: bold;">🏥 Idoneità Sanitaria</h6>
                     <div class="hse_idoneita_grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div class="hse_idoneita_sanitaria_field">
-                            <label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">⏰ Scadenza *:</label>
+                            <label class="hse_idoneita_sanitaria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">⏰ Scadenza *:</label>
                             <input type="date" name="hse_personale_idoneita_scadenza[]" class="hse_idoneita_sanitaria_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" onchange="hse_validateScadenze(${hse_newIndex})">
                         </div>
                         <div class="hse_idoneita_file_field">
-                            <label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 11px;">📄 File Idoneità *:</label>
+                            <label class="hse_idoneita_file_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 15px; font-weight: 600;">📄 File Idoneità *:</label>
                             <input type="file" name="hse_idoneita_file_${hse_newIndex}" accept=".pdf" class="hse_idoneita_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
                         </div>
                     </div>
@@ -5241,17 +5247,17 @@ function hse_addPersona() {
                     <div class="hse_antincendio_field">
                         <label class="hse_antincendio_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🔥 Formazione e nomina Antincendio:</label>
                         <input type="file" name="hse_formazione_antincendio_${hse_newIndex}" id="hse_formazione_antincendio_file_${hse_newIndex}" accept=".pdf" class="hse_antincendio_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
                         <input type="date" name="hse_formazione_antincendio_emissione_${hse_newIndex}" id="hse_formazione_antincendio_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 3, document.getElementById('hse_formazione_antincendio_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 3 anni):</label>
                         <input type="date" name="hse_formazione_antincendio_scadenza_${hse_newIndex}" id="hse_formazione_antincendio_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_primo_soccorso_field">
                         <label class="hse_primo_soccorso_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚑 Formazione e nomina Primo Soccorso:</label>
                         <input type="file" name="hse_formazione_primo_soccorso_${hse_newIndex}" id="hse_formazione_primo_soccorso_file_${hse_newIndex}" accept=".pdf" class="hse_primo_soccorso_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
                         <input type="date" name="hse_formazione_primo_soccorso_emissione_${hse_newIndex}" id="hse_formazione_primo_soccorso_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 3, document.getElementById('hse_formazione_primo_soccorso_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 3 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 3 anni):</label>
                         <input type="date" name="hse_formazione_primo_soccorso_scadenza_${hse_newIndex}" id="hse_formazione_primo_soccorso_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_preposti_field">
@@ -5259,7 +5265,7 @@ function hse_addPersona() {
                         <input type="file" name="hse_formazione_preposti_${hse_newIndex}" id="hse_formazione_preposti_file_${hse_newIndex}" accept=".pdf" class="hse_preposti_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
                         <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>
                         <input type="date" name="hse_formazione_preposti_nomina_${hse_newIndex}" id="hse_formazione_preposti_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 2, document.getElementById('hse_formazione_preposti_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 2 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 2 anni):</label>
                         <input type="date" name="hse_formazione_preposti_scadenza_${hse_newIndex}" id="hse_formazione_preposti_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                 </div>
@@ -5271,9 +5277,9 @@ function hse_addPersona() {
                     <div class="hse_formazione_generale_specifica_field">
                         <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🎓 Formazione Generale e Specifica:</label>
                         <input type="file" name="hse_formazione_generale_specifica_${hse_newIndex}" id="hse_formazione_generale_specifica_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
                         <input type="date" name="hse_formazione_generale_specifica_emissione_${hse_newIndex}" id="hse_formazione_generale_specifica_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_generale_specifica_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
                         <input type="date" name="hse_formazione_generale_specifica_scadenza_${hse_newIndex}" id="hse_formazione_generale_specifica_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_rspp_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">
@@ -5281,7 +5287,7 @@ function hse_addPersona() {
                         <input type="file" name="hse_rspp_${hse_newIndex}" id="hse_rspp_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">
                         <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>
                         <input type="date" name="hse_rspp_nomina_${hse_newIndex}" id="hse_rspp_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_rspp_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>
                         <input type="date" name="hse_rspp_scadenza_${hse_newIndex}" id="hse_rspp_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_rls_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">
@@ -5289,7 +5295,7 @@ function hse_addPersona() {
                         <input type="file" name="hse_rls_${hse_newIndex}" id="hse_rls_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">
                         <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>
                         <input type="date" name="hse_rls_nomina_${hse_newIndex}" id="hse_rls_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 1, document.getElementById('hse_rls_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 1 anno):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 1 anno):</label>
                         <input type="date" name="hse_rls_scadenza_${hse_newIndex}" id="hse_rls_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_aspp_field">
@@ -5297,23 +5303,23 @@ function hse_addPersona() {
                         <input type="file" name="hse_aspp_${hse_newIndex}" id="hse_aspp_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
                         <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>
                         <input type="date" name="hse_aspp_nomina_${hse_newIndex}" id="hse_aspp_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_aspp_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>
                         <input type="date" name="hse_aspp_scadenza_${hse_newIndex}" id="hse_aspp_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_formazione_ple_field">
                         <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>
                         <input type="file" name="hse_formazione_ple_${hse_newIndex}" id="hse_formazione_ple_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
                         <input type="date" name="hse_formazione_ple_emissione_${hse_newIndex}" id="hse_formazione_ple_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_ple_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
                         <input type="date" name="hse_formazione_ple_scadenza_${hse_newIndex}" id="hse_formazione_ple_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_formazione_carrelli_field">
                         <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🚜 Formazione Utilizzo Carrelli Elevatori:</label>
                         <input type="file" name="hse_formazione_carrelli_${hse_newIndex}" id="hse_formazione_carrelli_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Emissione:</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
                         <input type="date" name="hse_formazione_carrelli_emissione_${hse_newIndex}" id="hse_formazione_carrelli_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_carrelli_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
                         <input type="date" name="hse_formazione_carrelli_scadenza_${hse_newIndex}" id="hse_formazione_carrelli_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                 </div>
@@ -6563,11 +6569,364 @@ function hse_showDebugInfo() {
     return debugInfo;
 }
 </script>
+
+<!-- Font Size Accessibility Control Widget -->
+<div id="hse_font_size_control" class="collapsed">
+    <button id="hse_font_toggle_btn" title="Controllo dimensione caratteri" aria-label="Apri controllo dimensione caratteri">
+        Aa
+    </button>
+    <div id="hse_font_control_panel">
+        <div class="hse_font_control_title">
+            🔤 Dimensione Caratteri
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">📝 Etichette (Label)</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('label', -1)" title="Diminuisci dimensione etichette">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_label_value">15px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('label', 1)" title="Aumenta dimensione etichette">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">📌 Titoli</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('title', -1)" title="Diminuisci dimensione titoli">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_title_value">18px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('title', 1)" title="Aumenta dimensione titoli">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">✏️ Campi Input</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('input', -1)" title="Diminuisci dimensione campi">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_input_value">16px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('input', 1)" title="Aumenta dimensione campi">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">📄 Testo Normale</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('text', -1)" title="Diminuisci dimensione testo">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_text_value">14px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('text', 1)" title="Aumenta dimensione testo">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">🔘 Pulsanti</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('button', -1)" title="Diminuisci dimensione pulsanti">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_button_value">16px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('button', 1)" title="Aumenta dimensione pulsanti">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <div class="hse_font_control_group">
+            <label class="hse_font_control_label">🔍 Testo Piccolo</label>
+            <div class="hse_font_control_buttons">
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('small', -1)" title="Diminuisci dimensione testo piccolo">
+                    A−
+                </button>
+                <span class="hse_font_current_value" id="hse_small_value">13px</span>
+                <button class="hse_font_control_btn" onclick="hseFontAdjust('small', 1)" title="Aumenta dimensione testo piccolo">
+                    A+
+                </button>
+            </div>
+        </div>
+        
+        <button class="hse_font_control_reset" onclick="hseFontReset()" title="Ripristina tutte le dimensioni predefinite">
+            🔄 Ripristina Predefinite
+        </button>
+    </div>
+</div>
+
+<script>
+// Font Size Accessibility Control
+(function() {
+    // Default font sizes
+    const defaultSizes = {
+        label: 15,
+        title: 18,
+        input: 16,
+        button: 16,
+        text: 14,
+        small: 13
+    };
+    
+    // Current font sizes (loaded from localStorage or defaults)
+    let currentSizes = { ...defaultSizes };
+    
+    // Min/Max limits
+    const limits = {
+        label: { min: 12, max: 22 },
+        title: { min: 14, max: 28 },
+        input: { min: 14, max: 22 },
+        button: { min: 14, max: 22 },
+        text: { min: 12, max: 20 },
+        small: { min: 11, max: 18 }
+    };
+    
+    // Load saved preferences
+    function loadPreferences() {
+        const saved = localStorage.getItem('hse_font_sizes');
+        if (saved) {
+            try {
+                currentSizes = { ...defaultSizes, ...JSON.parse(saved) };
+            } catch (e) {
+                console.error('Error loading font size preferences:', e);
+            }
+        }
+        applyFontSizes();
+        updateDisplay();
+    }
+    
+    // Save preferences
+    function savePreferences() {
+        localStorage.setItem('hse_font_sizes', JSON.stringify(currentSizes));
+    }
+    
+    // Apply font sizes to document
+    function applyFontSizes() {
+        document.body.classList.add('hse_font_adjusted');
+        document.documentElement.style.setProperty('--hse-label-size', currentSizes.label + 'px');
+        document.documentElement.style.setProperty('--hse-title-size', currentSizes.title + 'px');
+        document.documentElement.style.setProperty('--hse-input-size', currentSizes.input + 'px');
+        document.documentElement.style.setProperty('--hse-button-size', currentSizes.button + 'px');
+        document.documentElement.style.setProperty('--hse-text-size', currentSizes.text + 'px');
+        document.documentElement.style.setProperty('--hse-small-size', currentSizes.small + 'px');
+    }
+    
+    // Update display values
+    function updateDisplay() {
+        document.getElementById('hse_label_value').textContent = currentSizes.label + 'px';
+        document.getElementById('hse_title_value').textContent = currentSizes.title + 'px';
+        document.getElementById('hse_input_value').textContent = currentSizes.input + 'px';
+        document.getElementById('hse_button_value').textContent = currentSizes.button + 'px';
+        document.getElementById('hse_text_value').textContent = currentSizes.text + 'px';
+        document.getElementById('hse_small_value').textContent = currentSizes.small + 'px';
+    }
+    
+    // Adjust font size
+    window.hseFontAdjust = function(type, delta) {
+        const newSize = currentSizes[type] + delta;
+        if (newSize >= limits[type].min && newSize <= limits[type].max) {
+            currentSizes[type] = newSize;
+            applyFontSizes();
+            updateDisplay();
+            savePreferences();
+            
+            // Show feedback
+            const action = delta > 0 ? 'aumentata' : 'diminuita';
+            const typeNames = {
+                label: 'Etichette',
+                title: 'Titoli',
+                input: 'Campi Input',
+                button: 'Pulsanti',
+                text: 'Testo',
+                small: 'Testo Piccolo'
+            };
+            hse_enhancedToast(`✓ ${typeNames[type]}: dimensione ${action} a ${newSize}px`, 'success', 2000, false);
+        } else {
+            const limit = delta > 0 ? 'massima' : 'minima';
+            hse_enhancedToast(`⚠️ Dimensione ${limit} raggiunta`, 'warning', 2000, false);
+        }
+    };
+    
+    // Reset all font sizes
+    window.hseFontReset = function() {
+        currentSizes = { ...defaultSizes };
+        applyFontSizes();
+        updateDisplay();
+        savePreferences();
+        hse_enhancedToast('✓ Dimensioni caratteri ripristinate ai valori predefiniti', 'success', 3000, true);
+    };
+    
+    // Toggle panel
+    const toggleBtn = document.getElementById('hse_font_toggle_btn');
+    const control = document.getElementById('hse_font_size_control');
+    
+    toggleBtn.addEventListener('click', function() {
+        control.classList.toggle('collapsed');
+        control.classList.toggle('expanded');
+        
+        if (control.classList.contains('expanded')) {
+            toggleBtn.innerHTML = '✕';
+            toggleBtn.title = 'Chiudi';
+        } else {
+            toggleBtn.innerHTML = 'Aa';
+            toggleBtn.title = 'Controllo dimensione caratteri';
+        }
+    });
+    
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+        if (control.classList.contains('expanded') && 
+            !control.contains(e.target)) {
+            control.classList.remove('expanded');
+            control.classList.add('collapsed');
+            toggleBtn.innerHTML = 'Aa';
+            toggleBtn.title = 'Controllo dimensione caratteri';
+        }
+    });
+    
+    // Prevent closing when clicking inside
+    control.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Initialize on load
+    loadPreferences();
+})();
+</script>
+
 <style>
 /* ================== STILI CSS HSE CON ACCORDION + NUOVI CAMPI ================== */
 
+/* ============================================
+   MIGLIORAMENTI TIPOGRAFIA E LEGGIBILITÀ
+   Riferimento: BO HSE #mezzo-details-modal e #assignments-summary
+   ============================================ */
+
+/* Container base con font migliorato */
 .hse_cantiere_form_container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #222;
     animation: hse_fadeInUp 0.6s ease-out;
+}
+
+/* Label migliorati - Font-size minimo 16px */
+.hse_cantiere_form label,
+.hse_field_label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    line-height: 1.5;
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* Input e campi form - Font-size 16px per evitare zoom mobile */
+.hse_cantiere_form input[type="text"],
+.hse_cantiere_form input[type="email"],
+.hse_cantiere_form input[type="tel"],
+.hse_cantiere_form input[type="number"],
+.hse_cantiere_form input[type="date"],
+.hse_cantiere_form textarea,
+.hse_cantiere_form select {
+    font-size: 16px;
+    line-height: 1.5;
+    color: #222;
+    padding: 12px 14px;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    background-color: #fff;
+    transition: all 0.3s ease;
+    min-height: 44px;
+    font-family: inherit;
+}
+
+/* Placeholder con contrasto migliorato */
+.hse_cantiere_form input::placeholder,
+.hse_cantiere_form textarea::placeholder {
+    color: #6c757d;
+    opacity: 1;
+    font-size: 16px;
+}
+
+/* Stati validazione evidenti */
+.hse_field_error,
+.hse_cantiere_form input.hse_invalid {
+    border-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.05);
+}
+
+.hse_field_error:focus,
+.hse_cantiere_form input.hse_invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+}
+
+/* Messaggi errore migliorati */
+.hse_error_message {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 14px;
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+    line-height: 1.6;
+}
+
+.hse_error_message::before {
+    content: "⚠️";
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+/* Bottoni - Dimensione minima 44x44px per accessibilità */
+.hse_cantiere_form button {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.5;
+    padding: 12px 24px;
+    min-height: 44px;
+    min-width: 44px;
+    border-radius: 6px;
+    font-family: inherit;
+}
+
+/* Titoli sezioni con dimensioni aumentate */
+.hse_section_title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0066a2;
+    line-height: 1.4;
+    margin-bottom: 20px;
+    letter-spacing: 0.3px;
+}
+
+/* Grid form con gap aumentato */
+.hse_form_grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Focus visibile per accessibilità */
+*:focus-visible {
+    outline: 2px solid #0066a2;
+    outline-offset: 2px;
 }
 
 @keyframes hse_fadeInUp {
@@ -6794,7 +7153,29 @@ input[name="hse_attrezzi_data_revisione[]"]:focus {
     animation: hse_warningSlideIn 0.5s ease-out;
 }
 
-/* Checkbox selection in Part B */
+/* Checkbox selection in Part B - Enhanced styling */
+.hse_operaio_checkbox:hover,
+.hse_automezzo_checkbox:hover,
+.hse_attrezzo_checkbox:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-color: #0066a2 !important;
+}
+
+.hse_operaio_checkbox input[type="checkbox"]:checked,
+.hse_automezzo_checkbox input[type="checkbox"]:checked,
+.hse_attrezzo_checkbox input[type="checkbox"]:checked {
+    transform: scale(1.1);
+}
+
+.hse_operaio_checkbox:has(input[type="checkbox"]:checked),
+.hse_automezzo_checkbox:has(input[type="checkbox"]:checked),
+.hse_attrezzo_checkbox:has(input[type="checkbox"]:checked) {
+    background: rgba(40, 167, 69, 0.1) !important;
+    border-color: #28a745 !important;
+}
+
+.hse_operaio_checkbox input[type="checkbox"]:checked + .hse_operaio_name,
 .hse_automezzo_checkbox input[type="checkbox"]:checked + .hse_automezzo_name,
 .hse_attrezzo_checkbox input[type="checkbox"]:checked + .hse_attrezzo_name {
     color: #155724 !important;
@@ -6978,15 +7359,22 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
     to { opacity: 1; transform: translateX(0); }
 }
 
-/* Form migliorati con nuovi campi */
+/* Form migliorati con nuovi campi - Focus accessibile senza layout shift */
 .hse_cantiere_form input:focus,
 .hse_cantiere_form select:focus,
 .hse_cantiere_form textarea:focus {
     outline: none;
     border-color: #0066a2 !important;
-    box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.1);
-    transform: scale(1.02);
+    box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.2);
+    background-color: #fff;
     transition: all 0.3s ease;
+}
+
+/* Hover state per input */
+.hse_cantiere_form input:hover:not(:disabled),
+.hse_cantiere_form textarea:hover:not(:disabled),
+.hse_cantiere_form select:hover:not(:disabled) {
+    border-color: #2196f3;
 }
 
 .hse_cantiere_form button:hover {
@@ -7032,21 +7420,28 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
-/* File upload migliorati */
+/* File upload migliorati - Font-size 16px e padding aumentato */
 .hse_cantiere_form input[type="file"] {
+    font-size: 16px;
+    padding: 12px;
+    border: 2px dashed #dee2e6;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    cursor: pointer;
     transition: all 0.3s ease;
+    min-height: 44px;
     position: relative;
-    background-image: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
 }
 
 .hse_cantiere_form input[type="file"]:hover {
     border-color: #0066a2;
+    background: #fff;
     box-shadow: 0 2px 8px rgba(0, 102, 162, 0.1);
-    transform: translateY(-1px);
 }
 
 .hse_cantiere_form input[type="file"]:focus {
     border-color: #0066a2 !important;
+    border-style: solid;
     box-shadow: 0 0 0 3px rgba(0, 102, 162, 0.2);
 }
 
@@ -7271,12 +7666,14 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
         padding: 15px !important;
     }
     
+    /* Form grid sempre 1 colonna su tablet/mobile */
     .hse_dati_personali_grid,
     .hse_documenti_personali_grid,
     .hse_formazione_grid,
-    .hse_dvr_fields_grid {
+    .hse_dvr_fields_grid,
+    .hse_form_grid {
         grid-template-columns: 1fr !important;
-        gap: 10px !important;
+        gap: 16px !important;
     }
     
     .hse_cantieri_grid {
@@ -7294,9 +7691,11 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
         margin-left: 0 !important;
     }
     
+    /* Bottoni full-width su mobile */
     .hse_cantiere_form button {
         width: 100%;
         margin-bottom: 10px;
+        justify-content: center;
     }
     
     .hse_cantiere_accordion,
@@ -7308,6 +7707,7 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
     .hse_persona_accordion_header,
     .hse_cantiere_accordion_header {
         padding: 12px 15px !important;
+        font-size: 15px;
     }
     
     /* Badge responsive */
@@ -7360,6 +7760,30 @@ input[type="date"][style*="border: 2px solid #ffc107"] {
 .hse_cantiere_form input:focus {
     outline: 2px solid #0066a2;
     outline-offset: 1px;
+}
+
+/* Riduzione movimento per accessibilità */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Alto contrasto per accessibilità */
+@media (prefers-contrast: high) {
+    .hse_cantiere_form input,
+    .hse_cantiere_form textarea,
+    .hse_cantiere_form select {
+        border-width: 3px;
+    }
+    
+    .hse_cantiere_form button {
+        border: 2px solid currentColor;
+    }
 }
 
 /* Loading states */
@@ -7462,5 +7886,223 @@ html {
 .hse_cantiere_form input.hse_field_warning {
     border-color: #ffc107 !important;
     background: rgba(255, 193, 7, 0.05);
+}
+
+/* ===== FONT SIZE ACCESSIBILITY CONTROL ===== */
+#hse_font_size_control {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 9999;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+#hse_font_size_control.collapsed {
+    width: 56px;
+    height: 56px;
+}
+
+#hse_font_size_control.expanded {
+    width: 320px;
+    padding: 20px;
+}
+
+#hse_font_toggle_btn {
+    width: 56px;
+    height: 56px;
+    border: none;
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+#hse_font_toggle_btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 24px rgba(33, 150, 243, 0.4);
+}
+
+#hse_font_control_panel {
+    display: none;
+    padding-top: 15px;
+}
+
+#hse_font_size_control.expanded #hse_font_control_panel {
+    display: block;
+}
+
+#hse_font_size_control.expanded #hse_font_toggle_btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+}
+
+.hse_font_control_title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #222;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hse_font_control_group {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.hse_font_control_group:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.hse_font_control_label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.hse_font_control_buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.hse_font_control_btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.hse_font_control_btn:hover {
+    border-color: #2196f3;
+    background: #e3f2fd;
+    transform: translateY(-1px);
+}
+
+.hse_font_control_btn:active {
+    transform: translateY(0);
+}
+
+.hse_font_control_reset {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ff9800;
+    background: #fff3e0;
+    color: #e65100;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+}
+
+.hse_font_control_reset:hover {
+    background: #ffe0b2;
+    border-color: #f57c00;
+    transform: translateY(-1px);
+}
+
+.hse_font_current_value {
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #2196f3;
+}
+
+/* Font size adjustments applied to elements */
+body.hse_font_adjusted label,
+body.hse_font_adjusted .hse_operai_label,
+body.hse_font_adjusted .hse_automezzi_label,
+body.hse_font_adjusted .hse_attrezzi_label,
+body.hse_font_adjusted .hse_pos_label,
+body.hse_font_adjusted .hse_pos_data_label {
+    font-size: var(--hse-label-size, 15px) !important;
+}
+
+body.hse_font_adjusted h3,
+body.hse_font_adjusted h4,
+body.hse_font_adjusted .hse_cantiere_section_title,
+body.hse_font_adjusted .hse_persona_title {
+    font-size: var(--hse-title-size, 18px) !important;
+}
+
+body.hse_font_adjusted input,
+body.hse_font_adjusted select,
+body.hse_font_adjusted textarea {
+    font-size: var(--hse-input-size, 16px) !important;
+}
+
+body.hse_font_adjusted button,
+body.hse_font_adjusted .hse_button,
+body.hse_font_adjusted input[type="submit"] {
+    font-size: var(--hse-button-size, 16px) !important;
+}
+
+body.hse_font_adjusted p,
+body.hse_font_adjusted .hse_operai_help,
+body.hse_font_adjusted .hse_automezzi_help,
+body.hse_font_adjusted .hse_attrezzi_help,
+body.hse_font_adjusted .hse_cantiere_section_desc,
+body.hse_font_adjusted .hse_cantiere_descrizione,
+body.hse_font_adjusted .hse_note_content,
+body.hse_font_adjusted .hse_dvr_warning_text,
+body.hse_font_adjusted .hse_warning_text,
+body.hse_font_adjusted .hse_rct_scadenza {
+    font-size: var(--hse-text-size, 14px) !important;
+}
+
+body.hse_font_adjusted small,
+body.hse_font_adjusted .hse_success_date,
+body.hse_font_adjusted .hse_scadenza_date,
+body.hse_font_adjusted .hse_rct_info,
+body.hse_font_adjusted .hse_replace_hint,
+body.hse_font_adjusted .hse_progress_header,
+body.hse_font_adjusted .hse_note_label,
+body.hse_font_adjusted .hse_cantiere_info {
+    font-size: var(--hse-small-size, 13px) !important;
+}
+
+/* Responsive per mobile */
+@media (max-width: 768px) {
+    #hse_font_size_control.expanded {
+        width: calc(100vw - 40px);
+        max-width: 320px;
+    }
+    
+    #hse_font_size_control {
+        bottom: 10px;
+        left: 10px;
+    }
 }
 </style>

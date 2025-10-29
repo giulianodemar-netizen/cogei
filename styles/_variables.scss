@@ -1,0 +1,195 @@
+/**
+ * Variabili Globali Stile HSE
+ * ============================
+ * 
+ * File: styles/_variables.scss
+ * Descrizione: Definizioni globali per colori, tipografia e spacing
+ * utilizzate nel sistema HSE per garantire coerenza e accessibilità
+ * 
+ * Riferimento: Valori estratti da "BO HSE" sezioni #mezzo-details-modal 
+ * e #assignments-summary per garantire coerenza visiva
+ */
+
+/* ============================================
+   PALETTE COLORI AD ALTO CONTRASTO
+   ============================================ */
+
+/* Colori Testo - Contrast ratio >= 4.5:1 */
+$color-text-primary: #222;           /* Testo principale - nero scuro */
+$color-text-secondary: #444;         /* Testo secondario */
+$color-text-tertiary: #666;          /* Testo terziario - labels */
+$color-text-muted: #6c757d;          /* Testo attenuato - helper text */
+$color-text-info: #495057;           /* Testo info nelle card */
+$color-text-dark: #212529;           /* Testo molto scuro */
+$color-text-light: #333;             /* Testo chiaro per strong */
+
+/* Colori Sfondo */
+$color-bg-white: #fff;               /* Sfondo bianco principale */
+$color-bg-light: #f7f7f7;            /* Sfondo chiaro alternativo */
+$color-bg-gray-light: #f8f9fa;       /* Sfondo grigio chiaro */
+$color-bg-gray: #e9ecef;             /* Sfondo grigio medio */
+$color-bg-gray-dark: #dee2e6;        /* Sfondo grigio scuro */
+
+/* Colori Accento */
+$color-accent-primary: #0a66ff;      /* Blu primario - accento principale */
+$color-accent-secondary: #0066a2;    /* Blu secondario - form focus */
+$color-accent-blue: #2196f3;         /* Blu chiaro - header modal */
+$color-accent-blue-dark: #1976d2;    /* Blu scuro - header gradient */
+$color-accent-info: #17a2b8;         /* Ciano - informazioni */
+
+/* Colori Stati */
+$color-success: #28a745;             /* Verde successo */
+$color-success-light: #d4edda;       /* Verde chiaro background */
+$color-success-text: #155724;        /* Verde scuro testo */
+$color-warning: #ffc107;             /* Giallo warning */
+$color-warning-light: #fff3cd;       /* Giallo chiaro background */
+$color-warning-text: #856404;        /* Giallo scuro testo */
+$color-danger: #dc3545;              /* Rosso errore */
+$color-danger-light: #f8d7da;        /* Rosso chiaro background */
+$color-danger-text: #721c24;         /* Rosso scuro testo */
+
+/* Colori Bordi */
+$color-border-light: #dee2e6;        /* Bordo chiaro */
+$color-border-medium: #e9ecef;       /* Bordo medio */
+$color-border-focus: #0066a2;        /* Bordo focus input */
+$color-border-error: #dc3545;        /* Bordo errore */
+$color-border-success: #28a745;      /* Bordo successo */
+
+/* ============================================
+   TIPOGRAFIA
+   ============================================ */
+
+/* Font Families - Stack leggibile con fallback */
+$font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+$font-family-monospace: 'Courier New', Courier, monospace;
+
+/* Font Sizes - Base 16px per accessibilità */
+$font-size-base: 16px;              /* Dimensione base per body e input */
+$font-size-small: 14px;             /* Testo piccolo - helper text */
+$font-size-xsmall: 13px;            /* Testo extra piccolo - badge */
+$font-size-large: 18px;             /* Testo grande - sottotitoli */
+$font-size-xlarge: 19px;            /* Card titles */
+$font-size-xxlarge: 20px;           /* Modal headers */
+
+/* Line Heights - Migliorata leggibilità */
+$line-height-base: 1.5;             /* Line height base - buona leggibilità */
+$line-height-relaxed: 1.6;          /* Line height rilassato - paragrafi */
+$line-height-comfortable: 1.8;      /* Line height molto confortevole - card info */
+$line-height-tight: 1.4;            /* Line height stretto - titoli */
+
+/* Font Weights */
+$font-weight-normal: 400;           /* Peso normale */
+$font-weight-medium: 500;           /* Peso medio */
+$font-weight-semibold: 600;         /* Peso semi-bold */
+$font-weight-bold: 700;             /* Peso bold */
+
+/* Letter Spacing */
+$letter-spacing-normal: normal;     /* Spacing normale */
+$letter-spacing-wide: 0.3px;        /* Spacing largo - titoli */
+
+/* ============================================
+   SPACING E DIMENSIONI
+   ============================================ */
+
+/* Padding - Riferimento da BO HSE */
+$padding-xs: 6px;                   /* Padding extra small */
+$padding-sm: 12px;                  /* Padding small */
+$padding-md: 20px;                  /* Padding medium - modal header */
+$padding-lg: 22px;                  /* Padding large - card */
+$padding-xl: 25px;                  /* Padding extra large - modal body */
+
+/* Margins */
+$margin-xs: 8px;                    /* Margin extra small */
+$margin-sm: 14px;                   /* Margin small - card title bottom */
+$margin-md: 20px;                   /* Margin medium */
+$margin-lg: 25px;                   /* Margin large */
+
+/* Gap - Grid e Flexbox */
+$gap-sm: 10px;                      /* Gap small */
+$gap-md: 14px;                      /* Gap medium */
+$gap-lg: 18px;                      /* Gap large - grid assignments */
+$gap-xl: 20px;                      /* Gap extra large */
+
+/* Border Radius */
+$border-radius-sm: 4px;             /* Raggio piccolo */
+$border-radius-md: 6px;             /* Raggio medio */
+$border-radius-lg: 10px;            /* Raggio grande - card */
+$border-radius-pill: 20px;          /* Raggio pill - badge */
+
+/* Border Width */
+$border-width-thin: 1px;            /* Bordo sottile */
+$border-width-medium: 2px;          /* Bordo medio */
+$border-width-thick: 3px;           /* Bordo spesso - border-left */
+$border-width-xthick: 4px;          /* Bordo extra spesso */
+
+/* Box Shadow - Profondità visiva */
+$shadow-sm: 0 2px 4px rgba(0,0,0,0.08);        /* Ombra piccola */
+$shadow-md: 0 2px 8px rgba(0,0,0,0.08);        /* Ombra media */
+$shadow-lg: 0 4px 15px rgba(0,0,0,0.1);        /* Ombra grande */
+$shadow-xl: 0 6px 20px rgba(0,0,0,0.15);       /* Ombra extra grande */
+$shadow-focus: 0 0 0 3px rgba(0,102,162,0.2);  /* Ombra focus input */
+
+/* Dimensioni Minime Toccabili - Accessibilità Mobile */
+$touch-target-min: 44px;            /* Dimensione minima 44x44px */
+$touch-target-recommended: 48px;    /* Dimensione raccomandata */
+
+/* ============================================
+   TRANSIZIONI E ANIMAZIONI
+   ============================================ */
+
+/* Durate Transizioni */
+$transition-fast: 0.2s;             /* Transizione veloce */
+$transition-normal: 0.3s;           /* Transizione normale */
+$transition-slow: 0.4s;             /* Transizione lenta */
+
+/* Timing Functions */
+$ease-in-out: ease-in-out;          /* Easing standard */
+$ease-out: ease-out;                /* Easing out */
+$ease-in: ease-in;                  /* Easing in */
+
+/* ============================================
+   Z-INDEX LAYERS
+   ============================================ */
+
+$z-index-base: 1;                   /* Layer base */
+$z-index-dropdown: 1000;            /* Dropdown */
+$z-index-sticky: 1020;              /* Elementi sticky */
+$z-index-fixed: 1030;              /* Elementi fixed */
+$z-index-modal-backdrop: 10000;     /* Backdrop modal */
+$z-index-modal: 10001;              /* Modal */
+$z-index-popover: 10100;            /* Popover */
+$z-index-tooltip: 11000;            /* Tooltip/Toast */
+
+/* ============================================
+   BREAKPOINTS RESPONSIVE
+   ============================================ */
+
+$breakpoint-mobile: 480px;          /* Mobile piccolo */
+$breakpoint-tablet: 768px;          /* Tablet */
+$breakpoint-desktop: 992px;         /* Desktop piccolo */
+$breakpoint-desktop-lg: 1200px;     /* Desktop grande */
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* Contrast Ratios - WCAG AA Standard */
+$contrast-ratio-normal: 4.5;        /* Ratio minimo per testo normale */
+$contrast-ratio-large: 3.0;         /* Ratio minimo per testo grande (18px+) */
+
+/* Focus Indicators */
+$focus-outline-width: 2px;          /* Larghezza outline focus */
+$focus-outline-offset: 2px;         /* Offset outline focus */
+
+/* ============================================
+   UTILITÀ MIXINS (per uso futuro)
+   ============================================ */
+
+/* Note per i sviluppatori:
+ * - Questi valori sono stati estratti da "BO HSE" sezioni #mezzo-details-modal 
+ *   e #assignments-summary per garantire coerenza
+ * - Tutti i colori testo/sfondo rispettano WCAG AA (contrast ratio >= 4.5:1)
+ * - Font-size minimo 16px per input garantisce leggibilità
+ * - Line-height 1.5-1.8 per leggibilità ottimale
+ * - Dimensioni touch target >= 44px per accessibilità mobile
+ */
