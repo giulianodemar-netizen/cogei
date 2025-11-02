@@ -1884,7 +1884,8 @@ if (file_exists($disattivazioni_log)) {
     foreach ($page_lines as $index => $line) {
         if (empty(trim($line))) continue;
         
-        $entry_num = $offset + $index + 1;
+        // Calculate unique ID: total lines minus current position (newest = highest ID)
+        $entry_num = $total_lines - ($offset + $index);
         
         // Parse timestamp and message
         if (preg_match('/\[(.*?)\] (.*)/', $line, $matches)) {
