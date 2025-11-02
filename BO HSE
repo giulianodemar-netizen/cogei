@@ -15,8 +15,12 @@ if (!defined('ABSPATH')) {
 global $wpdb;
 date_default_timezone_set('Europe/Rome');
 
+// Includi logger centralizzato HSE
+require_once(ABSPATH . 'includes/log_mail_hse.php');
+
 // ================== CONFIGURAZIONE ==================
-$inviamail = false; // Cambia a true per attivare l'invio email
+$GLOBALS['inviamail'] = true; // Email ATTIVATE - Le email vengono inviate
+$inviamail = $GLOBALS['inviamail'];
 
 // ================== CREAZIONE NUOVE TABELLE CANTIERI ==================
 
@@ -1455,7 +1459,9 @@ echo '</div>';
 echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #e9ecef;">';
 echo '<button onclick="showTab(\'richieste\')" id="tab-richieste" class="tab-button active" style="background: #0066a2; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">📋 Richieste Cantiere</button>';
 echo '<button onclick="showTab(\'cantieri\')" id="tab-cantieri" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">🏗️ Gestione Cantieri</button>';
-echo '<button onclick="showTab(\'assegnazioni\')" id="tab-assegnazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 8px 8px 0 0;">🔗 Assegnazioni</button>';
+echo '<button onclick="showTab(\'assegnazioni\')" id="tab-assegnazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">🔗 Assegnazioni</button>';
+echo '<button onclick="showTab(\'log-email\')" id="tab-log-email" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">📧 Log Email</button>';
+echo '<button onclick="showTab(\'log-disattivazioni\')" id="tab-log-disattivazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 8px 8px 0 0;">🔴 Log Disattivazioni</button>';
 echo '</div>';
 
 // MESSAGGI DI FEEDBACK GLOBALI
@@ -2985,6 +2991,266 @@ echo '</div>';
 echo '</form>';
 echo '</div>';
 echo '</div>';
+
+// ================== LOG EMAIL TAB ==================
+echo '<div id="content-log-email" class="tab-content" style="display: none;">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">📧 Log Email HSE</h3>';
+
+$log_file = ABSPATH . 'log_mail/log_hse_mail.txt';
+
+if (file_exists($log_file)) {
+    $log_content = file_get_contents($log_file);
+    $log_lines = explode("\n", $log_content);
+    
+    // Parse log entries
+    $log_entries = [];
+    $current_entry = [];
+    
+    foreach ($log_lines as $line) {
+        if (preg_match('/^-{100}$/', $line)) {
+            if (!empty($current_entry)) {
+                $log_entries[] = $current_entry;
+                $current_entry = [];
+            }
+        } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+            $current_entry[] = $line;
+        }
+    }
+    
+    if (!empty($current_entry)) {
+        $log_entries[] = $current_entry;
+    }
+    
+    // Reverse to show newest first
+    $log_entries = array_reverse($log_entries);
+    
+    // Pagination
+    $per_page = 20;
+    $current_page = isset($_GET['log_page']) ? max(1, intval($_GET['log_page'])) : 1;
+    $total_entries = count($log_entries);
+    $total_pages = ceil($total_entries / $per_page);
+    $offset = ($current_page - 1) * $per_page;
+    $page_entries = array_slice($log_entries, $offset, $per_page);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+    echo '<strong>ℹ️ Informazioni:</strong> Mostra le ultime ' . $per_page . ' voci per pagina. Totale: ' . $total_entries . ' voci nel log.';
+    echo '</div>';
+    
+    // Pagination controls
+    if ($total_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button onclick="window.location.href=\'?log_page=' . ($current_page - 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_page = max(1, $current_page - 2);
+        $end_page = min($total_pages, $current_page + 2);
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="window.location.href=\'?log_page=' . $i . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button onclick="window.location.href=\'?log_page=' . ($current_page + 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    foreach ($page_entries as $entry) {
+        if (empty($entry)) continue;
+        
+        $first_line = $entry[0] ?? '';
+        
+        // Parse timestamp and type
+        preg_match('/\[(.*?)\] \[(.*?)\] (.*)/', $first_line, $matches);
+        $timestamp = $matches[1] ?? '';
+        $ambiente = $matches[2] ?? '';
+        $tipo = $matches[3] ?? '';
+        
+        // Determine color based on environment
+        $env_color = $ambiente === 'DEBUG' ? '#ffc107' : '#28a745';
+        $env_bg = $ambiente === 'DEBUG' ? '#fff3cd' : '#d4edda';
+        
+        // Determine color based on email type
+        $tipo_colors = [
+            'NOTIFICA_ADMIN_MODIFICHE_HSE' => ['bg' => '#fff3cd', 'text' => '#856404'],
+            'AVVISO_SCADENZA_15_GIORNI' => ['bg' => '#e7f3ff', 'text' => '#004085'],
+            'AVVISO_SCADENZA_5_GIORNI' => ['bg' => '#fff3cd', 'text' => '#856404'],
+            'AVVISO_SCADENZA_OGGI' => ['bg' => '#ffe5e5', 'text' => '#c82333'],
+            'AVVISO_DISATTIVAZIONE_15_GIORNI' => ['bg' => '#f8d7da', 'text' => '#721c24'],
+            'DISATTIVAZIONE_AUTOMATICA' => ['bg' => '#343a40', 'text' => '#ffffff']
+        ];
+        
+        $tipo_style = $tipo_colors[$tipo] ?? ['bg' => '#e9ecef', 'text' => '#495057'];
+        
+        echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+        
+        // Header
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">';
+        echo '<div>';
+        echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 8px;">' . $ambiente . '</span>';
+        echo '<span style="background: ' . $tipo_style['bg'] . '; color: ' . $tipo_style['text'] . '; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold;">' . $tipo . '</span>';
+        echo '</div>';
+        echo '<span style="color: #6c757d; font-size: 12px;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+        echo '</div>';
+        
+        // Content
+        echo '<div style="font-family: monospace; font-size: 12px; line-height: 1.6; background: #f8f9fa; padding: 12px; border-radius: 4px;">';
+        for ($i = 1; $i < count($entry); $i++) {
+            echo htmlspecialchars($entry[$i]) . '<br>';
+        }
+        echo '</div>';
+        
+        echo '</div>';
+    }
+    
+    // Pagination controls (bottom)
+    if ($total_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button onclick="window.location.href=\'?log_page=' . ($current_page - 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="window.location.href=\'?log_page=' . $i . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button onclick="window.location.href=\'?log_page=' . ($current_page + 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessuna email registrata</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il log verrà popolato quando vengono inviate email HSE.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End content-log-email
+
+// ================== LOG DISATTIVAZIONI TAB ==================
+echo '<div id="content-log-disattivazioni" class="tab-content" style="display: none;">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">🔴 Log Disattivazioni HSE</h3>';
+
+$log_dis_file = ABSPATH . 'log_mail/log_hse_disattivazioni.txt';
+
+if (file_exists($log_dis_file)) {
+    $log_dis_content = file_get_contents($log_dis_file);
+    $log_dis_lines = array_filter(explode("\n", $log_dis_content), function($line) {
+        return !empty(trim($line));
+    });
+    
+    // Reverse to show newest first
+    $log_dis_lines = array_reverse($log_dis_lines);
+    
+    // Pagination
+    $per_page_dis = 20;
+    $current_dis_page = isset($_GET['dis_page']) ? max(1, intval($_GET['dis_page'])) : 1;
+    $total_dis_entries = count($log_dis_lines);
+    $total_dis_pages = ceil($total_dis_entries / $per_page_dis);
+    $offset_dis = ($current_dis_page - 1) * $per_page_dis;
+    $page_dis_entries = array_slice($log_dis_lines, $offset_dis, $per_page_dis);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">';
+    echo '<strong>ℹ️ Informazioni:</strong> Log delle disattivazioni automatiche per documenti HSE scaduti. Totale: ' . $total_dis_entries . ' voci.';
+    echo '</div>';
+    
+    // Pagination controls (top)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page - 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_dis_page = max(1, $current_dis_page - 2);
+        $end_dis_page = min($total_dis_pages, $current_dis_page + 2);
+        
+        for ($i = $start_dis_page; $i <= $end_dis_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="window.location.href=\'?dis_page=' . $i . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page + 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    $entry_num = $total_dis_entries - $offset_dis;
+    foreach ($page_dis_entries as $line) {
+        if (preg_match('/\[(.*?)\] \[USER ID: (\d+)\] (.*)/', $line, $matches)) {
+            $timestamp = $matches[1];
+            $user_id_match = $matches[2];
+            $message = $matches[3];
+            
+            echo '<div style="border: 1px solid #f5c6cb; border-radius: 8px; padding: 15px; margin-bottom: 10px; background: #f8d7da; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+            
+            // Header
+            echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+            echo '<div>';
+            echo '<span style="background: #721c24; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID LOG: ' . $entry_num . '</span>';
+            if (!empty($user_id_match)) {
+                echo '<span style="background: #856404; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">USER ID: ' . htmlspecialchars($user_id_match) . '</span>';
+            }
+            echo '</div>';
+            echo '<span style="color: #721c24; font-size: 12px; font-weight: bold;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+            echo '</div>';
+            
+            // Content
+            echo '<div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">';
+            echo '<p style="margin: 0; color: #721c24; font-size: 14px; line-height: 1.5;"><strong>🔴 ' . htmlspecialchars($message) . '</strong></p>';
+            echo '</div>';
+            
+            echo '</div>';
+        } else {
+            // Fallback for non-standard format
+            echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #f8f9fa;">';
+            echo '<p style="margin: 0; font-family: monospace; font-size: 12px; color: #666;">' . htmlspecialchars($line) . '</p>';
+            echo '</div>';
+        }
+        $entry_num--;
+    }
+    
+    // Pagination controls (bottom)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page - 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_dis_page; $i <= $end_dis_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="window.location.href=\'?dis_page=' . $i . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page + 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessuna disattivazione registrata</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il log verrà popolato quando il cron esegue disattivazioni automatiche.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End content-log-disattivazioni
 
 // ================== JAVASCRIPT ESTESO ==================
 ?>
@@ -5795,8 +6061,11 @@ function debugCantieriSystem() {
 // ================== INIZIALIZZAZIONE ESTESA ==================
 
 document.addEventListener("DOMContentLoaded", function() {
-    // Inizializza stato tab
-    showTab('richieste');
+    // Inizializza stato tab - controlla se c'è un tab nell'URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    const defaultTab = tabParam || 'richieste';
+    showTab(defaultTab);
     
     // Inizializza filtri richieste
     var rows = document.querySelectorAll(".cantiere-row");
