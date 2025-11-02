@@ -14,6 +14,9 @@ if (!defined('ABSPATH')) {
 
 global $wpdb;
 
+// Includi logger centralizzato HSE
+require_once(ABSPATH . 'includes/log_mail_hse.php');
+
 $hse_max_file_size = 10 * 1024 * 1024; // 10MB in bytes
 $hse_allowed_extensions = array('pdf');
 
@@ -914,6 +917,99 @@ function hse_checkOperaioScadenze($operaio) {
     return $warnings;
 }
 
+/**
+ * Invia notifica email all'admin HSE quando un utente aggiorna i dati
+ */
+function sendHseAdminUpdateNotification($user_id, $update_type, $details = array()) {
+    $admin_email = 'ufficio_qualita@cogei.net';
+    $user = get_userdata($user_id);
+    if (!$user) return false;
+    
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    $user_email = $user->user_email;
+    
+    $subject = "ALERT: Aggiornamento dati HSE da utente";
+    
+    $type_labels = [
+        'parte_a' => 'Parte A - Dati Personale, Mezzi e Attrezzi',
+        'parte_b' => 'Parte B - Assegnazioni Cantiere'
+    ];
+    
+    $update_label = $type_labels[$update_type] ?? $update_type;
+    
+    $details_html = '';
+    if (!empty($details)) {
+        $details_html = '<div style="background: #f8f9fa; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;">';
+        $details_html .= '<h3 style="margin: 0 0 10px 0; color: #0c5460;">📋 Dettagli aggiornamento:</h3>';
+        $details_html .= '<ul style="margin: 0; padding-left: 20px;">';
+        foreach ($details as $key => $value) {
+            $details_html .= "<li><strong>{$key}:</strong> {$value}</li>";
+        }
+        $details_html .= '</ul>';
+        $details_html .= '</div>';
+    }
+    
+    $body = "<html>
+<head>
+<title>Notifica Aggiornamento HSE</title>
+</head>
+<body>
+<div style='background: #17a2b8; color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>📢 ALERT - Aggiornamento Dati HSE</h2>
+</div>
+
+<p>Ciao Admin,</p>
+
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha aggiornato i suoi dati HSE.</p>
+
+<div style='background: #d1ecf1; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #0c5460;'>📝 Tipo di aggiornamento:</h3>
+<strong>{$update_label}</strong>
+</div>
+
+{$details_html}
+
+<div style='background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #856404;'>👤 Informazioni Utente:</h3>
+• <strong>ID:</strong> {$user_id}<br>
+• <strong>Ragione Sociale:</strong> {$rag_soc}<br>
+• <strong>Email:</strong> {$user_email}
+</div>
+
+<p><strong>Data aggiornamento:</strong> " . date('d/m/Y H:i:s') . "</p>
+
+<p>Verifica i dati aggiornati nel pannello BO HSE.</p>
+
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 30px; border-radius: 4px;'>
+<div style='text-align: center; color: white; font-size: 12px;'>
+COGEI SRL - Sistema HSE Notifiche Automatiche<br>
+Copyright © 2023 Cogei. All Rights Reserved.
+</div>
+</div>
+</body>
+</html>";
+    
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <sistema-hse@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    
+    $email_sent = mail($admin_email, $subject, $body, $headers);
+    
+    // Log centralizzato
+    HseMailLogger::logAdminNotification(
+        $user_id,
+        $rag_soc ?: 'N/A',
+        $user_email,
+        $admin_email,
+        $email_sent,
+        array_map(function($k, $v) { return ['nome' => $k, 'valore' => $v]; }, array_keys($details), $details),
+        false // non è debug mode
+    );
+    
+    return $email_sent;
+}
+
 ?>
 <?php
 
@@ -1445,6 +1541,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     }
                     
                     $hse_success_message = "✅ Parte A salvata con successo! Dati personale ($hse_new_count persone), automezzi ($hse_new_automezzi_count) e attrezzi ($hse_new_attrezzi_count) aggiornati.";
+                    
+                    // Invia notifica admin
+                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', [
+                        'Personale' => $hse_new_count . ' persone',
+                        'Automezzi' => $hse_new_automezzi_count,
+                        'Attrezzi' => $hse_new_attrezzi_count
+                    ]);
                 }
             }
         } elseif (isset($_POST['hse_cantiere_submit_parte_b'])) {
@@ -1591,6 +1694,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     ));
                     
                     $hse_success_message = "✅ Parte B salvata con successo per il cantiere '$hse_cantiere_nome'! Assegnati: $hse_assigned_operai_count operai, $hse_assigned_automezzi_count automezzi, $hse_assigned_attrezzi_count attrezzi.";
+                    
+                    // Invia notifica admin
+                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_b', [
+                        'Cantiere' => $hse_cantiere_nome,
+                        'Operai assegnati' => $hse_assigned_operai_count,
+                        'Automezzi assegnati' => $hse_assigned_automezzi_count,
+                        'Attrezzi assegnati' => $hse_assigned_attrezzi_count
+                    ]);
                     
                     $hse_has_any_assignment = $wpdb->get_var($wpdb->prepare(
                         "SELECT COUNT(*) FROM (
