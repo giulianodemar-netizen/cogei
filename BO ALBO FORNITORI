@@ -1732,6 +1732,21 @@ if (file_exists($log_file)) {
         $env_color = $ambiente === 'DEBUG' ? '#ffc107' : '#28a745';
         $env_bg = $ambiente === 'DEBUG' ? '#fff3cd' : '#d4edda';
         
+        // Determine color based on email type
+        $tipo_colors = [
+            'ATTIVAZIONE_UTENTE' => ['bg' => '#d4edda', 'text' => '#155724'],                      // Verde
+            'DISATTIVAZIONE_UTENTE' => ['bg' => '#f8d7da', 'text' => '#721c24'],                  // Rosso
+            'RICHIESTA_DOCUMENTI' => ['bg' => '#d1ecf1', 'text' => '#0c5460'],                    // Ciano
+            'NOTIFICA_ADMIN_MODIFICHE_DOCUMENTI' => ['bg' => '#fff3cd', 'text' => '#856404'],     // Giallo
+            'AVVISO_SCADENZA_15_GIORNI' => ['bg' => '#e7f3ff', 'text' => '#004085'],              // Blu chiaro
+            'AVVISO_SCADENZA_5_GIORNI' => ['bg' => '#fff3cd', 'text' => '#856404'],               // Giallo/arancio
+            'AVVISO_SCADENZA_OGGI' => ['bg' => '#ffe5e5', 'text' => '#c82333'],                   // Rosso chiaro
+            'AVVISO_DISATTIVAZIONE_15_GIORNI' => ['bg' => '#f8d7da', 'text' => '#721c24'],        // Rosso scuro
+            'DISATTIVAZIONE_AUTOMATICA' => ['bg' => '#343a40', 'text' => '#ffffff']               // Nero
+        ];
+        
+        $tipo_style = $tipo_colors[$tipo] ?? ['bg' => '#e9ecef', 'text' => '#495057']; // Default grigio
+        
         echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
         
         // Header with checkbox and ID
@@ -1740,7 +1755,7 @@ if (file_exists($log_file)) {
         echo '<input type="checkbox" class="log-checkbox" name="log_indices[]" value="' . $global_index . '" onchange="updateSelectedCount()" style="margin-right: 10px; cursor: pointer;">';
         echo '<span style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID: ' . $global_index . '</span>';
         echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">' . htmlspecialchars($ambiente) . '</span>';
-        echo '<span style="font-weight: bold; color: #0066a2; font-size: 14px;">' . htmlspecialchars($tipo) . '</span>';
+        echo '<span style="background: ' . $tipo_style['bg'] . '; color: ' . $tipo_style['text'] . '; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">' . htmlspecialchars($tipo) . '</span>';
         echo '</div>';
         echo '<span style="color: #666; font-size: 12px;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
         echo '</div>';
