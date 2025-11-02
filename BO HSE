@@ -1573,6 +1573,146 @@ echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamai
 echo '<strong>Stato Email:</strong> ' . ($inviamail ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
 echo '</div>';
 
+// ================== RIEPILOGO MODIFICHE RECENTI HSE ==================
+
+// Function to get recent HSE updates
+function getRecentHseUpdates() {
+    global $wpdb;
+    
+    // Get updates from last 48 hours
+    $cutoff_date = date('Y-m-d H:i:s', strtotime('-48 hours'));
+    
+    $recent_updates = [];
+    
+    // Query for recently updated richieste
+    $richieste = $wpdb->get_results($wpdb->prepare(
+        "SELECT r.*, u.user_email, u.display_name
+        FROM {$wpdb->prefix}cantiere_richieste r
+        LEFT JOIN {$wpdb->users} u ON r.user_id = u.ID
+        WHERE r.data_aggiornamento >= %s
+        ORDER BY r.data_aggiornamento DESC",
+        $cutoff_date
+    ), ARRAY_A);
+    
+    foreach ($richieste as $richiesta) {
+        $user_id = $richiesta['user_id'];
+        $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+        
+        // Get details of what was updated
+        $changes = [];
+        
+        // Check personale updates
+        $personale_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_personale 
+            WHERE richiesta_id = %d AND data_aggiornamento >= %s",
+            $richiesta['id'], $cutoff_date
+        ));
+        
+        if ($personale_count > 0) {
+            $changes[] = "Personale: {$personale_count} record aggiornati";
+        }
+        
+        // Check automezzi updates  
+        $automezzi_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_automezzi
+            WHERE richiesta_id = %d AND data_aggiornamento >= %s",
+            $richiesta['id'], $cutoff_date
+        ));
+        
+        if ($automezzi_count > 0) {
+            $changes[] = "Automezzi: {$automezzi_count} aggiornati";
+        }
+        
+        // Check attrezzi updates
+        $attrezzi_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_attrezzi
+            WHERE richiesta_id = %d AND data_aggiornamento >= %s",
+            $richiesta['id'], $cutoff_date
+        ));
+        
+        if ($attrezzi_count > 0) {
+            $changes[] = "Attrezzi: {$attrezzi_count} aggiornati";
+        }
+        
+        // Check if DVR or RCT was updated
+        if (!empty($richiesta['dvr_file'])) {
+            $changes[] = "DVR caricato/aggiornato";
+        }
+        if (!empty($richiesta['rct_file'])) {
+            $changes[] = "RCT caricato/aggiornato";
+        }
+        
+        if (!empty($changes)) {
+            $recent_updates[] = [
+                'user_id' => $user_id,
+                'rag_soc' => $rag_soc ?: $richiesta['display_name'],
+                'email' => $richiesta['user_email'],
+                'timestamp' => $richiesta['data_aggiornamento'],
+                'changes' => $changes
+            ];
+        }
+    }
+    
+    return $recent_updates;
+}
+
+$recent_hse_updates = getRecentHseUpdates();
+
+if (!empty($recent_hse_updates)) {
+    echo '<div style="background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #17a2b8; overflow: hidden;">';
+    
+    // Accordion Header (clickable)
+    echo '<div onclick="toggleHseUpdatesAccordion()" style="background: rgba(23, 162, 184, 0.15); padding: 15px 20px; cursor: pointer; user-select: none; border-bottom: 1px solid #17a2b8;" onmouseover="this.style.background=\'rgba(23, 162, 184, 0.25)\'" onmouseout="this.style.background=\'rgba(23, 162, 184, 0.15)\'">';
+    echo '<h3 style="color: #0c5460; margin: 0; display: flex; align-items: center; justify-content: space-between;">';
+    echo '<span>📢 Aggiornamenti Recenti HSE (ultime 48 ore) <span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">' . count($recent_hse_updates) . ' aggiornamenti</span></span>';
+    echo '<span id="hse-accordion-arrow" style="font-size: 16px; transition: transform 0.3s ease;">▼</span>';
+    echo '</h3>';
+    echo '</div>';
+    
+    // Accordion Content (initially collapsed)
+    echo '<div id="hse-updates-content" style="display: none; padding: 20px;">';
+    echo '<div style="display: grid; gap: 15px;">';
+    foreach ($recent_hse_updates as $update) {
+        echo '<div style="background: #e7f3ff; border: 1px solid #0066a2; border-radius: 6px; padding: 15px; border-left: 4px solid #0066a2;">';
+        echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">';
+        echo '<div>';
+        echo '<strong style="color: #004085; font-size: 14px;">🏢 ' . htmlspecialchars($update['rag_soc']) . '</strong>';
+        echo '<div style="font-size: 12px; color: #6c757d; margin-top: 2px;">';
+        echo '<strong>ID:</strong> ' . $update['user_id'] . ' | ';
+        echo '<strong>Email:</strong> ' . htmlspecialchars($update['email']);
+        echo '</div>';
+        echo '</div>';
+        echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', strtotime($update['timestamp'])) . '</span>';
+        echo '</div>';
+        
+        echo '<div style="margin-top: 10px;">';
+        echo '<strong style="color: #004085; font-size: 12px;">📝 Modifiche effettuate:</strong>';
+        echo '<div style="margin-top: 5px; font-size: 11px; line-height: 1.4;">';
+        foreach ($update['changes'] as $change) {
+            echo '<div style="background: rgba(0,102,162,0.1); padding: 4px 8px; margin: 2px 0; border-radius: 3px;">';
+            echo '<strong style="color: #004085;">• ' . htmlspecialchars($change) . '</strong>';
+            echo '</div>';
+        }
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+    }
+    echo '</div>';
+    
+    echo '<div style="margin-top: 15px; padding: 10px; background: rgba(23,162,184,0.1); border-radius: 4px; font-size: 12px; color: #0c5460;">';
+    echo '<strong>ℹ️ Nota:</strong> Questi sono gli aggiornamenti effettuati dagli utenti HSE nelle ultime 48 ore. ';
+    echo 'Per ogni modifica è stata inviata una notifica email all\'amministratore (ufficio_qualita@cogei.net).';
+    echo '</div>';
+    
+    echo '</div>'; // Close accordion content
+    echo '</div>'; // Close accordion container
+} else {
+    echo '<div style="background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 15px; margin-bottom: 20px; border-left: 5px solid #28a745;">';
+    echo '<h4 style="color: #155724; margin: 0; display: flex; align-items: center;">✅ Nessun Aggiornamento Recente</h4>';
+    echo '<p style="margin: 8px 0 0 0; font-size: 14px; color: #155724;">Non ci sono aggiornamenti HSE nelle ultime 48 ore.</p>';
+    echo '</div>';
+}
+
 // TAB NAVIGATION
 echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #e9ecef;">';
 echo '<button onclick="showTab(\'richieste\')" id="tab-richieste" class="tab-button active" style="background: #0066a2; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">📋 Richieste Cantiere</button>';
@@ -7817,6 +7957,21 @@ echo '}';
 echo '';
 echo 'function closeMezzoDetailsModal() {';
 echo '    document.getElementById("mezzo-details-modal").style.display = "none";';
+echo '}';
+echo '';
+echo '// ================== HSE UPDATES ACCORDION ==================';
+echo '';
+echo 'function toggleHseUpdatesAccordion() {';
+echo '    const content = document.getElementById(\'hse-updates-content\');';
+echo '    const arrow = document.getElementById(\'hse-accordion-arrow\');';
+echo '    ';
+echo '    if (content.style.display === \'none\' || content.style.display === \'\') {';
+echo '        content.style.display = \'block\';';
+echo '        arrow.style.transform = \'rotate(180deg)\';';
+echo '    } else {';
+echo '        content.style.display = \'none\';';
+echo '        arrow.style.transform = \'rotate(0deg)\';';
+echo '    }';
 echo '}';
 echo '';
 echo '// ================== LOG DELETION FUNCTIONS ==================';
