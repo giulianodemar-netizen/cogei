@@ -18,8 +18,11 @@ if (!defined('ABSPATH')) {
 global $wpdb;
 date_default_timezone_set('Europe/Rome');
 
+// Includi logger centralizzato
+require_once(ABSPATH . 'includes/log_mail.php');
+
 // ================== CONFIGURAZIONE EMAIL ==================
-$inviamail = false; // Cambia a true per attivare l'invio email, false per solo log
+$inviamail = true; // Email ATTIVATE - Le email vengono inviate
 
 // ================== GESTIONE EXPORT CSV ==================
 
@@ -74,13 +77,9 @@ function sendActivationEmail($user_id) {
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $email = $user->user_email;
     
-    $log_file = ABSPATH . 'attiva_disattiva_utente_manuale.txt';
-    $timestamp = date('d/m/Y H:i:s');
-    
-    if ($inviamail) {
-        $to = $email;
-        $subject = "Il tuo account su Cogei.net è stato attivato";
-        $body = "<html>
+    $to = $email;
+    $subject = "Il tuo account su Cogei.net è stato attivato";
+    $body = "<html>
 <head>
 <title>Account attivato</title>
 </head>
@@ -97,24 +96,25 @@ Cogei S.r.l.
 </div>
 </body>
 </html>";
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
-        $headers .= 'Cc:' . "\r\n";
-        
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'Cc:' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
         $email_sent = mail($to, $subject, $body, $headers);
-        $log_entry = "[{$timestamp}] ATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
-    } else {
-        $log_entry = "[{$timestamp}] ATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email NON INVIATA (inviamail=false)\n";
     }
     
-    if (!file_exists($log_file)) {
-        $header = "LOG ATTIVAZIONI/DISATTIVAZIONI MANUALI - " . date('Y') . "\n";
-        $header .= str_repeat("=", 80) . "\n\n";
-        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
-    }
-    
-    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+    // Log centralizzato
+    AlboFornitoriMailLogger::logActivation(
+        $user_id,
+        $rag_soc ?: 'N/A',
+        $email,
+        $to,
+        $email_sent,
+        !$inviamail // debug_mode se inviamail è false
+    );
 }
 
 function sendDeactivationEmail($user_id) {
@@ -124,13 +124,9 @@ function sendDeactivationEmail($user_id) {
     $user_rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $user_email = $user->user_email;
     
-    $log_file = ABSPATH . 'attiva_disattiva_utente_manuale.txt';
-    $timestamp = date('d/m/Y H:i:s');
-    
-    if ($inviamail) {
-        $to = $user_email;
-        $subject = "Il tuo account su Cogei.net è stato disattivato";
-        $body = "<html>
+    $to = $user_email;
+    $subject = "Il tuo account su Cogei.net è stato disattivato";
+    $body = "<html>
 <head>
 <title>Account disattivato</title>
 </head>
@@ -149,24 +145,25 @@ Cogei SRL.
 </div>
 </body>
 </html>";
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
-        $headers .= 'Cc:' . "\r\n";
-        
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'Cc:' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
         $email_sent = mail($to, $subject, $body, $headers);
-        $log_entry = "[{$timestamp}] DISATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$user_email} | Ragione Sociale: {$user_rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
-    } else {
-        $log_entry = "[{$timestamp}] DISATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$user_email} | Ragione Sociale: {$user_rag_soc} | Email NON INVIATA (inviamail=false)\n";
     }
     
-    if (!file_exists($log_file)) {
-        $header = "LOG ATTIVAZIONI/DISATTIVAZIONI MANUALI - " . date('Y') . "\n";
-        $header .= str_repeat("=", 80) . "\n\n";
-        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
-    }
-    
-    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+    // Log centralizzato
+    AlboFornitoriMailLogger::logDeactivation(
+        $user_id,
+        $user_rag_soc ?: 'N/A',
+        $user_email,
+        $to,
+        $email_sent,
+        !$inviamail // debug_mode se inviamail è false
+    );
 }
 
 // ================== FUNZIONI HELPER ==================
@@ -556,16 +553,23 @@ function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_
     global $inviamail;
     
     $admin_email = 'ufficio_qualita@cogei.net';
+    $user = get_userdata($user_id);
+    $user_email = $user ? $user->user_email : 'N/A';
     
-    if ($inviamail) {
-        $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
-        
-        $documents_list = '';
-        foreach ($changed_documents as $change) {
-            $documents_list .= "- {$change['document']}: da '{$change['old_date']}' a '{$change['new_date']}'<br>";
-        }
-        
-        $body = "<html>
+    $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
+    
+    $documents_list = '';
+    $documenti_log = [];
+    foreach ($changed_documents as $change) {
+        $documents_list .= "- {$change['document']}: da '{$change['old_date']}' a '{$change['new_date']}'<br>";
+        $documenti_log[] = [
+            'nome' => $change['document'],
+            'old_date' => $change['old_date'],
+            'new_date' => $change['new_date']
+        ];
+    }
+    
+    $body = "<html>
 <head>
 <title>Disattivazione Automatica Fornitore</title>
 </head>
@@ -604,18 +608,27 @@ Copyright © 2023 Cogei. All Rights Reserved.
 </div>
 </body>
 </html>";
-        
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
-        $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
-        
+    
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
         $email_sent = mail($admin_email, $subject, $body, $headers);
-        
-        // Log email result
-        $log_entry = "[" . date('d/m/Y H:i:s') . "] ADMIN NOTIFICATION - ID: {$user_id} | Admin Email: {$admin_email} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
-        file_put_contents(ABSPATH . 'auto_disattivazione_documenti.txt', $log_entry, FILE_APPEND | LOCK_EX);
     }
+    
+    // Log centralizzato
+    AlboFornitoriMailLogger::logAdminNotification(
+        $user_id,
+        $rag_soc ?: 'N/A',
+        $user_email,
+        $admin_email,
+        $email_sent,
+        $documenti_log,
+        !$inviamail // debug_mode
+    );
 }
 
 // Function to collect all users with document changes for summary display
@@ -769,9 +782,8 @@ if (isset($_POST['document_action'])) {
                     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
                     $admin_user = get_userdata($current_user_id);
                     
-                    if ($inviamail) {
-                        $subject = "Richiesta Documenti - Cogei.net";
-                        $body = "<html>
+                    $subject = "Richiesta Documenti - Cogei.net";
+                    $body = "<html>
 <head>
 <title>Richiesta Documenti</title>
 </head>
@@ -793,13 +805,27 @@ Ti preghiamo di aggiornare i documenti richiesti nel tuo profilo fornitore.<br><
 </div>
 </body>
 </html>";
-                        
-                        $headers = "MIME-Version: 1.0" . "\r\n";
-                        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-                        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
-                        
-                        mail($user->user_email, $subject, $body, $headers);
+                    
+                    $headers = "MIME-Version: 1.0" . "\r\n";
+                    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+                    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+                    
+                    $email_sent = false;
+                    if ($inviamail) {
+                        $email_sent = mail($user->user_email, $subject, $body, $headers);
                     }
+                    
+                    // Log centralizzato
+                    AlboFornitoriMailLogger::logDocumentRequest(
+                        $user_id,
+                        $rag_soc,
+                        $user->user_email,
+                        $user->user_email,
+                        $email_sent,
+                        $richiesta_note,
+                        [], // allegati (verrà implementato dopo)
+                        !$inviamail // debug_mode
+                    );
                     
                     $success = true;
                     $success_info = [
@@ -1270,7 +1296,13 @@ foreach ($suppliers as $user) {
         $registration_date = date('d/m/Y H:i', strtotime($user->user_registered));
     }
     
-    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
+    // Determina stile riga: rosso per Disattivo
+    $row_style = 'border-bottom: 1px solid #ddd;';
+    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa') {
+        $row_style .= ' background-color: #f8d7da;';
+    }
+    
+    echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
