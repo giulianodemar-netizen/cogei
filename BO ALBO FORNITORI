@@ -820,8 +820,10 @@ if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
         
         // Redirect using JavaScript to avoid output buffer issues
         $deleted_count = count($indices_to_delete);
+        // Get the base path from REQUEST_URI (before any query params)
+        $base_path = strtok($_SERVER['REQUEST_URI'], '?');
         echo '<script type="text/javascript">';
-        echo 'window.location.href = "' . esc_url($_SERVER['PHP_SELF']) . '?tab=log&deleted=' . $deleted_count . '";';
+        echo 'window.location.href = "' . esc_url($base_path) . '?tab=log&deleted=' . $deleted_count . '";';
         echo '</script>';
         exit;
     }
@@ -1402,7 +1404,7 @@ if (!empty($users_with_changes)) {
 }
 
 // TABELLA
-echo '<div style="max-height: 600px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<div style="max-height: 800px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">';
 echo '<table style="width: 100%; border-collapse: collapse;">';
 echo '<thead style="position: sticky; top: 0; z-index: 10;">';
 echo '<tr style="background: #0066a2 !important; color: white !important;">';
