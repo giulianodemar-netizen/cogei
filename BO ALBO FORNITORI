@@ -750,6 +750,82 @@ function createDocumentRequestsTable() {
     $wpdb->query($sql);
 }
 
+// Handle log deletion actions
+if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
+    $log_file = ABSPATH . 'log_mail/log_mail_albo_fornitori.txt';
+    
+    if (file_exists($log_file) && isset($_POST['log_indices'])) {
+        $indices_to_delete = array_map('intval', $_POST['log_indices']);
+        
+        // Read and parse log
+        $log_content = file_get_contents($log_file);
+        $log_lines = explode("\n", $log_content);
+        
+        // Parse log entries
+        $log_entries = [];
+        $current_entry = [];
+        $entry_line_map = []; // Maps entry index to line numbers
+        $current_line_start = 0;
+        
+        foreach ($log_lines as $line_num => $line) {
+            if (preg_match('/^-{100}$/', $line)) {
+                if (!empty($current_entry)) {
+                    $entry_line_map[count($log_entries)] = [$current_line_start, $line_num];
+                    $log_entries[] = $current_entry;
+                    $current_entry = [];
+                }
+                $current_line_start = $line_num;
+            } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+                $current_entry[] = $line;
+            }
+        }
+        
+        if (!empty($current_entry)) {
+            $entry_line_map[count($log_entries)] = [$current_line_start, count($log_lines) - 1];
+            $log_entries[] = $current_entry;
+        }
+        
+        // Reverse indices since we display newest first
+        $log_entries_reversed = array_reverse($log_entries, true);
+        $total_entries = count($log_entries);
+        
+        // Build new log content
+        $lines_to_keep = [];
+        $entry_idx = 0;
+        foreach ($log_entries as $original_idx => $entry) {
+            $display_idx = $total_entries - 1 - $original_idx;
+            
+            if (!in_array($display_idx, $indices_to_delete)) {
+                // Keep this entry
+                if (isset($entry_line_map[$original_idx])) {
+                    $start = $entry_line_map[$original_idx][0];
+                    $end = $entry_line_map[$original_idx][1];
+                    for ($i = $start; $i <= $end; $i++) {
+                        $lines_to_keep[] = $log_lines[$i];
+                    }
+                }
+            }
+        }
+        
+        // Write back to file
+        if (empty($lines_to_keep)) {
+            // If all deleted, recreate with header
+            $header = str_repeat("=", 100) . "\n";
+            $header .= "LOG EMAIL ALBO FORNITORI - " . date('Y') . "\n";
+            $header .= str_repeat("=", 100) . "\n\n";
+            file_put_contents($log_file, $header, LOCK_EX);
+        } else {
+            file_put_contents($log_file, implode("\n", $lines_to_keep), LOCK_EX);
+        }
+        
+        // Redirect to avoid resubmission
+        $redirect_url = add_query_arg(['tab' => 'log', 'deleted' => count($indices_to_delete)], $_SERVER['REQUEST_URI']);
+        $redirect_url = remove_query_arg(['log_action', 'log_indices'], $redirect_url);
+        header("Location: " . $redirect_url);
+        exit;
+    }
+}
+
 // Handle document request actions
 if (isset($_POST['document_action'])) {
     $action = sanitize_text_field($_POST['document_action']);
@@ -1540,6 +1616,14 @@ echo '</div>'; // End tab-fornitori-content
 echo '<div id="tab-log-content" style="display: ' . ($current_tab === 'log' ? 'block' : 'none') . ';">';
 echo '<h3 style="color: #0066a2; margin-top: 0;">📧 Log Email Albo Fornitori</h3>';
 
+// Show deletion success message
+if (isset($_GET['deleted']) && is_numeric($_GET['deleted'])) {
+    $deleted_count = intval($_GET['deleted']);
+    echo '<div style="padding: 15px; background: #d4edda; border: 1px solid #28a745; border-radius: 4px; margin-bottom: 15px; color: #155724;">';
+    echo '<strong>✅ Successo:</strong> ' . $deleted_count . ' ' . ($deleted_count === 1 ? 'voce eliminata' : 'voci eliminate') . ' dal log.';
+    echo '</div>';
+}
+
 $log_file = ABSPATH . 'log_mail/log_mail_albo_fornitori.txt';
 
 if (file_exists($log_file)) {
@@ -1580,6 +1664,22 @@ if (file_exists($log_file)) {
     echo '<strong>ℹ️ Informazioni:</strong> Mostra le ultime ' . $per_page . ' voci per pagina. Totale: ' . $total_entries . ' voci nel log.';
     echo '</div>';
     
+    // Bulk actions form start
+    echo '<form id="log-delete-form" method="POST" onsubmit="return confirmLogDeletion()">';
+    echo '<input type="hidden" name="log_action" value="delete_logs">';
+    
+    // Bulk actions toolbar
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">';
+    echo '<div>';
+    echo '<label style="margin-right: 15px;"><input type="checkbox" id="select-all-logs" onchange="toggleAllLogs(this.checked)"> <strong>Seleziona tutto</strong></label>';
+    echo '<button type="submit" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">🗑️ Elimina Selezionati</button>';
+    echo '<span id="selected-count" style="margin-left: 10px; color: #666; font-size: 13px;"></span>';
+    echo '</div>';
+    echo '<div>';
+    echo '<button type="button" onclick="if(confirm(\'Confermi di voler eliminare TUTTE le voci del log?\')) { deleteAllLogs(); }" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">🗑️ Elimina Tutto</button>';
+    echo '</div>';
+    echo '</div>';
+    
     // Pagination controls
     if ($total_pages > 1) {
         echo '<div style="margin-bottom: 15px; text-align: center;">';
@@ -1604,8 +1704,11 @@ if (file_exists($log_file)) {
     }
     
     // Display log entries
+    $entry_index = 0;
     foreach ($page_entries as $entry) {
         if (empty($entry)) continue;
+        
+        $global_index = $offset + $entry_index; // Calculate global index for this entry
         
         $first_line = $entry[0] ?? '';
         
@@ -1621,9 +1724,10 @@ if (file_exists($log_file)) {
         
         echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
         
-        // Header
+        // Header with checkbox
         echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">';
-        echo '<div>';
+        echo '<div style="display: flex; align-items: center;">';
+        echo '<input type="checkbox" class="log-checkbox" name="log_indices[]" value="' . $global_index . '" onchange="updateSelectedCount()" style="margin-right: 10px; cursor: pointer;">';
         echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">' . htmlspecialchars($ambiente) . '</span>';
         echo '<span style="font-weight: bold; color: #0066a2; font-size: 14px;">' . htmlspecialchars($tipo) . '</span>';
         echo '</div>';
@@ -1657,7 +1761,11 @@ if (file_exists($log_file)) {
         }
         echo '</div>';
         echo '</div>';
+        
+        $entry_index++; // Increment for next entry
     }
+    
+    echo '</form>'; // Close log deletion form
     
     // Pagination controls (bottom)
     if ($total_pages > 1) {
@@ -2205,6 +2313,60 @@ function switchToLogPage(page) {
     url.searchParams.set('tab', 'log');
     url.searchParams.set('log_page', page);
     window.location.href = url.toString();
+}
+
+// ================== LOG DELETION FUNCTIONS ==================
+
+function toggleAllLogs(checked) {
+    const checkboxes = document.querySelectorAll('.log-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.checked = checked;
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.log-checkbox:checked');
+    const count = checkboxes.length;
+    const countSpan = document.getElementById('selected-count');
+    const selectAllCheckbox = document.getElementById('select-all-logs');
+    
+    if (countSpan) {
+        if (count > 0) {
+            countSpan.textContent = '(' + count + ' selezionat' + (count === 1 ? 'a' : 'e') + ')';
+            countSpan.style.fontWeight = 'bold';
+            countSpan.style.color = '#dc3545';
+        } else {
+            countSpan.textContent = '';
+        }
+    }
+    
+    // Update select all checkbox state
+    const allCheckboxes = document.querySelectorAll('.log-checkbox');
+    if (selectAllCheckbox && allCheckboxes.length > 0) {
+        selectAllCheckbox.checked = count === allCheckboxes.length;
+    }
+}
+
+function confirmLogDeletion() {
+    const checkboxes = document.querySelectorAll('.log-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('⚠️ Seleziona almeno una voce da eliminare');
+        return false;
+    }
+    
+    return confirm('Confermi di voler eliminare ' + checkboxes.length + ' ' + (checkboxes.length === 1 ? 'voce' : 'voci') + ' dal log?\n\nQuesta azione non può essere annullata.');
+}
+
+function deleteAllLogs() {
+    // Select all checkboxes
+    const checkboxes = document.querySelectorAll('.log-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.checked = true;
+    });
+    
+    // Submit the form
+    document.getElementById('log-delete-form').submit();
 }
 
 // Accordion functionality for document changes summary
