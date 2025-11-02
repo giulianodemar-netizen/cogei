@@ -138,6 +138,24 @@ class HseMailLogger {
     }
     
     /**
+     * Log semplificato per richiesta documenti
+     */
+    public static function logDocumentRequest($user_id, $user_name, $user_email, $destinatario, $email_sent, $note, $allegati = [], $debug_mode = false) {
+        self::log([
+            'ambiente' => $debug_mode ? 'DEBUG' : 'PROD',
+            'tipo_email' => 'RICHIESTA_DOCUMENTI',
+            'destinatario' => $destinatario,
+            'oggetto' => 'Richiesta Documenti - Cogei.net',
+            'user_id' => $user_id,
+            'user_name' => $user_name,
+            'user_email' => $user_email,
+            'note' => $note,
+            'allegati' => $allegati,
+            'email_sent' => $email_sent
+        ]);
+    }
+    
+    /**
      * Log per notifiche cron scadenze
      */
     public static function logCronNotification($tipo, $user_id, $user_name, $user_email, $destinatario, $email_sent, $documenti, $trigger_day, $debug_mode = false) {

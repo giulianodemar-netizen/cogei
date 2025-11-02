@@ -1328,7 +1328,23 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
 </body>
 </html>";
                         
-                        wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                        $email_sent = wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                    } else {
+                        $email_sent = false;
+                    }
+                    
+                    // Log centralizzato HSE
+                    if (class_exists('HseMailLogger')) {
+                        HseMailLogger::logDocumentRequest(
+                            $user_id,
+                            $rag_soc,
+                            $user->user_email,
+                            $user->user_email,
+                            $email_sent,
+                            $richiesta_note,
+                            [], // allegati (HSE non supporta allegati per ora)
+                            !$inviamail // debug_mode
+                        );
                     }
                     
                     $success = true;
