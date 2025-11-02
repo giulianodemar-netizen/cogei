@@ -818,9 +818,10 @@ if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
             file_put_contents($log_file, implode("\n", $lines_to_keep), LOCK_EX);
         }
         
-        // Redirect to avoid resubmission
-        $redirect_url = add_query_arg(['tab' => 'log', 'deleted' => count($indices_to_delete)], $_SERVER['REQUEST_URI']);
-        $redirect_url = remove_query_arg(['log_action', 'log_indices'], $redirect_url);
+        // Redirect to avoid resubmission - build clean URL
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?'); // Get URL without any query parameters
+        $redirect_url = add_query_arg(['tab' => 'log', 'deleted' => count($indices_to_delete)], $base_url);
         header("Location: " . $redirect_url);
         exit;
     }
