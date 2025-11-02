@@ -765,6 +765,65 @@ if (isset($_POST['document_action'])) {
             if (!empty($richiesta_note) && !empty($user_id)) {
                 global $wpdb;
                 
+                // Handle PDF attachments
+                $uploaded_files = [];
+                $attachment_errors = [];
+                
+                if (!empty($_FILES['allegati_pdf']['name'][0])) {
+                    $upload_dir = ABSPATH . 'wp-content/uploads/allegati_richieste_documenti/';
+                    
+                    // Ensure upload directory exists
+                    if (!file_exists($upload_dir)) {
+                        mkdir($upload_dir, 0755, true);
+                    }
+                    
+                    $max_file_size = 10 * 1024 * 1024; // 10 MB
+                    
+                    foreach ($_FILES['allegati_pdf']['name'] as $key => $filename) {
+                        if ($_FILES['allegati_pdf']['error'][$key] === UPLOAD_ERR_OK) {
+                            $tmp_name = $_FILES['allegati_pdf']['tmp_name'][$key];
+                            $file_size = $_FILES['allegati_pdf']['size'][$key];
+                            
+                            // Validate file type
+                            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                            $mime_type = finfo_file($finfo, $tmp_name);
+                            finfo_close($finfo);
+                            
+                            if ($mime_type !== 'application/pdf') {
+                                $attachment_errors[] = "File {$filename} non è un PDF valido";
+                                continue;
+                            }
+                            
+                            // Validate file extension
+                            $file_ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                            if ($file_ext !== 'pdf') {
+                                $attachment_errors[] = "File {$filename} deve avere estensione .pdf";
+                                continue;
+                            }
+                            
+                            // Validate file size
+                            if ($file_size > $max_file_size) {
+                                $attachment_errors[] = "File {$filename} supera il limite di 10 MB";
+                                continue;
+                            }
+                            
+                            // Generate safe filename
+                            $safe_filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', pathinfo($filename, PATHINFO_FILENAME));
+                            $new_filename = $user_id . '_' . time() . '_' . $safe_filename . '.pdf';
+                            $target_path = $upload_dir . $new_filename;
+                            
+                            // Move uploaded file
+                            if (move_uploaded_file($tmp_name, $target_path)) {
+                                // Set proper permissions
+                                chmod($target_path, 0644);
+                                $uploaded_files[] = $new_filename;
+                            } else {
+                                $attachment_errors[] = "Errore nel caricamento di {$filename}";
+                            }
+                        }
+                    }
+                }
+                
                 // Insert or update document request
                 $result = $wpdb->replace(
                     $wpdb->prefix . 'document_requests',
@@ -783,6 +842,19 @@ if (isset($_POST['document_action'])) {
                     $admin_user = get_userdata($current_user_id);
                     
                     $subject = "Richiesta Documenti - Cogei.net";
+                    
+                    // Build attachments list for email
+                    $attachments_html = '';
+                    if (!empty($uploaded_files)) {
+                        $attachments_html = '<div style="background: #e7f3ff; padding: 15px; border-left: 4px solid #0066a2; margin: 20px 0;">';
+                        $attachments_html .= '<strong>📎 Allegati:</strong><br>';
+                        foreach ($uploaded_files as $file) {
+                            $file_url = site_url('/wp-content/uploads/allegati_richieste_documenti/' . $file);
+                            $attachments_html .= '• <a href="' . $file_url . '" target="_blank">' . htmlspecialchars($file) . '</a><br>';
+                        }
+                        $attachments_html .= '</div>';
+                    }
+                    
                     $body = "<html>
 <head>
 <title>Richiesta Documenti</title>
@@ -797,6 +869,7 @@ hai ricevuto una richiesta di documenti dal pannello di amministrazione:<br><br>
 <strong>Richiesta:</strong><br>
 {$richiesta_note}
 </div>
+{$attachments_html}
 <strong>Richiesto da:</strong> {$admin_user->display_name}<br>
 <strong>Data richiesta:</strong> " . date('d/m/Y H:i') . "<br><br>
 Ti preghiamo di aggiornare i documenti richiesti nel tuo profilo fornitore.<br><br>
@@ -823,7 +896,7 @@ Ti preghiamo di aggiornare i documenti richiesti nel tuo profilo fornitore.<br><
                         $user->user_email,
                         $email_sent,
                         $richiesta_note,
-                        [], // allegati (verrà implementato dopo)
+                        $uploaded_files, // allegati
                         !$inviamail // debug_mode
                     );
                     
@@ -1398,24 +1471,30 @@ echo '<button onclick="closeDocumentRequestModal()" style="background: transpare
 echo '</div>';
 echo '<p style="margin: 8px 0 0 0; opacity: 0.9;">Azienda: <span id="document-azienda-name"></span></p>';
 echo '</div>';
-echo '<form id="document-request-form" method="POST" style="padding: 20px;">';
+echo '<form id="document-request-form" method="POST" enctype="multipart/form-data" onsubmit="return validateDocumentRequest()" style="padding: 20px;">';
 echo '<input type="hidden" name="document_action" value="request_documents">';
 echo '<input type="hidden" name="user_id" id="document-user-id" value="">';
 echo '<div style="margin-bottom: 20px;">';
 echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">📝 Descrizione richiesta documenti:</label>';
 echo '<textarea name="richiesta_note" id="document-richiesta-note" rows="4" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;" placeholder="Inserisci i dettagli della richiesta documenti..."></textarea>';
 echo '</div>';
+echo '<div style="margin-bottom: 20px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">📎 Allegati PDF (opzionale):</label>';
+echo '<input type="file" name="allegati_pdf[]" id="document-allegati" multiple accept=".pdf,application/pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<small style="display: block; margin-top: 5px; color: #6c757d;">Puoi allegare uno o più file PDF (max 10 MB ciascuno)</small>';
+echo '</div>';
 echo '<div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">';
 echo '<p style="margin: 0; font-size: 14px; color: #495057;"><strong>ℹ️ Informazioni:</strong></p>';
 echo '<ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px; color: #6c757d;">';
 echo '<li>Verrà inviata una email automatica all\'azienda</li>';
 echo '<li>La richiesta verrà registrata nel sistema</li>';
+echo '<li>Gli allegati PDF saranno inclusi nell\'email</li>';
 echo '<li>Puoi cancellare la richiesta in qualsiasi momento</li>';
 echo '</ul>';
 echo '</div>';
 echo '<div style="text-align: right;">';
 echo '<button type="button" onclick="closeDocumentRequestModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Annulla</button>';
-echo '<button type="button" onclick="submitDocumentRequest()" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">📄 Invia Richiesta</button>';
+echo '<button type="submit" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">📄 Invia Richiesta</button>';
 echo '</div>';
 echo '</form>';
 echo '</div>';
@@ -1770,23 +1849,49 @@ function closeDocumentRequestModal() {
     modal.style.display = 'none';
 }
 
-function submitDocumentRequest() {
-    const form = document.getElementById('document-request-form');
+function validateDocumentRequest() {
     const notes = document.getElementById('document-richiesta-note').value.trim();
+    const fileInput = document.getElementById('document-allegati');
     
     if (!notes) {
         alert('⚠️ Inserisci una nota per la richiesta documenti');
         document.getElementById('document-richiesta-note').focus();
-        return;
+        return false;
     }
     
     if (notes.length < 10) {
         alert('⚠️ La richiesta deve contenere almeno 10 caratteri');
         document.getElementById('document-richiesta-note').focus();
-        return;
+        return false;
     }
     
-    if (confirm('Confermi l\'invio della richiesta documenti all\'azienda?')) {
+    // Validate file uploads
+    if (fileInput.files.length > 0) {
+        const maxSize = 10 * 1024 * 1024; // 10 MB
+        for (let i = 0; i < fileInput.files.length; i++) {
+            const file = fileInput.files[i];
+            
+            // Check file type
+            if (file.type !== 'application/pdf') {
+                alert('⚠️ Solo file PDF sono accettati. File non valido: ' + file.name);
+                return false;
+            }
+            
+            // Check file size
+            if (file.size > maxSize) {
+                alert('⚠️ File troppo grande: ' + file.name + '\nLa dimensione massima è 10 MB.');
+                return false;
+            }
+        }
+    }
+    
+    return confirm('Confermi l\'invio della richiesta documenti all\'azienda?');
+}
+
+function submitDocumentRequest() {
+    // This function is no longer used, kept for backward compatibility
+    const form = document.getElementById('document-request-form');
+    if (validateDocumentRequest()) {
         form.submit();
     }
 }

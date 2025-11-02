@@ -1,0 +1,7 @@
+# Disable PHP execution for security
+<Files *.php>
+    deny from all
+</Files>
+
+# Disable directory listing
+Options -Indexes
