@@ -18,8 +18,11 @@ if (!defined('ABSPATH')) {
 global $wpdb;
 date_default_timezone_set('Europe/Rome');
 
+// Includi logger centralizzato
+require_once(ABSPATH . 'includes/log_mail.php');
+
 // ================== CONFIGURAZIONE EMAIL ==================
-$inviamail = false; // Cambia a true per attivare l'invio email, false per solo log
+$GLOBALS['inviamail'] = true; // Email ATTIVATE - Le email vengono inviate
 
 // ================== GESTIONE EXPORT CSV ==================
 
@@ -68,19 +71,15 @@ if (isset($_GET['csv_export']) && $_GET['csv_export'] === '1') {
 // ================== FUNZIONI EMAIL ==================
 
 function sendActivationEmail($user_id) {
-    global $inviamail;
+    $inviamail = $GLOBALS["inviamail"];
     
     $user = get_userdata($user_id);
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $email = $user->user_email;
     
-    $log_file = ABSPATH . 'attiva_disattiva_utente_manuale.txt';
-    $timestamp = date('d/m/Y H:i:s');
-    
-    if ($inviamail) {
-        $to = $email;
-        $subject = "Il tuo account su Cogei.net è stato attivato";
-        $body = "<html>
+    $to = $email;
+    $subject = "Il tuo account su Cogei.net è stato attivato";
+    $body = "<html>
 <head>
 <title>Account attivato</title>
 </head>
@@ -97,40 +96,37 @@ Cogei S.r.l.
 </div>
 </body>
 </html>";
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
-        $headers .= 'Cc:' . "\r\n";
-        
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'Cc:' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
         $email_sent = mail($to, $subject, $body, $headers);
-        $log_entry = "[{$timestamp}] ATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
-    } else {
-        $log_entry = "[{$timestamp}] ATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email NON INVIATA (inviamail=false)\n";
     }
     
-    if (!file_exists($log_file)) {
-        $header = "LOG ATTIVAZIONI/DISATTIVAZIONI MANUALI - " . date('Y') . "\n";
-        $header .= str_repeat("=", 80) . "\n\n";
-        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
-    }
-    
-    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+    // Log centralizzato
+    AlboFornitoriMailLogger::logActivation(
+        $user_id,
+        $rag_soc ?: 'N/A',
+        $email,
+        $to,
+        $email_sent,
+        !$inviamail // debug_mode se inviamail è false
+    );
 }
 
 function sendDeactivationEmail($user_id) {
-    global $inviamail;
+    $inviamail = $GLOBALS["inviamail"];
     
     $user = get_userdata($user_id);
     $user_rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $user_email = $user->user_email;
     
-    $log_file = ABSPATH . 'attiva_disattiva_utente_manuale.txt';
-    $timestamp = date('d/m/Y H:i:s');
-    
-    if ($inviamail) {
-        $to = $user_email;
-        $subject = "Il tuo account su Cogei.net è stato disattivato";
-        $body = "<html>
+    $to = $user_email;
+    $subject = "Il tuo account su Cogei.net è stato disattivato";
+    $body = "<html>
 <head>
 <title>Account disattivato</title>
 </head>
@@ -149,24 +145,25 @@ Cogei SRL.
 </div>
 </body>
 </html>";
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
-        $headers .= 'Cc:' . "\r\n";
-        
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'Cc:' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
         $email_sent = mail($to, $subject, $body, $headers);
-        $log_entry = "[{$timestamp}] DISATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$user_email} | Ragione Sociale: {$user_rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
-    } else {
-        $log_entry = "[{$timestamp}] DISATTIVAZIONE MANUALE - ID: {$user_id} | Email: {$user_email} | Ragione Sociale: {$user_rag_soc} | Email NON INVIATA (inviamail=false)\n";
     }
     
-    if (!file_exists($log_file)) {
-        $header = "LOG ATTIVAZIONI/DISATTIVAZIONI MANUALI - " . date('Y') . "\n";
-        $header .= str_repeat("=", 80) . "\n\n";
-        file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
-    }
-    
-    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+    // Log centralizzato
+    AlboFornitoriMailLogger::logDeactivation(
+        $user_id,
+        $user_rag_soc ?: 'N/A',
+        $user_email,
+        $to,
+        $email_sent,
+        !$inviamail // debug_mode se inviamail è false
+    );
 }
 
 // ================== FUNZIONI HELPER ==================
@@ -447,7 +444,8 @@ function getDocumentRequest($user_id) {
 
 // Function to check for document changes and auto-disable users
 function checkDocumentChangesAndDisableUser($user_id) {
-    global $wpdb, $inviamail;
+    global $wpdb;
+    $inviamail = $GLOBALS['inviamail'];
     
     // Get current live data from user_meta
     $user = get_userdata($user_id);
@@ -553,19 +551,26 @@ function checkDocumentChangesAndDisableUser($user_id) {
 
 // Function to send admin notification about document changes
 function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc) {
-    global $inviamail;
+    $inviamail = $GLOBALS["inviamail"];
     
     $admin_email = 'ufficio_qualita@cogei.net';
+    $user = get_userdata($user_id);
+    $user_email = $user ? $user->user_email : 'N/A';
     
-    if ($inviamail) {
-        $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
-        
-        $documents_list = '';
-        foreach ($changed_documents as $change) {
-            $documents_list .= "- {$change['document']}: da '{$change['old_date']}' a '{$change['new_date']}'<br>";
-        }
-        
-        $body = "<html>
+    $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
+    
+    $documents_list = '';
+    $documenti_log = [];
+    foreach ($changed_documents as $change) {
+        $documents_list .= "- {$change['document']}: da '{$change['old_date']}' a '{$change['new_date']}'<br>";
+        $documenti_log[] = [
+            'nome' => $change['document'],
+            'old_date' => $change['old_date'],
+            'new_date' => $change['new_date']
+        ];
+    }
+    
+    $body = "<html>
 <head>
 <title>Disattivazione Automatica Fornitore</title>
 </head>
@@ -604,18 +609,27 @@ Copyright © 2023 Cogei. All Rights Reserved.
 </div>
 </body>
 </html>";
-        
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
-        $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
-        
+    
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
         $email_sent = mail($admin_email, $subject, $body, $headers);
-        
-        // Log email result
-        $log_entry = "[" . date('d/m/Y H:i:s') . "] ADMIN NOTIFICATION - ID: {$user_id} | Admin Email: {$admin_email} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
-        file_put_contents(ABSPATH . 'auto_disattivazione_documenti.txt', $log_entry, FILE_APPEND | LOCK_EX);
     }
+    
+    // Log centralizzato
+    AlboFornitoriMailLogger::logAdminNotification(
+        $user_id,
+        $rag_soc ?: 'N/A',
+        $user_email,
+        $admin_email,
+        $email_sent,
+        $documenti_log,
+        !$inviamail // debug_mode
+    );
 }
 
 // Function to collect all users with document changes for summary display
@@ -737,6 +751,85 @@ function createDocumentRequestsTable() {
     $wpdb->query($sql);
 }
 
+// Handle log deletion actions
+if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
+    $log_file = ABSPATH . 'log_mail/log_mail_albo_fornitori.txt';
+    
+    if (file_exists($log_file) && isset($_POST['log_indices'])) {
+        $indices_to_delete = array_map('intval', $_POST['log_indices']);
+        
+        // Read and parse log
+        $log_content = file_get_contents($log_file);
+        $log_lines = explode("\n", $log_content);
+        
+        // Parse log entries
+        $log_entries = [];
+        $current_entry = [];
+        $entry_line_map = []; // Maps entry index to line numbers
+        $current_line_start = 0;
+        
+        foreach ($log_lines as $line_num => $line) {
+            if (preg_match('/^-{100}$/', $line)) {
+                if (!empty($current_entry)) {
+                    $entry_line_map[count($log_entries)] = [$current_line_start, $line_num];
+                    $log_entries[] = $current_entry;
+                    $current_entry = [];
+                }
+                $current_line_start = $line_num;
+            } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+                $current_entry[] = $line;
+            }
+        }
+        
+        if (!empty($current_entry)) {
+            $entry_line_map[count($log_entries)] = [$current_line_start, count($log_lines) - 1];
+            $log_entries[] = $current_entry;
+        }
+        
+        // Reverse indices since we display newest first
+        $log_entries_reversed = array_reverse($log_entries, true);
+        $total_entries = count($log_entries);
+        
+        // Build new log content
+        $lines_to_keep = [];
+        $entry_idx = 0;
+        foreach ($log_entries as $original_idx => $entry) {
+            $display_idx = $total_entries - 1 - $original_idx;
+            
+            if (!in_array($display_idx, $indices_to_delete)) {
+                // Keep this entry
+                if (isset($entry_line_map[$original_idx])) {
+                    $start = $entry_line_map[$original_idx][0];
+                    $end = $entry_line_map[$original_idx][1];
+                    for ($i = $start; $i <= $end; $i++) {
+                        $lines_to_keep[] = $log_lines[$i];
+                    }
+                }
+            }
+        }
+        
+        // Write back to file
+        if (empty($lines_to_keep)) {
+            // If all deleted, recreate with header
+            $header = str_repeat("=", 100) . "\n";
+            $header .= "LOG EMAIL ALBO FORNITORI - " . date('Y') . "\n";
+            $header .= str_repeat("=", 100) . "\n\n";
+            file_put_contents($log_file, $header, LOCK_EX);
+        } else {
+            file_put_contents($log_file, implode("\n", $lines_to_keep), LOCK_EX);
+        }
+        
+        // Redirect using JavaScript to avoid output buffer issues
+        $deleted_count = count($indices_to_delete);
+        // Get the base path from REQUEST_URI (before any query params)
+        $base_path = strtok($_SERVER['REQUEST_URI'], '?');
+        echo '<script type="text/javascript">';
+        echo 'window.location.href = "' . esc_url($base_path) . '?tab=log&deleted=' . $deleted_count . '";';
+        echo '</script>';
+        exit;
+    }
+}
+
 // Handle document request actions
 if (isset($_POST['document_action'])) {
     $action = sanitize_text_field($_POST['document_action']);
@@ -751,6 +844,69 @@ if (isset($_POST['document_action'])) {
             
             if (!empty($richiesta_note) && !empty($user_id)) {
                 global $wpdb;
+                
+                // Handle PDF attachments
+                $uploaded_files = [];
+                $attachment_errors = [];
+                
+                if (!empty($_FILES['allegati_pdf']['name'][0])) {
+                    $upload_dir = ABSPATH . 'wp-content/uploads/allegati_richieste_documenti/';
+                    
+                    // Ensure upload directory exists
+                    if (!file_exists($upload_dir)) {
+                        mkdir($upload_dir, 0755, true);
+                    }
+                    
+                    $max_file_size = 10 * 1024 * 1024; // 10 MB
+                    
+                    foreach ($_FILES['allegati_pdf']['name'] as $key => $filename) {
+                        if ($_FILES['allegati_pdf']['error'][$key] === UPLOAD_ERR_OK) {
+                            $tmp_name = $_FILES['allegati_pdf']['tmp_name'][$key];
+                            $file_size = $_FILES['allegati_pdf']['size'][$key];
+                            
+                            // Validate file type
+                            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                            $mime_type = finfo_file($finfo, $tmp_name);
+                            finfo_close($finfo);
+                            
+                            if ($mime_type !== 'application/pdf') {
+                                $attachment_errors[] = "File {$filename} non è un PDF valido";
+                                continue;
+                            }
+                            
+                            // Validate file extension
+                            $file_ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                            if ($file_ext !== 'pdf') {
+                                $attachment_errors[] = "File {$filename} deve avere estensione .pdf";
+                                continue;
+                            }
+                            
+                            // Validate file size
+                            if ($file_size > $max_file_size) {
+                                $attachment_errors[] = "File {$filename} supera il limite di 10 MB";
+                                continue;
+                            }
+                            
+                            // Generate safe filename (remove dots to prevent double extension exploits)
+                            $safe_filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($filename, PATHINFO_FILENAME));
+                            // Ensure filename doesn't start with underscore or dash
+                            $safe_filename = ltrim($safe_filename, '_-');
+                            // Use first 50 chars to prevent overly long filenames
+                            $safe_filename = substr($safe_filename, 0, 50);
+                            $new_filename = $user_id . '_' . time() . '_' . $safe_filename . '.pdf';
+                            $target_path = $upload_dir . $new_filename;
+                            
+                            // Move uploaded file
+                            if (move_uploaded_file($tmp_name, $target_path)) {
+                                // Set proper permissions
+                                chmod($target_path, 0644);
+                                $uploaded_files[] = $new_filename;
+                            } else {
+                                $attachment_errors[] = "Errore nel caricamento di {$filename}";
+                            }
+                        }
+                    }
+                }
                 
                 // Insert or update document request
                 $result = $wpdb->replace(
@@ -769,9 +925,21 @@ if (isset($_POST['document_action'])) {
                     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
                     $admin_user = get_userdata($current_user_id);
                     
-                    if ($inviamail) {
-                        $subject = "Richiesta Documenti - Cogei.net";
-                        $body = "<html>
+                    $subject = "Richiesta Documenti - Cogei.net";
+                    
+                    // Build attachments list for email
+                    $attachments_html = '';
+                    if (!empty($uploaded_files)) {
+                        $attachments_html = '<div style="background: #e7f3ff; padding: 15px; border-left: 4px solid #0066a2; margin: 20px 0;">';
+                        $attachments_html .= '<strong>📎 Allegati:</strong><br>';
+                        foreach ($uploaded_files as $file) {
+                            $file_url = site_url('/wp-content/uploads/allegati_richieste_documenti/' . $file);
+                            $attachments_html .= '• <a href="' . $file_url . '" target="_blank">' . htmlspecialchars($file) . '</a><br>';
+                        }
+                        $attachments_html .= '</div>';
+                    }
+                    
+                    $body = "<html>
 <head>
 <title>Richiesta Documenti</title>
 </head>
@@ -785,6 +953,7 @@ hai ricevuto una richiesta di documenti dal pannello di amministrazione:<br><br>
 <strong>Richiesta:</strong><br>
 {$richiesta_note}
 </div>
+{$attachments_html}
 <strong>Richiesto da:</strong> {$admin_user->display_name}<br>
 <strong>Data richiesta:</strong> " . date('d/m/Y H:i') . "<br><br>
 Ti preghiamo di aggiornare i documenti richiesti nel tuo profilo fornitore.<br><br>
@@ -793,13 +962,27 @@ Ti preghiamo di aggiornare i documenti richiesti nel tuo profilo fornitore.<br><
 </div>
 </body>
 </html>";
-                        
-                        $headers = "MIME-Version: 1.0" . "\r\n";
-                        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-                        $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
-                        
-                        mail($user->user_email, $subject, $body, $headers);
+                    
+                    $headers = "MIME-Version: 1.0" . "\r\n";
+                    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+                    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+                    
+                    $email_sent = false;
+                    if ($inviamail) {
+                        $email_sent = mail($user->user_email, $subject, $body, $headers);
                     }
+                    
+                    // Log centralizzato
+                    AlboFornitoriMailLogger::logDocumentRequest(
+                        $user_id,
+                        $rag_soc,
+                        $user->user_email,
+                        $user->user_email,
+                        $email_sent,
+                        $richiesta_note,
+                        $uploaded_files, // allegati
+                        !$inviamail // debug_mode
+                    );
                     
                     $success = true;
                     $success_info = [
@@ -1015,10 +1198,21 @@ createSuppliersCopyTable();
 echo '<div style="margin: 20px; font-family: Arial, sans-serif;">';
 echo '<h2>Gestione Fornitori</h2>';
 
+// ================== TAB NAVIGATION ==================
+$current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'fornitori';
+
+echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #0066a2;">';
+echo '<button onclick="switchTab(\'fornitori\')" id="tab-fornitori" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'fornitori' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'fornitori' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📋 Fornitori</button>';
+echo '<button onclick="switchTab(\'log\')" id="tab-log" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'log' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'log' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📧 Log Email</button>';
+echo '<button onclick="switchTab(\'disattivazioni\')" id="tab-disattivazioni" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'disattivazioni' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'disattivazioni' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">🔴 Log Disattivazioni</button>';
+echo '</div>';
+
+// Tab Content Container
+echo '<div id="tab-fornitori-content" style="display: ' . ($current_tab === 'fornitori' ? 'block' : 'none') . ';">';
+
 // STATO EMAIL
-global $inviamail;
-echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamail ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($inviamail ? '#28a745' : '#ffc107') . ';">';
-echo '<strong>Stato Email:</strong> ' . ($inviamail ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
+echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($GLOBALS['inviamail'] ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($GLOBALS['inviamail'] ? '#28a745' : '#ffc107') . ';">';
+echo '<strong>Stato Email:</strong> ' . ($GLOBALS['inviamail'] ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
 echo '</div>';
 
 // CONTROLLI
@@ -1211,10 +1405,13 @@ if (!empty($users_with_changes)) {
 }
 
 // TABELLA
-echo '<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">';
+echo '<div style="max-height: 800px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<table style="width: 100%; border-collapse: collapse;">';
+echo '<thead style="position: sticky; top: 0; z-index: 10;">';
 echo '<tr style="background: #0066a2 !important; color: white !important;">';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">ID</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Tipo</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Campo Utente</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Ragione Sociale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Email</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
@@ -1228,6 +1425,8 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">📄 Nota richiesta documenti</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
 echo '</tr>';
+echo '</thead>';
+echo '<tbody>';
 
 $suppliers = get_users([
     'role' => 'subscriber',
@@ -1239,6 +1438,60 @@ foreach ($suppliers as $user) {
     $user_id = $user->ID;
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    
+    // Determina campo utente specifico in base al tipo
+    $user_campo_spec = '';
+    switch ($tipo) {
+        case 'Lavoro':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_lav', false);
+            if (!empty($campo_array) && is_array($campo_array)) {
+                // Get first element if it's an array of arrays
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
+            break;
+        case 'Servizi':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_servizi', false);
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
+            break;
+        case 'Forniture':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_forniture', false);
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
+            break;
+        case 'Subappalto':
+            $user_campo_spec = 'VUOTO';
+            break;
+        case 'Noli':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_noli', false);
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
+            break;
+        case 'Consulenze':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_consulenze', false);
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
+            break;
+        case 'Polizze':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_polizze', false);
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
+            break;
+        default:
+            $user_campo_spec = 'N/A';
+            break;
+    }
     
     // Calcola dati dinamici
     $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
@@ -1270,9 +1523,16 @@ foreach ($suppliers as $user) {
         $registration_date = date('d/m/Y H:i', strtotime($user->user_registered));
     }
     
-    echo '<tr style="border-bottom: 1px solid #ddd;" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
+    // Determina stile riga: rosso per Disattivo e stati non attivi
+    $row_style = 'border-bottom: 1px solid #ddd;';
+    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa' || $dynamic_status === 'Solo_Registrato_In_Attesa') {
+        $row_style .= ' background-color: #f8d7da;';
+    }
+    
+    echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . ($user_campo_spec ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->display_name . '</td>';
@@ -1323,7 +1583,8 @@ foreach ($suppliers as $user) {
     echo '<td style="padding: 8px; border: 1px solid #ddd;">';
     
     // Pulsanti azioni
-    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa') {
+    // Utenti non attivi: Disattivo, Disattivo_In_Attesa, Solo_Registrato_In_Attesa
+    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa' || $dynamic_status === 'Solo_Registrato_In_Attesa') {
         if ($can_activate) {
             $current_url = $_SERVER['REQUEST_URI'];
             $base_url = strtok($current_url, '?');
@@ -1354,7 +1615,344 @@ foreach ($suppliers as $user) {
     echo '</tr>';
 }
 
+echo '</tbody>';
 echo '</table>';
+echo '</div>'; // Close scrollable wrapper
+
+// Close fornitori tab
+echo '</div>'; // End tab-fornitori-content
+
+// ================== LOG EMAIL TAB ==================
+echo '<div id="tab-log-content" style="display: ' . ($current_tab === 'log' ? 'block' : 'none') . ';">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">📧 Log Email Albo Fornitori</h3>';
+
+// Show deletion success message
+if (isset($_GET['deleted']) && is_numeric($_GET['deleted'])) {
+    $deleted_count = intval($_GET['deleted']);
+    echo '<div style="padding: 15px; background: #d4edda; border: 1px solid #28a745; border-radius: 4px; margin-bottom: 15px; color: #155724;">';
+    echo '<strong>✅ Successo:</strong> ' . $deleted_count . ' ' . ($deleted_count === 1 ? 'voce eliminata' : 'voci eliminate') . ' dal log.';
+    echo '</div>';
+}
+
+$log_file = ABSPATH . 'log_mail/log_mail_albo_fornitori.txt';
+
+if (file_exists($log_file)) {
+    $log_content = file_get_contents($log_file);
+    $log_lines = explode("\n", $log_content);
+    
+    // Parse log entries
+    $log_entries = [];
+    $current_entry = [];
+    
+    foreach ($log_lines as $line) {
+        if (preg_match('/^-{100}$/', $line)) {
+            if (!empty($current_entry)) {
+                $log_entries[] = $current_entry;
+                $current_entry = [];
+            }
+        } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+            $current_entry[] = $line;
+        }
+    }
+    
+    if (!empty($current_entry)) {
+        $log_entries[] = $current_entry;
+    }
+    
+    // Reverse to show newest first
+    $log_entries = array_reverse($log_entries);
+    
+    // Pagination
+    $per_page = 20;
+    $current_page = isset($_GET['log_page']) ? max(1, intval($_GET['log_page'])) : 1;
+    $total_entries = count($log_entries);
+    $total_pages = ceil($total_entries / $per_page);
+    $offset = ($current_page - 1) * $per_page;
+    $page_entries = array_slice($log_entries, $offset, $per_page);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+    echo '<strong>ℹ️ Informazioni:</strong> Mostra le ultime ' . $per_page . ' voci per pagina. Totale: ' . $total_entries . ' voci nel log.';
+    echo '</div>';
+    
+    // Bulk actions form start
+    echo '<form id="log-delete-form" method="POST" onsubmit="return confirmLogDeletion()">';
+    echo '<input type="hidden" name="log_action" value="delete_logs">';
+    
+    // Bulk actions toolbar
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">';
+    echo '<div>';
+    echo '<label style="margin-right: 15px;"><input type="checkbox" id="select-all-logs" onchange="toggleAllLogs(this.checked)"> <strong>Seleziona tutto</strong></label>';
+    echo '<button type="submit" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">🗑️ Elimina Selezionati</button>';
+    echo '<span id="selected-count" style="margin-left: 10px; color: #666; font-size: 13px;"></span>';
+    echo '</div>';
+    echo '<div>';
+    echo '<button type="button" onclick="if(confirm(\'Confermi di voler eliminare TUTTE le voci del log?\')) { deleteAllLogs(); }" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">🗑️ Elimina Tutto</button>';
+    echo '</div>';
+    echo '</div>';
+    
+    // Pagination controls
+    if ($total_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button onclick="switchToLogPage(' . ($current_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_page = max(1, $current_page - 2);
+        $end_page = min($total_pages, $current_page + 2);
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToLogPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button onclick="switchToLogPage(' . ($current_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    $entry_index = 0;
+    foreach ($page_entries as $entry) {
+        if (empty($entry)) continue;
+        
+        $global_index = $offset + $entry_index; // Calculate global index for this entry
+        
+        $first_line = $entry[0] ?? '';
+        
+        // Parse timestamp and type
+        preg_match('/\[(.*?)\] \[(.*?)\] (.*)/', $first_line, $matches);
+        $timestamp = $matches[1] ?? '';
+        $ambiente = $matches[2] ?? '';
+        $tipo = $matches[3] ?? '';
+        
+        // Determine color based on environment
+        $env_color = $ambiente === 'DEBUG' ? '#ffc107' : '#28a745';
+        $env_bg = $ambiente === 'DEBUG' ? '#fff3cd' : '#d4edda';
+        
+        // Determine color based on email type
+        $tipo_colors = [
+            'ATTIVAZIONE_UTENTE' => ['bg' => '#d4edda', 'text' => '#155724'],                      // Verde
+            'DISATTIVAZIONE_UTENTE' => ['bg' => '#f8d7da', 'text' => '#721c24'],                  // Rosso
+            'RICHIESTA_DOCUMENTI' => ['bg' => '#d1ecf1', 'text' => '#0c5460'],                    // Ciano
+            'NOTIFICA_ADMIN_MODIFICHE_DOCUMENTI' => ['bg' => '#fff3cd', 'text' => '#856404'],     // Giallo
+            'AVVISO_SCADENZA_15_GIORNI' => ['bg' => '#e7f3ff', 'text' => '#004085'],              // Blu chiaro
+            'AVVISO_SCADENZA_5_GIORNI' => ['bg' => '#fff3cd', 'text' => '#856404'],               // Giallo/arancio
+            'AVVISO_SCADENZA_OGGI' => ['bg' => '#ffe5e5', 'text' => '#c82333'],                   // Rosso chiaro
+            'AVVISO_DISATTIVAZIONE_15_GIORNI' => ['bg' => '#f8d7da', 'text' => '#721c24'],        // Rosso scuro
+            'DISATTIVAZIONE_AUTOMATICA' => ['bg' => '#343a40', 'text' => '#ffffff']               // Nero
+        ];
+        
+        $tipo_style = $tipo_colors[$tipo] ?? ['bg' => '#e9ecef', 'text' => '#495057']; // Default grigio
+        
+        echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+        
+        // Header with checkbox and ID
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">';
+        echo '<div style="display: flex; align-items: center;">';
+        echo '<input type="checkbox" class="log-checkbox" name="log_indices[]" value="' . $global_index . '" onchange="updateSelectedCount()" style="margin-right: 10px; cursor: pointer;">';
+        echo '<span style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID: ' . $global_index . '</span>';
+        echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">' . htmlspecialchars($ambiente) . '</span>';
+        echo '<span style="background: ' . $tipo_style['bg'] . '; color: ' . $tipo_style['text'] . '; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">' . htmlspecialchars($tipo) . '</span>';
+        echo '</div>';
+        echo '<span style="color: #666; font-size: 12px;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+        echo '</div>';
+        
+        // Content
+        echo '<div style="font-family: monospace; font-size: 12px; line-height: 1.6;">';
+        for ($i = 1; $i < count($entry); $i++) {
+            $line = $entry[$i];
+            if (empty(trim($line))) continue;
+            
+            // Highlight important fields
+            if (strpos($line, 'Destinatario:') === 0) {
+                echo '<div style="margin: 5px 0;"><strong style="color: #0066a2;">📧 ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Oggetto:') === 0) {
+                echo '<div style="margin: 5px 0;"><strong style="color: #333;">✉️ ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Utente:') === 0) {
+                echo '<div style="margin: 5px 0;"><strong style="color: #6c757d;">👤 ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Stato:') === 0) {
+                $is_success = strpos($line, 'SUCCESSO') !== false || strpos($line, 'INVIATA') !== false;
+                $status_color = $is_success ? '#28a745' : ($ambiente === 'DEBUG' ? '#ffc107' : '#dc3545');
+                echo '<div style="margin: 5px 0;"><strong style="color: ' . $status_color . ';">✓ ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Documenti coinvolti:') === 0 || strpos($line, 'Allegati:') === 0) {
+                echo '<div style="margin: 5px 0; color: #666;"><strong>' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (preg_match('/^  - /', $line)) {
+                echo '<div style="margin: 2px 0 2px 15px; color: #666;">📄 ' . htmlspecialchars(trim($line)) . '</div>';
+            } else {
+                echo '<div style="margin: 2px 0; color: #666;">' . htmlspecialchars($line) . '</div>';
+            }
+        }
+        echo '</div>';
+        echo '</div>';
+        
+        $entry_index++; // Increment for next entry
+    }
+    
+    echo '</form>'; // Close log deletion form
+    
+    // Pagination controls (bottom)
+    if ($total_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button onclick="switchToLogPage(' . ($current_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToLogPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button onclick="switchToLogPage(' . ($current_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessun log disponibile</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il file log verrà creato automaticamente al primo invio email.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End tab-log-content
+
+// ================== LOG DISATTIVAZIONI TAB ==================
+echo '<div id="tab-disattivazioni-content" style="display: ' . ($current_tab === 'disattivazioni' ? 'block' : 'none') . ';">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">🔴 Log Disattivazioni Automatiche</h3>';
+
+echo '<div style="margin-bottom: 15px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+echo '<strong>ℹ️ Informazioni:</strong> Questo log registra tutte le disattivazioni automatiche eseguite dal cron quando i documenti scadono da oltre 15 giorni.';
+echo '</div>';
+
+$disattivazioni_log = ABSPATH . 'log_mail/log_cron_disattivazioni.txt';
+
+if (file_exists($disattivazioni_log)) {
+    $log_content = file_get_contents($disattivazioni_log);
+    $log_lines = explode("\n", $log_content);
+    
+    // Filter out empty lines and headers
+    $log_lines = array_filter($log_lines, function($line) {
+        $trimmed = trim($line);
+        return !empty($trimmed) && strpos($trimmed, '===') === false;
+    });
+    
+    // Reverse to show newest first
+    $log_lines = array_reverse(array_values($log_lines));
+    
+    // Pagination
+    $per_page = 30;
+    $current_dis_page = isset($_GET['dis_page']) ? max(1, intval($_GET['dis_page'])) : 1;
+    $total_lines = count($log_lines);
+    $total_dis_pages = ceil($total_lines / $per_page);
+    $offset = ($current_dis_page - 1) * $per_page;
+    $page_lines = array_slice($log_lines, $offset, $per_page);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+    echo '<strong>ℹ️ Statistiche:</strong> Mostra ' . $per_page . ' voci per pagina. Totale disattivazioni registrate: <strong>' . $total_lines . '</strong>';
+    echo '</div>';
+    
+    // Pagination controls (top)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_page = max(1, $current_dis_page - 2);
+        $end_page = min($total_dis_pages, $current_dis_page + 2);
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToDisattivazioniPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    foreach ($page_lines as $index => $line) {
+        if (empty(trim($line))) continue;
+        
+        // Calculate unique ID: total lines minus current position (newest = highest ID)
+        $entry_num = $total_lines - ($offset + $index);
+        
+        // Parse timestamp and message
+        if (preg_match('/\[(.*?)\] (.*)/', $line, $matches)) {
+            $timestamp = $matches[1] ?? '';
+            $message = $matches[2] ?? '';
+            
+            // Extract user ID if present
+            $user_id_match = '';
+            if (preg_match('/Fornitore ID (\d+)/', $message, $id_matches)) {
+                $user_id_match = $id_matches[1];
+            }
+            
+            echo '<div style="border: 1px solid #f5c6cb; border-radius: 8px; padding: 15px; margin-bottom: 10px; background: #f8d7da; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+            
+            // Header
+            echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+            echo '<div>';
+            echo '<span style="background: #721c24; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID LOG: ' . $entry_num . '</span>';
+            if (!empty($user_id_match)) {
+                echo '<span style="background: #856404; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">USER ID: ' . htmlspecialchars($user_id_match) . '</span>';
+            }
+            echo '</div>';
+            echo '<span style="color: #721c24; font-size: 12px; font-weight: bold;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+            echo '</div>';
+            
+            // Content
+            echo '<div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">';
+            echo '<p style="margin: 0; color: #721c24; font-size: 14px; line-height: 1.5;"><strong>🔴 ' . htmlspecialchars($message) . '</strong></p>';
+            echo '</div>';
+            
+            echo '</div>';
+        } else {
+            // Fallback for non-standard format
+            echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #f8f9fa;">';
+            echo '<p style="margin: 0; font-family: monospace; font-size: 12px; color: #666;">' . htmlspecialchars($line) . '</p>';
+            echo '</div>';
+        }
+    }
+    
+    // Pagination controls (bottom)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToDisattivazioniPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessuna disattivazione registrata</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il log verrà popolato quando il cron esegue disattivazioni automatiche.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End tab-disattivazioni-content
 
 // Document Request Modal
 echo '<div id="document-request-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">';
@@ -1366,24 +1964,30 @@ echo '<button onclick="closeDocumentRequestModal()" style="background: transpare
 echo '</div>';
 echo '<p style="margin: 8px 0 0 0; opacity: 0.9;">Azienda: <span id="document-azienda-name"></span></p>';
 echo '</div>';
-echo '<form id="document-request-form" method="POST" style="padding: 20px;">';
+echo '<form id="document-request-form" method="POST" enctype="multipart/form-data" onsubmit="return validateDocumentRequest()" style="padding: 20px;">';
 echo '<input type="hidden" name="document_action" value="request_documents">';
 echo '<input type="hidden" name="user_id" id="document-user-id" value="">';
 echo '<div style="margin-bottom: 20px;">';
 echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">📝 Descrizione richiesta documenti:</label>';
 echo '<textarea name="richiesta_note" id="document-richiesta-note" rows="4" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;" placeholder="Inserisci i dettagli della richiesta documenti..."></textarea>';
 echo '</div>';
+echo '<div style="margin-bottom: 20px;">';
+echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #333;">📎 Allegati PDF (opzionale):</label>';
+echo '<input type="file" name="allegati_pdf[]" id="document-allegati" multiple accept=".pdf,application/pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<small style="display: block; margin-top: 5px; color: #6c757d;">Puoi allegare uno o più file PDF (max 10 MB ciascuno)</small>';
+echo '</div>';
 echo '<div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">';
 echo '<p style="margin: 0; font-size: 14px; color: #495057;"><strong>ℹ️ Informazioni:</strong></p>';
 echo '<ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px; color: #6c757d;">';
 echo '<li>Verrà inviata una email automatica all\'azienda</li>';
 echo '<li>La richiesta verrà registrata nel sistema</li>';
+echo '<li>Gli allegati PDF saranno inclusi nell\'email</li>';
 echo '<li>Puoi cancellare la richiesta in qualsiasi momento</li>';
 echo '</ul>';
 echo '</div>';
 echo '<div style="text-align: right;">';
 echo '<button type="button" onclick="closeDocumentRequestModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Annulla</button>';
-echo '<button type="button" onclick="submitDocumentRequest()" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">📄 Invia Richiesta</button>';
+echo '<button type="submit" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">📄 Invia Richiesta</button>';
 echo '</div>';
 echo '</form>';
 echo '</div>';
@@ -1523,7 +2127,16 @@ function shouldRowBeVisible(row) {
     
     if (selectedStatuses.length > 0) {
         var rowStatus = row.getAttribute("data-status");
-        if (selectedStatuses.indexOf(rowStatus) === -1) {
+        
+        // Logica speciale: se "Disattivo" è selezionato, mostra anche stati non attivi correlati
+        var disattivoSelected = selectedStatuses.indexOf("Disattivo") !== -1;
+        var nonActiveStatuses = ["Disattivo", "Disattivo_In_Attesa", "Solo_Registrato_In_Attesa"];
+        
+        if (disattivoSelected && nonActiveStatuses.indexOf(rowStatus) !== -1) {
+            // Mostra se è uno degli stati non attivi e "Disattivo" è selezionato
+            return true;
+        } else if (selectedStatuses.indexOf(rowStatus) === -1) {
+            // Altrimenti controlla match esatto
             return false;
         }
     }
@@ -1738,23 +2351,49 @@ function closeDocumentRequestModal() {
     modal.style.display = 'none';
 }
 
-function submitDocumentRequest() {
-    const form = document.getElementById('document-request-form');
+function validateDocumentRequest() {
     const notes = document.getElementById('document-richiesta-note').value.trim();
+    const fileInput = document.getElementById('document-allegati');
     
     if (!notes) {
         alert('⚠️ Inserisci una nota per la richiesta documenti');
         document.getElementById('document-richiesta-note').focus();
-        return;
+        return false;
     }
     
     if (notes.length < 10) {
         alert('⚠️ La richiesta deve contenere almeno 10 caratteri');
         document.getElementById('document-richiesta-note').focus();
-        return;
+        return false;
     }
     
-    if (confirm('Confermi l\'invio della richiesta documenti all\'azienda?')) {
+    // Validate file uploads
+    if (fileInput.files.length > 0) {
+        const maxSize = 10 * 1024 * 1024; // 10 MB
+        for (let i = 0; i < fileInput.files.length; i++) {
+            const file = fileInput.files[i];
+            
+            // Check file type
+            if (file.type !== 'application/pdf') {
+                alert('⚠️ Solo file PDF sono accettati. File non valido: ' + file.name);
+                return false;
+            }
+            
+            // Check file size
+            if (file.size > maxSize) {
+                alert('⚠️ File troppo grande: ' + file.name + '\nLa dimensione massima è 10 MB.');
+                return false;
+            }
+        }
+    }
+    
+    return confirm('Confermi l\'invio della richiesta documenti all\'azienda?');
+}
+
+function submitDocumentRequest() {
+    // This function is no longer used, kept for backward compatibility
+    const form = document.getElementById('document-request-form');
+    if (validateDocumentRequest()) {
         form.submit();
     }
 }
@@ -1789,6 +2428,120 @@ window.onclick = function(event) {
     if (event.target === modal) {
         closeDocumentRequestModal();
     }
+}
+
+// ================== TAB SWITCHING ==================
+
+function switchTab(tabName) {
+    // Hide all tab contents
+    document.getElementById('tab-fornitori-content').style.display = 'none';
+    document.getElementById('tab-log-content').style.display = 'none';
+    document.getElementById('tab-disattivazioni-content').style.display = 'none';
+    
+    // Remove active styling from all buttons
+    var buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(function(btn) {
+        btn.style.background = '#f0f0f0';
+        btn.style.color = '#333';
+    });
+    
+    // Show selected tab and update button style
+    if (tabName === 'fornitori') {
+        document.getElementById('tab-fornitori-content').style.display = 'block';
+        document.getElementById('tab-fornitori').style.background = '#0066a2';
+        document.getElementById('tab-fornitori').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'fornitori');
+        window.history.pushState({}, '', url);
+    } else if (tabName === 'log') {
+        document.getElementById('tab-log-content').style.display = 'block';
+        document.getElementById('tab-log').style.background = '#0066a2';
+        document.getElementById('tab-log').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'log');
+        window.history.pushState({}, '', url);
+    } else if (tabName === 'disattivazioni') {
+        document.getElementById('tab-disattivazioni-content').style.display = 'block';
+        document.getElementById('tab-disattivazioni').style.background = '#0066a2';
+        document.getElementById('tab-disattivazioni').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'disattivazioni');
+        window.history.pushState({}, '', url);
+    }
+}
+
+function switchToLogPage(page) {
+    var url = new URL(window.location);
+    url.searchParams.set('tab', 'log');
+    url.searchParams.set('log_page', page);
+    window.location.href = url.toString();
+}
+
+function switchToDisattivazioniPage(page) {
+    var url = new URL(window.location);
+    url.searchParams.set('tab', 'disattivazioni');
+    url.searchParams.set('dis_page', page);
+    window.location.href = url.toString();
+}
+
+// ================== LOG DELETION FUNCTIONS ==================
+
+function toggleAllLogs(checked) {
+    const checkboxes = document.querySelectorAll('.log-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.checked = checked;
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.log-checkbox:checked');
+    const count = checkboxes.length;
+    const countSpan = document.getElementById('selected-count');
+    const selectAllCheckbox = document.getElementById('select-all-logs');
+    
+    if (countSpan) {
+        if (count > 0) {
+            countSpan.textContent = '(' + count + ' selezionat' + (count === 1 ? 'a' : 'e') + ')';
+            countSpan.style.fontWeight = 'bold';
+            countSpan.style.color = '#dc3545';
+        } else {
+            countSpan.textContent = '';
+        }
+    }
+    
+    // Update select all checkbox state
+    const allCheckboxes = document.querySelectorAll('.log-checkbox');
+    if (selectAllCheckbox && allCheckboxes.length > 0) {
+        selectAllCheckbox.checked = count === allCheckboxes.length;
+    }
+}
+
+function confirmLogDeletion() {
+    const checkboxes = document.querySelectorAll('.log-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('⚠️ Seleziona almeno una voce da eliminare');
+        return false;
+    }
+    
+    return confirm('Confermi di voler eliminare ' + checkboxes.length + ' ' + (checkboxes.length === 1 ? 'voce' : 'voci') + ' dal log?\n\nQuesta azione non può essere annullata.');
+}
+
+function deleteAllLogs() {
+    // Select all checkboxes
+    const checkboxes = document.querySelectorAll('.log-checkbox');
+    checkboxes.forEach(function(cb) {
+        cb.checked = true;
+    });
+    
+    // Submit the form
+    document.getElementById('log-delete-form').submit();
 }
 
 // Accordion functionality for document changes summary
