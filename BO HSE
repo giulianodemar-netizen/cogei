@@ -1180,6 +1180,11 @@ function calculateComplianceStatus($personale) {
 function sendCantiereEmail($user_id, $action) {
     global $inviamail;
     
+    // Ensure $inviamail is properly set
+    if (!isset($inviamail)) {
+        $inviamail = true; // Default to true if not set
+    }
+    
     $user = get_userdata($user_id);
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $email = $user->user_email;
