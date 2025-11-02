@@ -1360,30 +1360,49 @@ foreach ($suppliers as $user) {
     switch ($tipo) {
         case 'Lavoro':
             $campo_array = get_user_meta($user_id, 'user_registration_campo_lav', false);
-            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            if (!empty($campo_array) && is_array($campo_array)) {
+                // Get first element if it's an array of arrays
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
             break;
         case 'Servizi':
             $campo_array = get_user_meta($user_id, 'user_registration_campo_servizi', false);
-            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
             break;
         case 'Forniture':
             $campo_array = get_user_meta($user_id, 'user_registration_campo_forniture', false);
-            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
             break;
         case 'Subappalto':
             $user_campo_spec = 'VUOTO';
             break;
         case 'Noli':
             $campo_array = get_user_meta($user_id, 'user_registration_campo_noli', false);
-            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
             break;
         case 'Consulenze':
             $campo_array = get_user_meta($user_id, 'user_registration_campo_consulenze', false);
-            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
             break;
         case 'Polizze':
             $campo_array = get_user_meta($user_id, 'user_registration_campo_polizze', false);
-            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            if (!empty($campo_array) && is_array($campo_array)) {
+                $campo_data = is_array($campo_array[0]) ? $campo_array[0] : $campo_array;
+                $user_campo_spec = is_array($campo_data) ? implode(', ', $campo_data) : $campo_data;
+            }
             break;
         default:
             $user_campo_spec = 'N/A';
@@ -1420,9 +1439,9 @@ foreach ($suppliers as $user) {
         $registration_date = date('d/m/Y H:i', strtotime($user->user_registered));
     }
     
-    // Determina stile riga: rosso per Disattivo
+    // Determina stile riga: rosso per Disattivo e stati non attivi
     $row_style = 'border-bottom: 1px solid #ddd;';
-    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa') {
+    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa' || $dynamic_status === 'Solo_Registrato_In_Attesa') {
         $row_style .= ' background-color: #f8d7da;';
     }
     
@@ -1480,7 +1499,8 @@ foreach ($suppliers as $user) {
     echo '<td style="padding: 8px; border: 1px solid #ddd;">';
     
     // Pulsanti azioni
-    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa') {
+    // Utenti non attivi: Disattivo, Disattivo_In_Attesa, Solo_Registrato_In_Attesa
+    if ($dynamic_status === 'Disattivo' || $dynamic_status === 'Disattivo_In_Attesa' || $dynamic_status === 'Solo_Registrato_In_Attesa') {
         if ($can_activate) {
             $current_url = $_SERVER['REQUEST_URI'];
             $base_url = strtok($current_url, '?');
