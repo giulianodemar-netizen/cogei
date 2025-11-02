@@ -843,7 +843,7 @@ if (isset($_POST['document_action'])) {
             $richiesta_note = sanitize_textarea_field($_POST['richiesta_note']);
             
             if (!empty($richiesta_note) && !empty($user_id)) {
-                global $wpdb;
+                global $wpdb, $inviamail;
                 
                 // Handle PDF attachments
                 $uploaded_files = [];
