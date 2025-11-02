@@ -444,7 +444,8 @@ function getDocumentRequest($user_id) {
 
 // Function to check for document changes and auto-disable users
 function checkDocumentChangesAndDisableUser($user_id) {
-    global $wpdb, $inviamail;
+    global $wpdb;
+    $inviamail = $GLOBALS['inviamail'];
     
     // Get current live data from user_meta
     $user = get_userdata($user_id);
