@@ -19,8 +19,7 @@ date_default_timezone_set('Europe/Rome');
 require_once(ABSPATH . 'includes/log_mail_hse.php');
 
 // ================== CONFIGURAZIONE ==================
-$GLOBALS['inviamail'] = true; // Email ATTIVATE - Le email vengono inviate
-$inviamail = $GLOBALS['inviamail'];
+$inviamail = true; // Email ATTIVATE - Le email vengono inviate
 
 // ================== CREAZIONE NUOVE TABELLE CANTIERI ==================
 

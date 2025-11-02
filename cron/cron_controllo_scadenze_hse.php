@@ -58,10 +58,25 @@ function calculateDaysToExpiry($scadenza_date) {
     }
     
     // Gestisci formato date SQL (Y-m-d) e italiano (d/m/Y)
-    $converted_date = str_replace("/", "-", $scadenza_date);
     try {
         $now = new DateTime("now");
-        $expiry_date = new DateTime($converted_date . ' 23:59:59');
+        $expiry_date = null;
+        
+        // Prova formato italiano d/m/Y
+        if (strpos($scadenza_date, '/') !== false) {
+            $expiry_date = DateTime::createFromFormat('d/m/Y H:i:s', $scadenza_date . ' 23:59:59');
+        }
+        
+        // Prova formato SQL Y-m-d se il precedente fallisce
+        if (!$expiry_date) {
+            $expiry_date = DateTime::createFromFormat('Y-m-d H:i:s', $scadenza_date . ' 23:59:59');
+        }
+        
+        // Fallback al parsing standard se entrambi falliscono
+        if (!$expiry_date) {
+            $expiry_date = new DateTime($scadenza_date . ' 23:59:59');
+        }
+        
         $interval = $now->diff($expiry_date);
         return (int)$interval->format('%r%a');
     } catch (Exception $e) {
@@ -570,7 +585,8 @@ foreach ($hse_users as $hse_user_row) {
 
 // Notifica admin delle sospensioni
 if (!empty($disabled_users)) {
-    echo "Invio notifica admin per {count($disabled_users)} utenti sospesi...\n";
+    $num_disabled = count($disabled_users);
+    echo "Invio notifica admin per {$num_disabled} utenti sospesi...\n";
     notifyAdminDisabling($disabled_users, $debug_mode);
     echo "✓ Notifica admin inviata\n\n";
 }
