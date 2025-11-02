@@ -1202,7 +1202,8 @@ $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'fornit
 
 echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #0066a2;">';
 echo '<button onclick="switchTab(\'fornitori\')" id="tab-fornitori" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'fornitori' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'fornitori' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📋 Fornitori</button>';
-echo '<button onclick="switchTab(\'log\')" id="tab-log" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'log' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'log' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">📧 Log Email</button>';
+echo '<button onclick="switchTab(\'log\')" id="tab-log" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'log' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'log' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📧 Log Email</button>';
+echo '<button onclick="switchTab(\'disattivazioni\')" id="tab-disattivazioni" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'disattivazioni' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'disattivazioni' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">🔴 Log Disattivazioni</button>';
 echo '</div>';
 
 // Tab Content Container
@@ -1806,6 +1807,137 @@ if (file_exists($log_file)) {
 
 echo '</div>'; // End tab-log-content
 
+// ================== LOG DISATTIVAZIONI TAB ==================
+echo '<div id="tab-disattivazioni-content" style="display: ' . ($current_tab === 'disattivazioni' ? 'block' : 'none') . ';">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">🔴 Log Disattivazioni Automatiche</h3>';
+
+echo '<div style="margin-bottom: 15px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+echo '<strong>ℹ️ Informazioni:</strong> Questo log registra tutte le disattivazioni automatiche eseguite dal cron quando i documenti scadono da oltre 15 giorni.';
+echo '</div>';
+
+$disattivazioni_log = ABSPATH . 'log_mail/log_cron_disattivazioni.txt';
+
+if (file_exists($disattivazioni_log)) {
+    $log_content = file_get_contents($disattivazioni_log);
+    $log_lines = explode("\n", $log_content);
+    
+    // Filter out empty lines and headers
+    $log_lines = array_filter($log_lines, function($line) {
+        $trimmed = trim($line);
+        return !empty($trimmed) && strpos($trimmed, '===') === false;
+    });
+    
+    // Reverse to show newest first
+    $log_lines = array_reverse(array_values($log_lines));
+    
+    // Pagination
+    $per_page = 30;
+    $current_dis_page = isset($_GET['dis_page']) ? max(1, intval($_GET['dis_page'])) : 1;
+    $total_lines = count($log_lines);
+    $total_dis_pages = ceil($total_lines / $per_page);
+    $offset = ($current_dis_page - 1) * $per_page;
+    $page_lines = array_slice($log_lines, $offset, $per_page);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+    echo '<strong>ℹ️ Statistiche:</strong> Mostra ' . $per_page . ' voci per pagina. Totale disattivazioni registrate: <strong>' . $total_lines . '</strong>';
+    echo '</div>';
+    
+    // Pagination controls (top)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_page = max(1, $current_dis_page - 2);
+        $end_page = min($total_dis_pages, $current_dis_page + 2);
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToDisattivazioniPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    foreach ($page_lines as $index => $line) {
+        if (empty(trim($line))) continue;
+        
+        $entry_num = $offset + $index + 1;
+        
+        // Parse timestamp and message
+        if (preg_match('/\[(.*?)\] (.*)/', $line, $matches)) {
+            $timestamp = $matches[1] ?? '';
+            $message = $matches[2] ?? '';
+            
+            // Extract user ID if present
+            $user_id_match = '';
+            if (preg_match('/Fornitore ID (\d+)/', $message, $id_matches)) {
+                $user_id_match = $id_matches[1];
+            }
+            
+            echo '<div style="border: 1px solid #f5c6cb; border-radius: 8px; padding: 15px; margin-bottom: 10px; background: #f8d7da; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+            
+            // Header
+            echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+            echo '<div>';
+            echo '<span style="background: #721c24; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID LOG: ' . $entry_num . '</span>';
+            if (!empty($user_id_match)) {
+                echo '<span style="background: #856404; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">USER ID: ' . htmlspecialchars($user_id_match) . '</span>';
+            }
+            echo '</div>';
+            echo '<span style="color: #721c24; font-size: 12px; font-weight: bold;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+            echo '</div>';
+            
+            // Content
+            echo '<div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">';
+            echo '<p style="margin: 0; color: #721c24; font-size: 14px; line-height: 1.5;"><strong>🔴 ' . htmlspecialchars($message) . '</strong></p>';
+            echo '</div>';
+            
+            echo '</div>';
+        } else {
+            // Fallback for non-standard format
+            echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #f8f9fa;">';
+            echo '<p style="margin: 0; font-family: monospace; font-size: 12px; color: #666;">' . htmlspecialchars($line) . '</p>';
+            echo '</div>';
+        }
+    }
+    
+    // Pagination controls (bottom)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToDisattivazioniPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="switchToDisattivazioniPage(' . ($current_dis_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessuna disattivazione registrata</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il log verrà popolato quando il cron esegue disattivazioni automatiche.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End tab-disattivazioni-content
+
 // Document Request Modal
 echo '<div id="document-request-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">';
 echo '<div style="background-color: #fefefe; margin: 5% auto; padding: 0; border: none; border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">';
@@ -2288,6 +2420,7 @@ function switchTab(tabName) {
     // Hide all tab contents
     document.getElementById('tab-fornitori-content').style.display = 'none';
     document.getElementById('tab-log-content').style.display = 'none';
+    document.getElementById('tab-disattivazioni-content').style.display = 'none';
     
     // Remove active styling from all buttons
     var buttons = document.querySelectorAll('.tab-button');
@@ -2315,6 +2448,15 @@ function switchTab(tabName) {
         var url = new URL(window.location);
         url.searchParams.set('tab', 'log');
         window.history.pushState({}, '', url);
+    } else if (tabName === 'disattivazioni') {
+        document.getElementById('tab-disattivazioni-content').style.display = 'block';
+        document.getElementById('tab-disattivazioni').style.background = '#0066a2';
+        document.getElementById('tab-disattivazioni').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'disattivazioni');
+        window.history.pushState({}, '', url);
     }
 }
 
@@ -2322,6 +2464,13 @@ function switchToLogPage(page) {
     var url = new URL(window.location);
     url.searchParams.set('tab', 'log');
     url.searchParams.set('log_page', page);
+    window.location.href = url.toString();
+}
+
+function switchToDisattivazioniPage(page) {
+    var url = new URL(window.location);
+    url.searchParams.set('tab', 'disattivazioni');
+    url.searchParams.set('dis_page', page);
     window.location.href = url.toString();
 }
 
