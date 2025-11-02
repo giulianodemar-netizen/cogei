@@ -821,8 +821,14 @@ if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
         // Redirect to avoid resubmission - build clean URL
         $current_url = $_SERVER['REQUEST_URI'];
         $base_url = strtok($current_url, '?'); // Get URL without any query parameters
-        $redirect_url = add_query_arg(['tab' => 'log', 'deleted' => count($indices_to_delete)], $base_url);
-        header("Location: " . $redirect_url);
+        $redirect_url = $base_url . '?tab=log&deleted=' . count($indices_to_delete);
+        
+        // Clear any output buffers before redirect
+        if (ob_get_length()) {
+            ob_end_clean();
+        }
+        
+        wp_redirect($redirect_url);
         exit;
     }
 }
@@ -1402,7 +1408,9 @@ if (!empty($users_with_changes)) {
 }
 
 // TABELLA
-echo '<table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">';
+echo '<div style="max-height: 600px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">';
+echo '<table style="width: 100%; border-collapse: collapse;">';
+echo '<thead style="position: sticky; top: 0; z-index: 10;">';
 echo '<tr style="background: #0066a2 !important; color: white !important;">';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">ID</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Tipo</th>';
@@ -1420,6 +1428,8 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">📄 Nota richiesta documenti</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
 echo '</tr>';
+echo '</thead>';
+echo '<tbody>';
 
 $suppliers = get_users([
     'role' => 'subscriber',
@@ -1608,7 +1618,9 @@ foreach ($suppliers as $user) {
     echo '</tr>';
 }
 
+echo '</tbody>';
 echo '</table>';
+echo '</div>'; // Close scrollable wrapper
 
 // Close fornitori tab
 echo '</div>'; // End tab-fornitori-content
@@ -1725,10 +1737,11 @@ if (file_exists($log_file)) {
         
         echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
         
-        // Header with checkbox
+        // Header with checkbox and ID
         echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">';
         echo '<div style="display: flex; align-items: center;">';
         echo '<input type="checkbox" class="log-checkbox" name="log_indices[]" value="' . $global_index . '" onchange="updateSelectedCount()" style="margin-right: 10px; cursor: pointer;">';
+        echo '<span style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID: ' . $global_index . '</span>';
         echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">' . htmlspecialchars($ambiente) . '</span>';
         echo '<span style="font-weight: bold; color: #0066a2; font-size: 14px;">' . htmlspecialchars($tipo) . '</span>';
         echo '</div>';
