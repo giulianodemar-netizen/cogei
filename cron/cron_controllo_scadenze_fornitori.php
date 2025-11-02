@@ -88,12 +88,46 @@ function getRequiredDocuments($user_id) {
 }
 
 /**
+ * Verifica se l'email è già stata inviata di recente
+ */
+function hasRecentEmailSent($user_id, $trigger_day) {
+    // Ottieni il timestamp dell'ultimo invio per questo utente e trigger day
+    $last_sent_key = "cron_email_last_sent_{$trigger_day}";
+    $last_sent = get_user_meta($user_id, $last_sent_key, true);
+    
+    if (empty($last_sent)) {
+        return false; // Mai inviata
+    }
+    
+    // Controlla se è stata inviata nelle ultime 24 ore
+    $now = time();
+    $time_diff = $now - $last_sent;
+    $hours_diff = $time_diff / 3600;
+    
+    // Se l'email è stata inviata meno di 24 ore fa, considera come già inviata
+    return $hours_diff < 24;
+}
+
+/**
+ * Registra l'invio dell'email
+ */
+function recordEmailSent($user_id, $trigger_day) {
+    $last_sent_key = "cron_email_last_sent_{$trigger_day}";
+    update_user_meta($user_id, $last_sent_key, time());
+}
+
+/**
  * Invia email di notifica scadenza
  */
 function sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_mode) {
     $user = get_userdata($user_id);
     if (!$user) {
         return false;
+    }
+    
+    // Controlla se l'email è già stata inviata di recente
+    if (hasRecentEmailSent($user_id, $trigger_day)) {
+        return 'skipped'; // Ritorna 'skipped' invece di false
     }
     
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
@@ -155,6 +189,9 @@ function sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_m
         $trigger_day,
         $debug_mode
     );
+    
+    // Registra l'invio dell'email
+    recordEmailSent($user_id, $trigger_day);
     
     return $email_sent;
 }
@@ -363,6 +400,7 @@ $suppliers = get_users([
 
 $total_suppliers = count($suppliers);
 $notifications_sent = 0;
+$notifications_skipped = 0;
 $disabled_users = [];
 
 echo "Trovati {$total_suppliers} fornitori da controllare...\n\n";
@@ -424,11 +462,17 @@ foreach ($suppliers as $user) {
         echo "  --> Invio notifica per {$trigger_day} giorni con " . count($expiring_docs) . " documento(i)\n";
         
         // Invia notifica consolidata
-        sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_mode);
-        $notifications_sent++;
+        $result = sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_mode);
+        
+        if ($result === 'skipped') {
+            echo "  --> SKIPPED - Email già inviata nelle ultime 24 ore\n";
+            $notifications_skipped++;
+        } else {
+            $notifications_sent++;
+        }
         
         // Se trigger -15, disattiva fornitore (una sola volta)
-        if ($trigger_day === -15) {
+        if ($trigger_day === -15 && $result !== 'skipped') {
             echo "  --> TENTATIVO DISATTIVAZIONE AUTOMATICA\n";
             $was_disabled = disableSupplier($user_id, $expiring_docs);
             
@@ -453,5 +497,6 @@ if (!empty($disabled_users)) {
 echo "\n===================================================\n";
 echo "CRON COMPLETATO\n";
 echo "Notifiche inviate: {$notifications_sent}\n";
+echo "Notifiche saltate (già inviate): {$notifications_skipped}\n";
 echo "Fornitori disattivati: " . count($disabled_users) . "\n";
 echo "===================================================\n";
