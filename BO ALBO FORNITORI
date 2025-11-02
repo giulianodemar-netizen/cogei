@@ -1118,6 +1118,17 @@ createSuppliersCopyTable();
 echo '<div style="margin: 20px; font-family: Arial, sans-serif;">';
 echo '<h2>Gestione Fornitori</h2>';
 
+// ================== TAB NAVIGATION ==================
+$current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'fornitori';
+
+echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #0066a2;">';
+echo '<button onclick="switchTab(\'fornitori\')" id="tab-fornitori" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'fornitori' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'fornitori' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📋 Fornitori</button>';
+echo '<button onclick="switchTab(\'log\')" id="tab-log" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'log' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'log' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">📧 Log Email</button>';
+echo '</div>';
+
+// Tab Content Container
+echo '<div id="tab-fornitori-content" style="display: ' . ($current_tab === 'fornitori' ? 'block' : 'none') . ';">';
+
 // STATO EMAIL
 global $inviamail;
 echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamail ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($inviamail ? '#28a745' : '#ffc107') . ';">';
@@ -1318,6 +1329,7 @@ echo '<table style="width: 100%; border-collapse: collapse; border: 1px solid #d
 echo '<tr style="background: #0066a2 !important; color: white !important;">';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">ID</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Tipo</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Campo Utente</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Ragione Sociale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Email</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
@@ -1342,6 +1354,41 @@ foreach ($suppliers as $user) {
     $user_id = $user->ID;
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+    
+    // Determina campo utente specifico in base al tipo
+    $user_campo_spec = '';
+    switch ($tipo) {
+        case 'Lavoro':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_lav', false);
+            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            break;
+        case 'Servizi':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_servizi', false);
+            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            break;
+        case 'Forniture':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_forniture', false);
+            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            break;
+        case 'Subappalto':
+            $user_campo_spec = 'VUOTO';
+            break;
+        case 'Noli':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_noli', false);
+            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            break;
+        case 'Consulenze':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_consulenze', false);
+            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            break;
+        case 'Polizze':
+            $campo_array = get_user_meta($user_id, 'user_registration_campo_polizze', false);
+            $user_campo_spec = !empty($campo_array) && is_array($campo_array) ? implode(', ', $campo_array) : '';
+            break;
+        default:
+            $user_campo_spec = 'N/A';
+            break;
+    }
     
     // Calcola dati dinamici
     $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
@@ -1382,6 +1429,7 @@ foreach ($suppliers as $user) {
     echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
+    echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . ($user_campo_spec ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($rag_soc ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->user_email . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user->display_name . '</td>';
@@ -1464,6 +1512,161 @@ foreach ($suppliers as $user) {
 }
 
 echo '</table>';
+
+// Close fornitori tab
+echo '</div>'; // End tab-fornitori-content
+
+// ================== LOG EMAIL TAB ==================
+echo '<div id="tab-log-content" style="display: ' . ($current_tab === 'log' ? 'block' : 'none') . ';">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">📧 Log Email Albo Fornitori</h3>';
+
+$log_file = ABSPATH . 'log_mail/log_mail_albo_fornitori.txt';
+
+if (file_exists($log_file)) {
+    $log_content = file_get_contents($log_file);
+    $log_lines = explode("\n", $log_content);
+    
+    // Parse log entries
+    $log_entries = [];
+    $current_entry = [];
+    
+    foreach ($log_lines as $line) {
+        if (preg_match('/^-{100}$/', $line)) {
+            if (!empty($current_entry)) {
+                $log_entries[] = $current_entry;
+                $current_entry = [];
+            }
+        } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+            $current_entry[] = $line;
+        }
+    }
+    
+    if (!empty($current_entry)) {
+        $log_entries[] = $current_entry;
+    }
+    
+    // Reverse to show newest first
+    $log_entries = array_reverse($log_entries);
+    
+    // Pagination
+    $per_page = 20;
+    $current_page = isset($_GET['log_page']) ? max(1, intval($_GET['log_page'])) : 1;
+    $total_entries = count($log_entries);
+    $total_pages = ceil($total_entries / $per_page);
+    $offset = ($current_page - 1) * $per_page;
+    $page_entries = array_slice($log_entries, $offset, $per_page);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+    echo '<strong>ℹ️ Informazioni:</strong> Mostra le ultime ' . $per_page . ' voci per pagina. Totale: ' . $total_entries . ' voci nel log.';
+    echo '</div>';
+    
+    // Pagination controls
+    if ($total_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button onclick="switchToLogPage(' . ($current_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_page = max(1, $current_page - 2);
+        $end_page = min($total_pages, $current_page + 2);
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToLogPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button onclick="switchToLogPage(' . ($current_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    foreach ($page_entries as $entry) {
+        if (empty($entry)) continue;
+        
+        $first_line = $entry[0] ?? '';
+        
+        // Parse timestamp and type
+        preg_match('/\[(.*?)\] \[(.*?)\] (.*)/', $first_line, $matches);
+        $timestamp = $matches[1] ?? '';
+        $ambiente = $matches[2] ?? '';
+        $tipo = $matches[3] ?? '';
+        
+        // Determine color based on environment
+        $env_color = $ambiente === 'DEBUG' ? '#ffc107' : '#28a745';
+        $env_bg = $ambiente === 'DEBUG' ? '#fff3cd' : '#d4edda';
+        
+        echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+        
+        // Header
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">';
+        echo '<div>';
+        echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">' . htmlspecialchars($ambiente) . '</span>';
+        echo '<span style="font-weight: bold; color: #0066a2; font-size: 14px;">' . htmlspecialchars($tipo) . '</span>';
+        echo '</div>';
+        echo '<span style="color: #666; font-size: 12px;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+        echo '</div>';
+        
+        // Content
+        echo '<div style="font-family: monospace; font-size: 12px; line-height: 1.6;">';
+        for ($i = 1; $i < count($entry); $i++) {
+            $line = $entry[$i];
+            if (empty(trim($line))) continue;
+            
+            // Highlight important fields
+            if (strpos($line, 'Destinatario:') === 0) {
+                echo '<div style="margin: 5px 0;"><strong style="color: #0066a2;">📧 ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Oggetto:') === 0) {
+                echo '<div style="margin: 5px 0;"><strong style="color: #333;">✉️ ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Utente:') === 0) {
+                echo '<div style="margin: 5px 0;"><strong style="color: #6c757d;">👤 ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Stato:') === 0) {
+                $is_success = strpos($line, 'SUCCESSO') !== false || strpos($line, 'INVIATA') !== false;
+                $status_color = $is_success ? '#28a745' : ($ambiente === 'DEBUG' ? '#ffc107' : '#dc3545');
+                echo '<div style="margin: 5px 0;"><strong style="color: ' . $status_color . ';">✓ ' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (strpos($line, 'Documenti coinvolti:') === 0 || strpos($line, 'Allegati:') === 0) {
+                echo '<div style="margin: 5px 0; color: #666;"><strong>' . htmlspecialchars($line) . '</strong></div>';
+            } elseif (preg_match('/^  - /', $line)) {
+                echo '<div style="margin: 2px 0 2px 15px; color: #666;">📄 ' . htmlspecialchars(trim($line)) . '</div>';
+            } else {
+                echo '<div style="margin: 2px 0; color: #666;">' . htmlspecialchars($line) . '</div>';
+            }
+        }
+        echo '</div>';
+        echo '</div>';
+    }
+    
+    // Pagination controls (bottom)
+    if ($total_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button onclick="switchToLogPage(' . ($current_page - 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="switchToLogPage(' . $i . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button onclick="switchToLogPage(' . ($current_page + 1) . ')" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessun log disponibile</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il file log verrà creato automaticamente al primo invio email.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End tab-log-content
 
 // Document Request Modal
 echo '<div id="document-request-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">';
@@ -1638,7 +1841,16 @@ function shouldRowBeVisible(row) {
     
     if (selectedStatuses.length > 0) {
         var rowStatus = row.getAttribute("data-status");
-        if (selectedStatuses.indexOf(rowStatus) === -1) {
+        
+        // Logica speciale: se "Disattivo" è selezionato, mostra anche stati non attivi correlati
+        var disattivoSelected = selectedStatuses.indexOf("Disattivo") !== -1;
+        var nonActiveStatuses = ["Disattivo", "Disattivo_In_Attesa", "Solo_Registrato_In_Attesa"];
+        
+        if (disattivoSelected && nonActiveStatuses.indexOf(rowStatus) !== -1) {
+            // Mostra se è uno degli stati non attivi e "Disattivo" è selezionato
+            return true;
+        } else if (selectedStatuses.indexOf(rowStatus) === -1) {
+            // Altrimenti controlla match esatto
             return false;
         }
     }
@@ -1930,6 +2142,49 @@ window.onclick = function(event) {
     if (event.target === modal) {
         closeDocumentRequestModal();
     }
+}
+
+// ================== TAB SWITCHING ==================
+
+function switchTab(tabName) {
+    // Hide all tab contents
+    document.getElementById('tab-fornitori-content').style.display = 'none';
+    document.getElementById('tab-log-content').style.display = 'none';
+    
+    // Remove active styling from all buttons
+    var buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(function(btn) {
+        btn.style.background = '#f0f0f0';
+        btn.style.color = '#333';
+    });
+    
+    // Show selected tab and update button style
+    if (tabName === 'fornitori') {
+        document.getElementById('tab-fornitori-content').style.display = 'block';
+        document.getElementById('tab-fornitori').style.background = '#0066a2';
+        document.getElementById('tab-fornitori').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'fornitori');
+        window.history.pushState({}, '', url);
+    } else if (tabName === 'log') {
+        document.getElementById('tab-log-content').style.display = 'block';
+        document.getElementById('tab-log').style.background = '#0066a2';
+        document.getElementById('tab-log').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'log');
+        window.history.pushState({}, '', url);
+    }
+}
+
+function switchToLogPage(page) {
+    var url = new URL(window.location);
+    url.searchParams.set('tab', 'log');
+    url.searchParams.set('log_page', page);
+    window.location.href = url.toString();
 }
 
 // Accordion functionality for document changes summary
