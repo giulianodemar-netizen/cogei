@@ -818,17 +818,11 @@ if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
             file_put_contents($log_file, implode("\n", $lines_to_keep), LOCK_EX);
         }
         
-        // Redirect to avoid resubmission - build clean URL
-        $current_url = $_SERVER['REQUEST_URI'];
-        $base_url = strtok($current_url, '?'); // Get URL without any query parameters
-        $redirect_url = $base_url . '?tab=log&deleted=' . count($indices_to_delete);
-        
-        // Clear any output buffers before redirect
-        if (ob_get_length()) {
-            ob_end_clean();
-        }
-        
-        wp_redirect($redirect_url);
+        // Redirect using JavaScript to avoid output buffer issues
+        $deleted_count = count($indices_to_delete);
+        echo '<script type="text/javascript">';
+        echo 'window.location.href = "' . esc_url($_SERVER['PHP_SELF']) . '?tab=log&deleted=' . $deleted_count . '";';
+        echo '</script>';
         exit;
     }
 }
