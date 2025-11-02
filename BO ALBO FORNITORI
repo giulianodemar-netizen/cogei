@@ -22,7 +22,7 @@ date_default_timezone_set('Europe/Rome');
 require_once(ABSPATH . 'includes/log_mail.php');
 
 // ================== CONFIGURAZIONE EMAIL ==================
-$inviamail = true; // Email ATTIVATE - Le email vengono inviate
+$GLOBALS['inviamail'] = true; // Email ATTIVATE - Le email vengono inviate
 
 // ================== GESTIONE EXPORT CSV ==================
 
@@ -71,7 +71,7 @@ if (isset($_GET['csv_export']) && $_GET['csv_export'] === '1') {
 // ================== FUNZIONI EMAIL ==================
 
 function sendActivationEmail($user_id) {
-    global $inviamail;
+    $inviamail = $GLOBALS["inviamail"];
     
     $user = get_userdata($user_id);
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
@@ -118,7 +118,7 @@ Cogei S.r.l.
 }
 
 function sendDeactivationEmail($user_id) {
-    global $inviamail;
+    $inviamail = $GLOBALS["inviamail"];
     
     $user = get_userdata($user_id);
     $user_rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
@@ -550,7 +550,7 @@ function checkDocumentChangesAndDisableUser($user_id) {
 
 // Function to send admin notification about document changes
 function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc) {
-    global $inviamail;
+    $inviamail = $GLOBALS["inviamail"];
     
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
@@ -1210,9 +1210,8 @@ echo '</div>';
 echo '<div id="tab-fornitori-content" style="display: ' . ($current_tab === 'fornitori' ? 'block' : 'none') . ';">';
 
 // STATO EMAIL
-global $inviamail;
-echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamail ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($inviamail ? '#28a745' : '#ffc107') . ';">';
-echo '<strong>Stato Email:</strong> ' . ($inviamail ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
+echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($GLOBALS['inviamail'] ? '#d4edda' : '#fff3cd') . '; border-radius: 5px; border-left: 4px solid ' . ($GLOBALS['inviamail'] ? '#28a745' : '#ffc107') . ';">';
+echo '<strong>Stato Email:</strong> ' . ($GLOBALS['inviamail'] ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
 echo '</div>';
 
 // CONTROLLI
