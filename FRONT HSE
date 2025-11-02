@@ -1010,6 +1010,27 @@ Copyright © 2023 Cogei. All Rights Reserved.
     return $email_sent;
 }
 
+// Helper function to track detailed changes for BO HSE display
+function trackHseChanges($user_id, $changes_array) {
+    // Get existing changes
+    $stored_changes = get_user_meta($user_id, 'hse_recent_changes', true);
+    if (!is_array($stored_changes)) {
+        $stored_changes = [];
+    }
+    
+    // Add new changes with timestamp
+    foreach ($changes_array as $change) {
+        $change['timestamp'] = current_time('timestamp');
+        $stored_changes[] = $change;
+    }
+    
+    // Keep only last 20 changes to avoid bloating
+    $stored_changes = array_slice($stored_changes, -20);
+    
+    // Update user meta
+    update_user_meta($user_id, 'hse_recent_changes', $stored_changes);
+}
+
 ?>
 <?php
 
@@ -1541,6 +1562,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     }
                     
                     $hse_success_message = "✅ Parte A salvata con successo! Dati personale ($hse_new_count persone), automezzi ($hse_new_automezzi_count) e attrezzi ($hse_new_attrezzi_count) aggiornati.";
+                    
+                    // Track detailed changes for BO HSE display
+                    $tracked_changes = [];
+                    
+                    // Track DVR changes
+                    if ($hse_dvr_file) {
+                        $tracked_changes[] = [
+                            'type' => 'file',
+                            'field' => 'DVR (Documento Valutazione Rischi)',
+                            'filename' => basename($hse_dvr_file),
+                            'new_value' => 'Data emissione: ' . ($hse_dvr_data_emissione ?: 'N/A')
+                        ];
+                    }
+                    
+                    // Track new vehicles
+                    $new_vehicles_count = max(0, $hse_new_automezzi_count - count($hse_existing_automezzi));
+                    if ($new_vehicles_count > 0) {
+                        for ($i = count($hse_existing_automezzi); $i < $hse_new_automezzi_count; $i++) {
+                            if (isset($hse_automezzi_data[$i])) {
+                                $vehicle_desc = $hse_automezzi_data[$i]['descrizione_automezzo'] . ' (' . $hse_automezzi_data[$i]['targa'] . ')';
+                                $tracked_changes[] = [
+                                    'type' => 'new',
+                                    'field' => 'Automezzo',
+                                    'new_value' => $vehicle_desc
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // Track personnel expiry date changes  
+                    for ($i = 0; $i < min($hse_new_count, count($hse_existing_personale)); $i++) {
+                        $old_person = $hse_existing_personale[$i];
+                        $new_person = $hse_personale_data[$i];
+                        $person_name = $new_person['nome'] . ' ' . $new_person['cognome'];
+                        
+                        // Check UNILAV scadenza change
+                        if (isset($_POST['hse_personale_unilav_scadenza'][$i])) {
+                            $old_unilav = $old_person['unilav_data_scadenza'] ?? '';
+                            $new_unilav = $new_person['unilav_data_scadenza'];
+                            if ($old_unilav != $new_unilav && !empty($new_unilav)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'UNILAV Scadenza - ' . $person_name,
+                                    'old_value' => $old_unilav ?: 'Non impostata',
+                                    'new_value' => $new_unilav
+                                ];
+                            }
+                        }
+                        
+                        // Check idoneità sanitaria change
+                        if (isset($_POST['hse_personale_idoneita_scadenza'][$i])) {
+                            $old_idoneita = $old_person['idoneita_sanitaria_scadenza'] ?? '';
+                            $new_idoneita = $new_person['idoneita_sanitaria_scadenza'];
+                            if ($old_idoneita != $new_idoneita && !empty($new_idoneita)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Idoneità Sanitaria - ' . $person_name,
+                                    'old_value' => $old_idoneita ?: 'Non impostata',
+                                    'new_value' => $new_idoneita
+                                ];
+                            }
+                        }
+                        
+                        // Check formazione date changes
+                        $formazione_types = [
+                            'formazione_antincendio_data_scadenza' => 'Formazione Antincendio',
+                            'formazione_primo_soccorso_data_scadenza' => 'Formazione Primo Soccorso',
+                            'formazione_preposti_data_scadenza' => 'Formazione Preposti'
+                        ];
+                        
+                        foreach ($formazione_types as $db_field => $label) {
+                            $old_date = $old_person[$db_field] ?? '';
+                            $post_key = 'hse_' . $db_field . '_' . $i;
+                            if (isset($_POST[$post_key])) {
+                                $new_date = sanitize_text_field($_POST[$post_key]);
+                                if ($old_date != $new_date && !empty($new_date)) {
+                                    $tracked_changes[] = [
+                                        'type' => 'update',
+                                        'field' => $label . ' - ' . $person_name,
+                                        'old_value' => $old_date ?: 'Non impostata',
+                                        'new_value' => $new_date
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Track new personnel
+                    if ($hse_new_count > count($hse_existing_personale)) {
+                        for ($i = count($hse_existing_personale); $i < $hse_new_count; $i++) {
+                            if (isset($hse_personale_data[$i])) {
+                                $person_name = $hse_personale_data[$i]['nome'] . ' ' . $hse_personale_data[$i]['cognome'];
+                                $tracked_changes[] = [
+                                    'type' => 'new',
+                                    'field' => 'Personale',
+                                    'new_value' => $person_name
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // Save tracked changes
+                    if (!empty($tracked_changes)) {
+                        trackHseChanges($hse_current_user_id, $tracked_changes);
+                    }
                     
                     // Invia notifica admin
                     sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', [

@@ -1575,83 +1575,71 @@ echo '</div>';
 
 // ================== RIEPILOGO MODIFICHE RECENTI HSE ==================
 
-// Function to get recent HSE updates
+// Function to get recent HSE updates with detailed change tracking
 function getRecentHseUpdates() {
     global $wpdb;
     
-    // Get updates from last 48 hours
-    $cutoff_date = date('Y-m-d H:i:s', strtotime('-48 hours'));
+    // Get updates from last 48 hours based on user meta storing logged changes
+    $cutoff_timestamp = strtotime('-48 hours');
     
     $recent_updates = [];
     
-    // Query for recently updated richieste
-    $richieste = $wpdb->get_results($wpdb->prepare(
-        "SELECT r.*, u.user_email, u.display_name
-        FROM {$wpdb->prefix}cantiere_richieste r
-        LEFT JOIN {$wpdb->users} u ON r.user_id = u.ID
-        WHERE r.data_aggiornamento >= %s
-        ORDER BY r.data_aggiornamento DESC",
-        $cutoff_date
-    ), ARRAY_A);
+    // Get all users with recent hse_recent_changes meta
+    $users = get_users([
+        'role' => 'subscriber',
+        'meta_query' => [
+            [
+                'key' => 'hse_recent_changes',
+                'compare' => 'EXISTS'
+            ]
+        ]
+    ]);
     
-    foreach ($richieste as $richiesta) {
-        $user_id = $richiesta['user_id'];
+    foreach ($users as $user) {
+        $user_id = $user->ID;
         $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
         
-        // Get details of what was updated
-        $changes = [];
+        // Get stored changes
+        $stored_changes = get_user_meta($user_id, 'hse_recent_changes', true);
         
-        // Check personale updates
-        $personale_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_personale 
-            WHERE richiesta_id = %d AND data_aggiornamento >= %s",
-            $richiesta['id'], $cutoff_date
-        ));
-        
-        if ($personale_count > 0) {
-            $changes[] = "Personale: {$personale_count} record aggiornati";
+        if (!is_array($stored_changes)) {
+            continue;
         }
         
-        // Check automezzi updates  
-        $automezzi_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_automezzi
-            WHERE richiesta_id = %d AND data_aggiornamento >= %s",
-            $richiesta['id'], $cutoff_date
-        ));
-        
-        if ($automezzi_count > 0) {
-            $changes[] = "Automezzi: {$automezzi_count} aggiornati";
+        // Filter changes within the last 48 hours
+        $filtered_changes = [];
+        foreach ($stored_changes as $change) {
+            if (!isset($change['timestamp'])) continue;
+            
+            $change_timestamp = is_numeric($change['timestamp']) ? $change['timestamp'] : strtotime($change['timestamp']);
+            
+            if ($change_timestamp >= $cutoff_timestamp) {
+                $filtered_changes[] = $change;
+            }
         }
         
-        // Check attrezzi updates
-        $attrezzi_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}cantiere_attrezzi
-            WHERE richiesta_id = %d AND data_aggiornamento >= %s",
-            $richiesta['id'], $cutoff_date
-        ));
-        
-        if ($attrezzi_count > 0) {
-            $changes[] = "Attrezzi: {$attrezzi_count} aggiornati";
-        }
-        
-        // Check if DVR or RCT was updated
-        if (!empty($richiesta['dvr_file'])) {
-            $changes[] = "DVR caricato/aggiornato";
-        }
-        if (!empty($richiesta['rct_file'])) {
-            $changes[] = "RCT caricato/aggiornato";
-        }
-        
-        if (!empty($changes)) {
+        if (!empty($filtered_changes)) {
+            // Sort by timestamp descending
+            usort($filtered_changes, function($a, $b) {
+                $a_time = is_numeric($a['timestamp']) ? $a['timestamp'] : strtotime($a['timestamp']);
+                $b_time = is_numeric($b['timestamp']) ? $b['timestamp'] : strtotime($b['timestamp']);
+                return $b_time - $a_time;
+            });
+            
             $recent_updates[] = [
                 'user_id' => $user_id,
-                'rag_soc' => $rag_soc ?: $richiesta['display_name'],
-                'email' => $richiesta['user_email'],
-                'timestamp' => $richiesta['data_aggiornamento'],
-                'changes' => $changes
+                'rag_soc' => $rag_soc ?: $user->display_name,
+                'email' => $user->user_email,
+                'timestamp' => is_numeric($filtered_changes[0]['timestamp']) ? date('Y-m-d H:i:s', $filtered_changes[0]['timestamp']) : $filtered_changes[0]['timestamp'],
+                'changes' => $filtered_changes
             ];
         }
     }
+    
+    // Sort by timestamp descending
+    usort($recent_updates, function($a, $b) {
+        return strtotime($b['timestamp']) - strtotime($a['timestamp']);
+    });
     
     return $recent_updates;
 }
@@ -1687,12 +1675,46 @@ if (!empty($recent_hse_updates)) {
         
         echo '<div style="margin-top: 10px;">';
         echo '<strong style="color: #004085; font-size: 12px;">📝 Modifiche effettuate:</strong>';
-        echo '<div style="margin-top: 5px; font-size: 11px; line-height: 1.4;">';
+        echo '<div style="margin-top: 5px; font-size: 11px; line-height: 1.6;">';
+        
         foreach ($update['changes'] as $change) {
-            echo '<div style="background: rgba(0,102,162,0.1); padding: 4px 8px; margin: 2px 0; border-radius: 3px;">';
-            echo '<strong style="color: #004085;">• ' . htmlspecialchars($change) . '</strong>';
+            $field_label = isset($change['field']) ? htmlspecialchars($change['field']) : 'Campo';
+            $change_type = isset($change['type']) ? $change['type'] : 'update';
+            
+            echo '<div style="background: rgba(0,102,162,0.1); padding: 8px; margin: 4px 0; border-radius: 3px; border-left: 3px solid #0066a2;">';
+            
+            if ($change_type === 'new') {
+                // New record added
+                echo '<div style="color: #004085; font-weight: bold; margin-bottom: 4px;">➕ ' . $field_label . ' - Nuovo elemento aggiunto</div>';
+                if (isset($change['new_value'])) {
+                    echo '<div style="color: #155724; margin-left: 20px;">▸ ' . htmlspecialchars($change['new_value']) . '</div>';
+                }
+            } elseif ($change_type === 'update') {
+                // Field updated
+                echo '<div style="color: #004085; font-weight: bold; margin-bottom: 4px;">✏️ ' . $field_label . '</div>';
+                
+                if (isset($change['old_value']) && isset($change['new_value'])) {
+                    echo '<div style="margin-left: 20px;">';
+                    echo '<div style="color: #856404; text-decoration: line-through;">⊖ Era: ' . htmlspecialchars($change['old_value']) . '</div>';
+                    echo '<div style="color: #155724; font-weight: bold;">⊕ Ora: ' . htmlspecialchars($change['new_value']) . '</div>';
+                    echo '</div>';
+                } elseif (isset($change['new_value'])) {
+                    echo '<div style="color: #155724; margin-left: 20px;">▸ ' . htmlspecialchars($change['new_value']) . '</div>';
+                }
+            } elseif ($change_type === 'file') {
+                // File uploaded
+                echo '<div style="color: #004085; font-weight: bold; margin-bottom: 4px;">📎 ' . $field_label . ' - File caricato/aggiornato</div>';
+                if (isset($change['filename'])) {
+                    echo '<div style="color: #155724; margin-left: 20px;">📄 ' . htmlspecialchars($change['filename']) . '</div>';
+                }
+            } else {
+                // Generic change
+                echo '<div style="color: #004085;">• ' . htmlspecialchars($change['description'] ?? $field_label) . '</div>';
+            }
+            
             echo '</div>';
         }
+        
         echo '</div>';
         echo '</div>';
         echo '</div>';
