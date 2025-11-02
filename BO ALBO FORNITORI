@@ -807,8 +807,12 @@ if (isset($_POST['document_action'])) {
                                 continue;
                             }
                             
-                            // Generate safe filename
-                            $safe_filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', pathinfo($filename, PATHINFO_FILENAME));
+                            // Generate safe filename (remove dots to prevent double extension exploits)
+                            $safe_filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($filename, PATHINFO_FILENAME));
+                            // Ensure filename doesn't start with underscore or dash
+                            $safe_filename = ltrim($safe_filename, '_-');
+                            // Use first 50 chars to prevent overly long filenames
+                            $safe_filename = substr($safe_filename, 0, 50);
                             $new_filename = $user_id . '_' . time() . '_' . $safe_filename . '.pdf';
                             $target_path = $upload_dir . $new_filename;
                             

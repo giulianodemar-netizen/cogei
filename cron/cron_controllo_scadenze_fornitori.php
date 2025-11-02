@@ -76,12 +76,12 @@ function getRequiredDocuments($user_id) {
     ];
     
     // RCT-RCO serve solo per: LAVORO, SERVIZI, SUBAPPALTO, NOLI
+    // NON serve per: FORNITURE, CONSULENZA, POLIZZE
     if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
-        if ($tipo === 'Forniture') {
-            $required_docs['user_registration_scad_rct_rco_forni'] = 'RCT-RCO (Forniture)';
-        } else {
-            $required_docs['user_registration_scad_rct_rco'] = 'RCT-RCO';
-        }
+        $required_docs['user_registration_scad_rct_rco'] = 'RCT-RCO';
+    } elseif ($tipo === 'Forniture') {
+        // Forniture usa un campo diverso
+        $required_docs['user_registration_scad_rct_rco_forni'] = 'RCT-RCO (Forniture)';
     }
     
     return $required_docs;
@@ -357,7 +357,9 @@ foreach ($suppliers as $user) {
     // Ottieni documenti richiesti
     $required_docs = getRequiredDocuments($user_id);
     
-    // Controlla ogni documento
+    // Controlla ogni documento e raggruppa per trigger day
+    $documents_by_trigger = []; // trigger_day => [documento1, documento2, ...]
+    
     foreach ($required_docs as $meta_key => $doc_name) {
         $scadenza_date = get_user_meta($user_id, $meta_key, true);
         
@@ -375,27 +377,36 @@ foreach ($suppliers as $user) {
         if (in_array($days, $trigger_days)) {
             echo "  - {$doc_name}: scadenza in {$days} giorni (TRIGGER)\n";
             
-            // Prepara info documento per la notifica
-            $expiring_docs = [[
+            // Raggruppa documenti per trigger day
+            if (!isset($documents_by_trigger[$days])) {
+                $documents_by_trigger[$days] = [];
+            }
+            
+            $documents_by_trigger[$days][] = [
                 'nome' => $doc_name,
                 'scadenza' => $scadenza_date,
                 'giorni' => $days
-            ]];
-            
-            // Invia notifica
-            sendExpiryNotification($user_id, $days, $expiring_docs, $debug_mode);
-            $notifications_sent++;
-            
-            // Se trigger -15, disattiva fornitore
-            if ($days === -15) {
-                echo "  --> DISATTIVAZIONE AUTOMATICA\n";
-                disableSupplier($user_id);
-                $disabled_users[] = [
-                    'id' => $user_id,
-                    'name' => $rag_soc,
-                    'email' => $user->user_email
-                ];
-            }
+            ];
+        }
+    }
+    
+    // Invia notifiche consolidate per trigger day
+    foreach ($documents_by_trigger as $trigger_day => $expiring_docs) {
+        echo "  --> Invio notifica per {$trigger_day} giorni con " . count($expiring_docs) . " documento(i)\n";
+        
+        // Invia notifica consolidata
+        sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_mode);
+        $notifications_sent++;
+        
+        // Se trigger -15, disattiva fornitore (una sola volta)
+        if ($trigger_day === -15) {
+            echo "  --> DISATTIVAZIONE AUTOMATICA\n";
+            disableSupplier($user_id);
+            $disabled_users[] = [
+                'id' => $user_id,
+                'name' => $rag_soc,
+                'email' => $user->user_email
+            ];
         }
     }
 }

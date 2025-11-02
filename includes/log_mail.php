@@ -21,9 +21,14 @@ class AlboFornitoriMailLogger {
      */
     private static function init() {
         if (self::$log_file === null) {
-            // Usa ABSPATH se definito (WordPress), altrimenti usa path relativo
-            $base_path = defined('ABSPATH') ? ABSPATH : dirname(__DIR__);
-            self::$log_file = $base_path . '/log_mail/log_mail_albo_fornitori.txt';
+            // Usa ABSPATH se definito (WordPress), altrimenti determina path assoluto
+            if (defined('ABSPATH')) {
+                $base_path = ABSPATH;
+            } else {
+                // Script eseguito fuori WordPress: usa directory parent del file includes
+                $base_path = dirname(dirname(__FILE__)) . '/';
+            }
+            self::$log_file = $base_path . 'log_mail/log_mail_albo_fornitori.txt';
             
             // Crea il file di log se non esiste
             if (!file_exists(self::$log_file)) {
