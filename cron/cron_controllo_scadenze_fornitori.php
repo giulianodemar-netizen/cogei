@@ -250,13 +250,32 @@ Ti invitiamo a verificare e aggiornare la documentazione.<br><br>";
 /**
  * Disattiva automaticamente un fornitore
  */
-function disableSupplier($user_id) {
-    update_user_meta($user_id, 'forced_supplier_status', 'Disattivo');
+function disableSupplier($user_id, $expired_docs) {
+    $current_status = get_user_meta($user_id, 'forced_supplier_status', true);
+    $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+    
+    // Costruisci lista documenti scaduti
+    $docs_list = [];
+    foreach ($expired_docs as $doc) {
+        $docs_list[] = $doc['nome'] . " (scaduto da " . abs($doc['giorni']) . " giorni)";
+    }
+    $docs_text = implode(', ', $docs_list);
     
     // Log dell'azione
-    $log_entry = "[" . date('d/m/Y H:i:s') . "] CRON: Fornitore ID {$user_id} disattivato automaticamente per documenti scaduti da oltre 15 giorni\n";
     $log_file = ABSPATH . 'log_mail/log_cron_disattivazioni.txt';
-    file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+    
+    if ($current_status === 'Disattivo') {
+        // Utente già disattivo - solo log informativo
+        $log_entry = "[" . date('d/m/Y H:i:s') . "] [USER ID: {$user_id}] Fornitore \"{$rag_soc}\" già DISATTIVO - Documenti scaduti: {$docs_text}\n";
+        file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+        return false; // Non disattivato (già era disattivo)
+    } else {
+        // Disattiva fornitore
+        update_user_meta($user_id, 'forced_supplier_status', 'Disattivo');
+        $log_entry = "[" . date('d/m/Y H:i:s') . "] [USER ID: {$user_id}] Fornitore \"{$rag_soc}\" DISATTIVATO automaticamente - Documenti scaduti: {$docs_text}\n";
+        file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+        return true; // Disattivato
+    }
 }
 
 /**
@@ -351,14 +370,16 @@ echo "Trovati {$total_suppliers} fornitori da controllare...\n\n";
 foreach ($suppliers as $user) {
     $user_id = $user->ID;
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
+    $current_status = get_user_meta($user_id, 'forced_supplier_status', true);
     
-    echo "Controllo fornitore ID {$user_id} ({$rag_soc})...\n";
+    echo "Controllo fornitore ID {$user_id} ({$rag_soc}) - Stato: {$current_status}...\n";
     
     // Ottieni documenti richiesti
     $required_docs = getRequiredDocuments($user_id);
     
     // Controlla ogni documento e raggruppa per trigger day
     $documents_by_trigger = []; // trigger_day => [documento1, documento2, ...]
+    $has_any_document = false; // Flag per verificare se ha almeno un documento con data
     
     foreach ($required_docs as $meta_key => $doc_name) {
         $scadenza_date = get_user_meta($user_id, $meta_key, true);
@@ -366,6 +387,8 @@ foreach ($suppliers as $user) {
         if (empty($scadenza_date)) {
             continue; // Documento non caricato
         }
+        
+        $has_any_document = true;
         
         $days = calculateDaysToExpiry($scadenza_date);
         
@@ -390,6 +413,12 @@ foreach ($suppliers as $user) {
         }
     }
     
+    // Se utente già disattivo e non ha documenti con date, salta completamente
+    if ($current_status === 'Disattivo' && !$has_any_document) {
+        echo "  --> Utente già disattivo senza documenti con date - SKIP\n";
+        continue;
+    }
+    
     // Invia notifiche consolidate per trigger day
     foreach ($documents_by_trigger as $trigger_day => $expiring_docs) {
         echo "  --> Invio notifica per {$trigger_day} giorni con " . count($expiring_docs) . " documento(i)\n";
@@ -400,13 +429,17 @@ foreach ($suppliers as $user) {
         
         // Se trigger -15, disattiva fornitore (una sola volta)
         if ($trigger_day === -15) {
-            echo "  --> DISATTIVAZIONE AUTOMATICA\n";
-            disableSupplier($user_id);
-            $disabled_users[] = [
-                'id' => $user_id,
-                'name' => $rag_soc,
-                'email' => $user->user_email
-            ];
+            echo "  --> TENTATIVO DISATTIVAZIONE AUTOMATICA\n";
+            $was_disabled = disableSupplier($user_id, $expiring_docs);
+            
+            // Aggiungi alla lista solo se effettivamente disattivato ora
+            if ($was_disabled) {
+                $disabled_users[] = [
+                    'id' => $user_id,
+                    'name' => $rag_soc,
+                    'email' => $user->user_email
+                ];
+            }
         }
     }
 }
