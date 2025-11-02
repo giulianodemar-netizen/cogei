@@ -1566,7 +1566,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     // Track detailed changes for BO HSE display
                     $tracked_changes = [];
                     
-                    // Track DVR changes
+                    // Track DVR changes (file upload or date change)
                     if ($hse_dvr_file) {
                         $tracked_changes[] = [
                             'type' => 'file',
@@ -1574,6 +1574,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             'filename' => basename($hse_dvr_file),
                             'new_value' => 'Data emissione: ' . ($hse_dvr_data_emissione ?: 'N/A')
                         ];
+                    } elseif ($hse_dvr_data_emissione && $hse_existing_request_dvr) {
+                        // Check if DVR date was updated
+                        $old_dvr_date = $hse_existing_request_dvr['dvr_data_emissione'] ?? '';
+                        if ($old_dvr_date != $hse_dvr_data_emissione) {
+                            $tracked_changes[] = [
+                                'type' => 'update',
+                                'field' => 'DVR Data Emissione',
+                                'old_value' => $old_dvr_date ?: 'Non impostata',
+                                'new_value' => $hse_dvr_data_emissione
+                            ];
+                        }
                     }
                     
                     // Track new vehicles
@@ -1591,6 +1602,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
+                    // Track vehicle expiry date changes for existing vehicles
+                    for ($i = 0; $i < min($hse_new_automezzi_count, count($hse_existing_automezzi)); $i++) {
+                        if (isset($hse_automezzi_data[$i]) && isset($hse_existing_automezzi[$i])) {
+                            $old_mezzo = $hse_existing_automezzi[$i];
+                            $new_mezzo = $hse_automezzi_data[$i];
+                            $mezzo_desc = $new_mezzo['descrizione_automezzo'];
+                            
+                            // Check revisione change
+                            $old_revisione = $old_mezzo['scadenza_revisione'] ?? '';
+                            $new_revisione = $new_mezzo['scadenza_revisione'] ?? '';
+                            if ($old_revisione != $new_revisione && !empty($new_revisione)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Scadenza Revisione - ' . $mezzo_desc,
+                                    'old_value' => $old_revisione ?: 'Non impostata',
+                                    'new_value' => $new_revisione
+                                ];
+                            }
+                            
+                            // Check assicurazione change
+                            $old_assicurazione = $old_mezzo['scadenza_assicurazione'] ?? '';
+                            $new_assicurazione = $new_mezzo['scadenza_assicurazione'] ?? '';
+                            if ($old_assicurazione != $new_assicurazione && !empty($new_assicurazione)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Scadenza Assicurazione - ' . $mezzo_desc,
+                                    'old_value' => $old_assicurazione ?: 'Non impostata',
+                                    'new_value' => $new_assicurazione
+                                ];
+                            }
+                        }
+                    }
+                    
                     // Track personnel expiry date changes  
                     for ($i = 0; $i < min($hse_new_count, count($hse_existing_personale)); $i++) {
                         $old_person = $hse_existing_personale[$i];
@@ -1598,49 +1642,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         $person_name = $new_person['nome'] . ' ' . $new_person['cognome'];
                         
                         // Check UNILAV scadenza change
-                        if (isset($_POST['hse_personale_unilav_scadenza'][$i])) {
-                            $old_unilav = $old_person['unilav_data_scadenza'] ?? '';
-                            $new_unilav = $new_person['unilav_data_scadenza'];
-                            if ($old_unilav != $new_unilav && !empty($new_unilav)) {
-                                $tracked_changes[] = [
-                                    'type' => 'update',
-                                    'field' => 'UNILAV Scadenza - ' . $person_name,
-                                    'old_value' => $old_unilav ?: 'Non impostata',
-                                    'new_value' => $new_unilav
-                                ];
-                            }
+                        $old_unilav = $old_person['unilav_data_scadenza'] ?? '';
+                        $new_unilav = $new_person['unilav_data_scadenza'] ?? '';
+                        if ($old_unilav != $new_unilav && !empty($new_unilav)) {
+                            $tracked_changes[] = [
+                                'type' => 'update',
+                                'field' => 'UNILAV Scadenza - ' . $person_name,
+                                'old_value' => $old_unilav ?: 'Non impostata',
+                                'new_value' => $new_unilav
+                            ];
                         }
                         
                         // Check idoneità sanitaria change
-                        if (isset($_POST['hse_personale_idoneita_scadenza'][$i])) {
-                            $old_idoneita = $old_person['idoneita_sanitaria_scadenza'] ?? '';
-                            $new_idoneita = $new_person['idoneita_sanitaria_scadenza'];
-                            if ($old_idoneita != $new_idoneita && !empty($new_idoneita)) {
-                                $tracked_changes[] = [
-                                    'type' => 'update',
-                                    'field' => 'Idoneità Sanitaria - ' . $person_name,
-                                    'old_value' => $old_idoneita ?: 'Non impostata',
-                                    'new_value' => $new_idoneita
-                                ];
-                            }
+                        $old_idoneita = $old_person['idoneita_sanitaria_scadenza'] ?? '';
+                        $new_idoneita = $new_person['idoneita_sanitaria_scadenza'] ?? '';
+                        if ($old_idoneita != $new_idoneita && !empty($new_idoneita)) {
+                            $tracked_changes[] = [
+                                'type' => 'update',
+                                'field' => 'Idoneità Sanitaria - ' . $person_name,
+                                'old_value' => $old_idoneita ?: 'Non impostata',
+                                'new_value' => $new_idoneita
+                            ];
                         }
                         
-                        // Check formazione date changes
-                        $formazione_types = [
+                        // Check formazione date changes (use direct DB field comparison)
+                        $formazione_fields = [
                             'formazione_antincendio_data_scadenza' => 'Formazione Antincendio',
                             'formazione_primo_soccorso_data_scadenza' => 'Formazione Primo Soccorso',
-                            'formazione_preposti_data_scadenza' => 'Formazione Preposti'
+                            'formazione_preposti_data_scadenza' => 'Formazione Preposti',
+                            'formazione_rspp_data_scadenza' => 'Formazione RSPP',
+                            'formazione_rls_data_scadenza' => 'Formazione RLS',
+                            'formazione_aspp_data_scadenza' => 'Formazione ASPP',
+                            'formazione_ple_data_scadenza' => 'Formazione PLE',
+                            'formazione_carrelli_data_scadenza' => 'Formazione Carrelli'
                         ];
                         
-                        foreach ($formazione_types as $db_field => $label) {
+                        foreach ($formazione_fields as $db_field => $label) {
                             $old_date = $old_person[$db_field] ?? '';
+                            // Check if this field was in the POST data
                             $post_key = 'hse_' . $db_field . '_' . $i;
                             if (isset($_POST[$post_key])) {
                                 $new_date = sanitize_text_field($_POST[$post_key]);
                                 if ($old_date != $new_date && !empty($new_date)) {
                                     $tracked_changes[] = [
                                         'type' => 'update',
-                                        'field' => $label . ' - ' . $person_name,
+                                        'field' => $label . ' Scadenza - ' . $person_name,
                                         'old_value' => $old_date ?: 'Non impostata',
                                         'new_value' => $new_date
                                     ];
@@ -1663,10 +1709,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
-                    // Save tracked changes
-                    if (!empty($tracked_changes)) {
-                        trackHseChanges($hse_current_user_id, $tracked_changes);
+                    // Track new attrezzi
+                    $new_attrezzi_count = max(0, $hse_new_attrezzi_count - count($hse_existing_attrezzi));
+                    if ($new_attrezzi_count > 0) {
+                        for ($i = count($hse_existing_attrezzi); $i < $hse_new_attrezzi_count; $i++) {
+                            if (isset($hse_attrezzi_data[$i])) {
+                                $tracked_changes[] = [
+                                    'type' => 'new',
+                                    'field' => 'Attrezzo',
+                                    'new_value' => $hse_attrezzi_data[$i]['descrizione_attrezzo']
+                                ];
+                            }
+                        }
                     }
+                    
+                    // Fallback: If no specific changes tracked, at least record that Parte A was saved
+                    if (empty($tracked_changes)) {
+                        $tracked_changes[] = [
+                            'type' => 'update',
+                            'field' => 'Parte A - Dati Generali',
+                            'new_value' => "Aggiornamento: Personale ($hse_new_count), Automezzi ($hse_new_automezzi_count), Attrezzi ($hse_new_attrezzi_count)"
+                        ];
+                    }
+                    
+                    // Save tracked changes - ALWAYS save if Parte A was submitted
+                    trackHseChanges($hse_current_user_id, $tracked_changes);
                     
                     // Invia notifica admin
                     sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', [
