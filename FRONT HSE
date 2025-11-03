@@ -1774,15 +1774,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     trackHseChanges($hse_current_user_id, $tracked_changes);
                     
                     // Calculate nearest expiries for notification
+                    // Fetch complete data from database after saving to get all fields
+                    $db_personale = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM {$wpdb->prefix}cantiere_personale WHERE user_id = %d",
+                        $hse_current_user_id
+                    ), ARRAY_A);
+                    
+                    $db_automezzi = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM {$wpdb->prefix}cantiere_automezzi WHERE user_id = %d",
+                        $hse_current_user_id
+                    ), ARRAY_A);
+                    
+                    $db_attrezzi = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM {$wpdb->prefix}cantiere_attrezzi WHERE user_id = %d",
+                        $hse_current_user_id
+                    ), ARRAY_A);
+                    
                     $nearest_personale_exp = null;
                     $nearest_personale_days = PHP_INT_MAX;
                     $today = new DateTime();
                     
-                    foreach ($hse_personale_data as $person) {
+                    foreach ($db_personale as $person) {
                         $person_name = $person['nome'] . ' ' . $person['cognome'];
                         $expiry_dates = [
                             'UNILAV' => $person['unilav_data_scadenza'] ?? '',
-                            'Idoneità Sanitaria' => $person['idoneita_sanitaria_scadenza'] ?? ''
+                            'Idoneità Sanitaria' => $person['idoneita_sanitaria_scadenza'] ?? '',
+                            'Formazione Antincendio' => $person['formazione_antincendio_data_scadenza'] ?? '',
+                            'Formazione Primo Soccorso' => $person['formazione_primo_soccorso_data_scadenza'] ?? '',
+                            'Formazione Preposti' => $person['formazione_preposti_data_scadenza'] ?? '',
+                            'Formazione RSPP' => $person['formazione_rspp_data_scadenza'] ?? '',
+                            'Formazione RLS' => $person['formazione_rls_data_scadenza'] ?? '',
+                            'Formazione ASPP' => $person['formazione_aspp_data_scadenza'] ?? '',
+                            'Formazione PLE' => $person['formazione_ple_data_scadenza'] ?? '',
+                            'Formazione Carrelli' => $person['formazione_carrelli_data_scadenza'] ?? ''
                         ];
                         
                         foreach ($expiry_dates as $type => $date_str) {
@@ -1808,11 +1832,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     $nearest_automezzi_exp = null;
                     $nearest_automezzi_days = PHP_INT_MAX;
                     
-                    foreach ($hse_automezzi_data as $mezzo) {
+                    foreach ($db_automezzi as $mezzo) {
                         $mezzo_desc = $mezzo['descrizione_automezzo'];
                         $expiry_dates = [
                             'Revisione' => $mezzo['scadenza_revisione'] ?? '',
-                            'Assicurazione' => $mezzo['scadenza_assicurazione'] ?? ''
+                            'Assicurazione' => $mezzo['scadenza_assicurazione'] ?? '',
+                            'Verifiche Periodiche' => $mezzo['scadenza_verifiche_periodiche'] ?? ''
                         ];
                         
                         foreach ($expiry_dates as $type => $date_str) {
@@ -1838,7 +1863,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     $nearest_attrezzi_exp = null;
                     $nearest_attrezzi_days = PHP_INT_MAX;
                     
-                    foreach ($hse_attrezzi_data as $attrezzo) {
+                    foreach ($db_attrezzi as $attrezzo) {
                         $attrezzo_desc = $attrezzo['descrizione_attrezzo'];
                         $date_str = $attrezzo['data_prossima_revisione'] ?? '';
                         
