@@ -15,8 +15,11 @@ if (!defined('ABSPATH')) {
 global $wpdb;
 date_default_timezone_set('Europe/Rome');
 
+// Includi logger centralizzato HSE
+require_once(ABSPATH . 'includes/log_mail_hse.php');
+
 // ================== CONFIGURAZIONE ==================
-$inviamail = false; // Cambia a true per attivare l'invio email
+$inviamail = true; // Email ATTIVATE - Le email vengono inviate
 
 // ================== CREAZIONE NUOVE TABELLE CANTIERI ==================
 
@@ -172,6 +175,87 @@ function createCantieriTablesIfNotExists() {
 
 // Esegui creazione tabelle
 createCantieriTablesIfNotExists();
+
+// ================== GESTIONE CANCELLAZIONE LOG EMAIL ==================
+
+// Handle log deletion actions
+if (isset($_POST['log_action']) && $_POST['log_action'] === 'delete_logs') {
+    $log_file = ABSPATH . 'log_mail/log_hse_mail.txt';
+    
+    if (file_exists($log_file) && isset($_POST['log_indices'])) {
+        $indices_to_delete = array_map('intval', $_POST['log_indices']);
+        
+        // Read and parse log
+        $log_content = file_get_contents($log_file);
+        $log_lines = explode("\n", $log_content);
+        
+        // Parse log entries
+        $log_entries = [];
+        $current_entry = [];
+        $entry_line_map = []; // Maps entry index to line numbers
+        $current_line_start = 0;
+        
+        foreach ($log_lines as $line_num => $line) {
+            if (preg_match('/^-{100}$/', $line)) {
+                if (!empty($current_entry)) {
+                    $entry_line_map[count($log_entries)] = [$current_line_start, $line_num];
+                    $log_entries[] = $current_entry;
+                    $current_entry = [];
+                }
+                $current_line_start = $line_num;
+            } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+                $current_entry[] = $line;
+            }
+        }
+        
+        if (!empty($current_entry)) {
+            $entry_line_map[count($log_entries)] = [$current_line_start, count($log_lines) - 1];
+            $log_entries[] = $current_entry;
+        }
+        
+        // Reverse indices since we display newest first
+        $log_entries_reversed = array_reverse($log_entries, true);
+        $total_entries = count($log_entries);
+        
+        // Build new log content
+        $lines_to_keep = [];
+        $entry_idx = 0;
+        foreach ($log_entries as $original_idx => $entry) {
+            $display_idx = $total_entries - 1 - $original_idx;
+            
+            if (!in_array($display_idx, $indices_to_delete)) {
+                // Keep this entry
+                if (isset($entry_line_map[$original_idx])) {
+                    $start = $entry_line_map[$original_idx][0];
+                    $end = $entry_line_map[$original_idx][1];
+                    for ($i = $start; $i <= $end; $i++) {
+                        $lines_to_keep[] = $log_lines[$i];
+                    }
+                }
+            }
+        }
+        
+        // Write back to file
+        if (empty($lines_to_keep)) {
+            // If all deleted, recreate with header
+            $header = str_repeat("=", 100) . "\n";
+            $header .= "LOG EMAIL HSE - " . date('Y') . "\n";
+            $header .= str_repeat("=", 100) . "\n\n";
+            file_put_contents($log_file, $header, LOCK_EX);
+        } else {
+            file_put_contents($log_file, implode("\n", $lines_to_keep), LOCK_EX);
+        }
+        
+        // Redirect using JavaScript to avoid output buffer issues
+        $deleted_count = count($indices_to_delete);
+        // Get the base path from REQUEST_URI (before any query params)
+        $base_path = strtok($_SERVER['REQUEST_URI'], '?');
+        echo '<script type="text/javascript">';
+        echo 'window.location.href = "' . esc_url($base_path) . '?tab=log-email&deleted=' . $deleted_count . '";';
+        echo '</script>';
+        exit;
+    }
+}
 
 // ================== FUNZIONI HELPER PER AUTOMEZZI E ATTREZZI ==================
 
@@ -1096,6 +1180,11 @@ function calculateComplianceStatus($personale) {
 function sendCantiereEmail($user_id, $action) {
     global $inviamail;
     
+    // Ensure $inviamail is properly set
+    if (!isset($inviamail)) {
+        $inviamail = true; // Default to true if not set
+    }
+    
     $user = get_userdata($user_id);
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $email = $user->user_email;
@@ -1107,12 +1196,15 @@ function sendCantiereEmail($user_id, $action) {
         $subject = "Accesso Cantiere Abilitato - Cogei.net";
         $body_action = "abilitato";
         $color = "#28a745";
+        $tipo_email = 'ATTIVAZIONE_CANTIERE';
     } else {
         $subject = "Accesso Cantiere Disabilitato - Cogei.net";
         $body_action = "disabilitato";
         $color = "#dc3545";
+        $tipo_email = 'DISATTIVAZIONE_CANTIERE';
     }
     
+    $email_sent = false;
     if ($inviamail) {
         $body = "<html>
 <head>
@@ -1151,6 +1243,20 @@ Cogei S.r.l.
         $log_entry = "[{$timestamp}] CANTIERE {$action} - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email INVIATA: " . ($email_sent ? 'SI' : 'FALLITA') . "\n";
     } else {
         $log_entry = "[{$timestamp}] CANTIERE {$action} - ID: {$user_id} | Email: {$email} | Ragione Sociale: {$rag_soc} | Email NON INVIATA (inviamail=false)\n";
+    }
+    
+    // Log centralizzato HSE
+    if (class_exists('HseMailLogger')) {
+        HseMailLogger::log([
+            'ambiente' => $inviamail ? 'PROD' : 'DEBUG',
+            'tipo_email' => $tipo_email,
+            'destinatario' => $email,
+            'oggetto' => $subject,
+            'user_id' => $user_id,
+            'user_name' => $rag_soc ?: $user->display_name,
+            'user_email' => $email,
+            'email_sent' => $email_sent
+        ]);
     }
     
     if (!file_exists($log_file)) {
@@ -1325,7 +1431,23 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
 </body>
 </html>";
                         
-                        wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                        $email_sent = wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                    } else {
+                        $email_sent = false;
+                    }
+                    
+                    // Log centralizzato HSE
+                    if (class_exists('HseMailLogger')) {
+                        HseMailLogger::logDocumentRequest(
+                            $user_id,
+                            $rag_soc,
+                            $user->user_email,
+                            $user->user_email,
+                            $email_sent,
+                            $richiesta_note,
+                            [], // allegati (HSE non supporta allegati per ora)
+                            !$inviamail // debug_mode
+                        );
                     }
                     
                     $success = true;
@@ -1451,11 +1573,195 @@ echo '<div style="margin-bottom: 15px; padding: 10px; background: ' . ($inviamai
 echo '<strong>Stato Email:</strong> ' . ($inviamail ? '<span style="color: #28a745;">ATTIVE - Le email vengono inviate</span>' : '<span style="color: #856404;">DISATTIVATE - Solo log (cambia $inviamail = true per attivare)</span>');
 echo '</div>';
 
+// ================== RIEPILOGO MODIFICHE RECENTI HSE ==================
+
+// Function to get recent HSE updates with detailed change tracking
+function getRecentHseUpdates() {
+    global $wpdb;
+    
+    // Get updates from last 48 hours based on user meta storing logged changes
+    $cutoff_timestamp = strtotime('-48 hours');
+    
+    $recent_updates = [];
+    
+    // Get all users with recent hse_recent_changes meta
+    $users = get_users([
+        'role' => 'subscriber',
+        'meta_query' => [
+            [
+                'key' => 'hse_recent_changes',
+                'compare' => 'EXISTS'
+            ]
+        ]
+    ]);
+    
+    foreach ($users as $user) {
+        $user_id = $user->ID;
+        $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+        
+        // Get stored changes
+        $stored_changes = get_user_meta($user_id, 'hse_recent_changes', true);
+        
+        if (!is_array($stored_changes)) {
+            continue;
+        }
+        
+        // Filter changes within the last 48 hours
+        $filtered_changes = [];
+        foreach ($stored_changes as $change) {
+            if (!isset($change['timestamp'])) continue;
+            
+            $change_timestamp = is_numeric($change['timestamp']) ? $change['timestamp'] : strtotime($change['timestamp']);
+            
+            if ($change_timestamp >= $cutoff_timestamp) {
+                $filtered_changes[] = $change;
+            }
+        }
+        
+        if (!empty($filtered_changes)) {
+            // Sort by timestamp descending
+            usort($filtered_changes, function($a, $b) {
+                $a_time = is_numeric($a['timestamp']) ? $a['timestamp'] : strtotime($a['timestamp']);
+                $b_time = is_numeric($b['timestamp']) ? $b['timestamp'] : strtotime($b['timestamp']);
+                return $b_time - $a_time;
+            });
+            
+            $recent_updates[] = [
+                'user_id' => $user_id,
+                'rag_soc' => $rag_soc ?: $user->display_name,
+                'email' => $user->user_email,
+                'timestamp' => is_numeric($filtered_changes[0]['timestamp']) ? $filtered_changes[0]['timestamp'] : strtotime($filtered_changes[0]['timestamp']),
+                'changes' => $filtered_changes
+            ];
+        }
+    }
+    
+    // Sort by timestamp descending
+    usort($recent_updates, function($a, $b) {
+        $a_time = is_numeric($a['timestamp']) ? $a['timestamp'] : strtotime($a['timestamp']);
+        $b_time = is_numeric($b['timestamp']) ? $b['timestamp'] : strtotime($b['timestamp']);
+        return $b_time - $a_time;
+    });
+    
+    return $recent_updates;
+}
+
+$recent_hse_updates = getRecentHseUpdates();
+
+// Add JavaScript function for accordion BEFORE the HTML that uses it
+?>
+<script>
+function toggleHseUpdatesAccordion() {
+    const content = document.getElementById('hse-updates-content');
+    const arrow = document.getElementById('hse-accordion-arrow');
+    
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+    } else {
+        content.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
+</script>
+<?php
+
+if (!empty($recent_hse_updates)) {
+    echo '<div style="background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #17a2b8; overflow: hidden;">';
+    
+    // Accordion Header (clickable)
+    echo '<div onclick="toggleHseUpdatesAccordion()" style="background: rgba(23, 162, 184, 0.15); padding: 15px 20px; cursor: pointer; user-select: none; border-bottom: 1px solid #17a2b8;" onmouseover="this.style.background=\'rgba(23, 162, 184, 0.25)\'" onmouseout="this.style.background=\'rgba(23, 162, 184, 0.15)\'">';
+    echo '<h3 style="color: #0c5460; margin: 0; display: flex; align-items: center; justify-content: space-between;">';
+    echo '<span>📢 Aggiornamenti Recenti HSE (ultime 48 ore) <span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 10px;">' . count($recent_hse_updates) . ' aggiornamenti</span></span>';
+    echo '<span id="hse-accordion-arrow" style="font-size: 16px; transition: transform 0.3s ease;">▼</span>';
+    echo '</h3>';
+    echo '</div>';
+    
+    // Accordion Content (initially collapsed)
+    echo '<div id="hse-updates-content" style="display: none; padding: 20px;">';
+    echo '<div style="display: grid; gap: 15px;">';
+    foreach ($recent_hse_updates as $update) {
+        echo '<div style="background: #e7f3ff; border: 1px solid #0066a2; border-radius: 6px; padding: 15px; border-left: 4px solid #0066a2;">';
+        echo '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">';
+        echo '<div>';
+        echo '<strong style="color: #004085; font-size: 14px;">🏢 ' . htmlspecialchars($update['rag_soc']) . '</strong>';
+        echo '<div style="font-size: 12px; color: #6c757d; margin-top: 2px;">';
+        echo '<strong>ID:</strong> ' . $update['user_id'] . ' | ';
+        echo '<strong>Email:</strong> ' . htmlspecialchars($update['email']);
+        echo '</div>';
+        echo '</div>';
+        echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', $update['timestamp']) . '</span>';
+        echo '</div>';
+        
+        echo '<div style="margin-top: 10px;">';
+        echo '<strong style="color: #004085; font-size: 12px;">📝 Modifiche effettuate:</strong>';
+        echo '<div style="margin-top: 5px; font-size: 11px; line-height: 1.6;">';
+        
+        foreach ($update['changes'] as $change) {
+            $field_label = isset($change['field']) ? htmlspecialchars($change['field']) : 'Campo';
+            $change_type = isset($change['type']) ? $change['type'] : 'update';
+            
+            echo '<div style="background: rgba(0,102,162,0.1); padding: 8px; margin: 4px 0; border-radius: 3px; border-left: 3px solid #0066a2;">';
+            
+            if ($change_type === 'new') {
+                // New record added
+                echo '<div style="color: #004085; font-weight: bold; margin-bottom: 4px;">➕ ' . $field_label . ' - Nuovo elemento aggiunto</div>';
+                if (isset($change['new_value'])) {
+                    echo '<div style="color: #155724; margin-left: 20px;">▸ ' . htmlspecialchars($change['new_value']) . '</div>';
+                }
+            } elseif ($change_type === 'update') {
+                // Field updated
+                echo '<div style="color: #004085; font-weight: bold; margin-bottom: 4px;">✏️ ' . $field_label . '</div>';
+                
+                if (isset($change['old_value']) && isset($change['new_value'])) {
+                    echo '<div style="margin-left: 20px;">';
+                    echo '<div style="color: #856404; text-decoration: line-through;">⊖ Era: ' . htmlspecialchars($change['old_value']) . '</div>';
+                    echo '<div style="color: #155724; font-weight: bold;">⊕ Ora: ' . htmlspecialchars($change['new_value']) . '</div>';
+                    echo '</div>';
+                } elseif (isset($change['new_value'])) {
+                    echo '<div style="color: #155724; margin-left: 20px;">▸ ' . htmlspecialchars($change['new_value']) . '</div>';
+                }
+            } elseif ($change_type === 'file') {
+                // File uploaded
+                echo '<div style="color: #004085; font-weight: bold; margin-bottom: 4px;">📎 ' . $field_label . ' - File caricato/aggiornato</div>';
+                if (isset($change['filename'])) {
+                    echo '<div style="color: #155724; margin-left: 20px;">📄 ' . htmlspecialchars($change['filename']) . '</div>';
+                }
+            } else {
+                // Generic change
+                echo '<div style="color: #004085;">• ' . htmlspecialchars($change['description'] ?? $field_label) . '</div>';
+            }
+            
+            echo '</div>';
+        }
+        
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+    }
+    echo '</div>';
+    
+    echo '<div style="margin-top: 15px; padding: 10px; background: rgba(23,162,184,0.1); border-radius: 4px; font-size: 12px; color: #0c5460;">';
+    echo '<strong>ℹ️ Nota:</strong> Questi sono gli aggiornamenti effettuati dagli utenti HSE nelle ultime 48 ore. ';
+    echo 'Per ogni modifica è stata inviata una notifica email all\'amministratore (ufficio_qualita@cogei.net).';
+    echo '</div>';
+    
+    echo '</div>'; // Close accordion content
+    echo '</div>'; // Close accordion container
+} else {
+    echo '<div style="background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 15px; margin-bottom: 20px; border-left: 5px solid #28a745;">';
+    echo '<h4 style="color: #155724; margin: 0; display: flex; align-items: center;">✅ Nessun Aggiornamento Recente</h4>';
+    echo '<p style="margin: 8px 0 0 0; font-size: 14px; color: #155724;">Non ci sono aggiornamenti HSE nelle ultime 48 ore.</p>';
+    echo '</div>';
+}
+
 // TAB NAVIGATION
 echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #e9ecef;">';
 echo '<button onclick="showTab(\'richieste\')" id="tab-richieste" class="tab-button active" style="background: #0066a2; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">📋 Richieste Cantiere</button>';
 echo '<button onclick="showTab(\'cantieri\')" id="tab-cantieri" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">🏗️ Gestione Cantieri</button>';
-echo '<button onclick="showTab(\'assegnazioni\')" id="tab-assegnazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 8px 8px 0 0;">🔗 Assegnazioni</button>';
+echo '<button onclick="showTab(\'assegnazioni\')" id="tab-assegnazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">🔗 Assegnazioni</button>';
+echo '<button onclick="showTab(\'log-email\')" id="tab-log-email" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; margin-right: 5px; cursor: pointer; border-radius: 8px 8px 0 0;">📧 Log Email</button>';
+echo '<button onclick="showTab(\'log-disattivazioni\')" id="tab-log-disattivazioni" class="tab-button" style="background: #6c757d; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 8px 8px 0 0;">🔴 Log Disattivazioni</button>';
 echo '</div>';
 
 // MESSAGGI DI FEEDBACK GLOBALI
@@ -2985,6 +3291,316 @@ echo '</div>';
 echo '</form>';
 echo '</div>';
 echo '</div>';
+
+// ================== LOG EMAIL TAB ==================
+echo '<div id="content-log-email" class="tab-content" style="display: none;">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">📧 Log Email HSE</h3>';
+
+$log_file = ABSPATH . 'log_mail/log_hse_mail.txt';
+
+if (file_exists($log_file)) {
+    $log_content = file_get_contents($log_file);
+    $log_lines = explode("\n", $log_content);
+    
+    // Parse log entries
+    $log_entries = [];
+    $current_entry = [];
+    
+    foreach ($log_lines as $line) {
+        if (preg_match('/^-{100}$/', $line)) {
+            if (!empty($current_entry)) {
+                $log_entries[] = $current_entry;
+                $current_entry = [];
+            }
+        } elseif (!empty(trim($line)) && strpos($line, '====') === false) {
+            $current_entry[] = $line;
+        }
+    }
+    
+    if (!empty($current_entry)) {
+        $log_entries[] = $current_entry;
+    }
+    
+    // Reverse to show newest first
+    $log_entries = array_reverse($log_entries);
+    
+    // Pagination
+    $per_page = 20;
+    $current_page = isset($_GET['log_page']) ? max(1, intval($_GET['log_page'])) : 1;
+    $total_entries = count($log_entries);
+    $total_pages = ceil($total_entries / $per_page);
+    $offset = ($current_page - 1) * $per_page;
+    $page_entries = array_slice($log_entries, $offset, $per_page);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+    echo '<strong>ℹ️ Informazioni:</strong> Mostra le ultime ' . $per_page . ' voci per pagina. Totale: ' . $total_entries . ' voci nel log.';
+    echo '</div>';
+    
+    // Show deletion success message
+    if (isset($_GET['deleted'])) {
+        $deleted_count = intval($_GET['deleted']);
+        echo '<div style="margin-bottom: 15px; padding: 10px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">';
+        echo '<strong>✅ Successo:</strong> ' . $deleted_count . ' ' . ($deleted_count === 1 ? 'voce eliminata' : 'voci eliminate') . ' dal log.';
+        echo '</div>';
+    }
+    
+    // Bulk actions form start
+    echo '<form id="log-delete-form" method="POST" onsubmit="return confirmLogDeletion()">';
+    echo '<input type="hidden" name="log_action" value="delete_logs">';
+    
+    // Bulk actions toolbar
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">';
+    echo '<div>';
+    echo '<label style="margin-right: 15px;"><input type="checkbox" id="select-all-logs" onchange="toggleAllLogs(this.checked)"> <strong>Seleziona tutto</strong></label>';
+    echo '<button type="submit" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">🗑️ Elimina Selezionati</button>';
+    echo '<span id="selected-count" style="margin-left: 10px; color: #666; font-size: 13px;"></span>';
+    echo '</div>';
+    echo '<div>';
+    echo '<button type="button" onclick="if(confirm(\'Confermi di voler eliminare TUTTE le voci del log?\')) { deleteAllLogs(); }" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">🗑️ Elimina Tutto</button>';
+    echo '</div>';
+    echo '</div>';
+    
+    // Pagination controls
+    if ($total_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button type="button" onclick="window.location.href=\'?log_page=' . ($current_page - 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_page = max(1, $current_page - 2);
+        $end_page = min($total_pages, $current_page + 2);
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button type="button" onclick="window.location.href=\'?log_page=' . $i . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button type="button" onclick="window.location.href=\'?log_page=' . ($current_page + 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    $global_index = $offset;
+    foreach ($page_entries as $entry) {
+        if (empty($entry)) continue;
+        
+        $first_line = $entry[0] ?? '';
+        
+        // Parse timestamp and type
+        preg_match('/\[(.*?)\] \[(.*?)\] (.*)/', $first_line, $matches);
+        $timestamp = $matches[1] ?? '';
+        $ambiente = $matches[2] ?? '';
+        $tipo = $matches[3] ?? '';
+        
+        // Determine color based on environment
+        $env_color = $ambiente === 'DEBUG' ? '#ffc107' : '#28a745';
+        $env_bg = $ambiente === 'DEBUG' ? '#fff3cd' : '#d4edda';
+        
+        // Determine color based on email type
+        $tipo_colors = [
+            'NOTIFICA_ADMIN_MODIFICHE_HSE' => ['bg' => '#fff3cd', 'text' => '#856404'],
+            'AVVISO_SCADENZA_15_GIORNI' => ['bg' => '#e7f3ff', 'text' => '#004085'],
+            'AVVISO_SCADENZA_5_GIORNI' => ['bg' => '#fff3cd', 'text' => '#856404'],
+            'AVVISO_SCADENZA_OGGI' => ['bg' => '#ffe5e5', 'text' => '#c82333'],
+            'AVVISO_DISATTIVAZIONE_15_GIORNI' => ['bg' => '#f8d7da', 'text' => '#721c24'],
+            'DISATTIVAZIONE_AUTOMATICA' => ['bg' => '#343a40', 'text' => '#ffffff'],
+            'RICHIESTA_DOCUMENTI' => ['bg' => '#d1ecf1', 'text' => '#0c5460'],
+            'ATTIVAZIONE_CANTIERE' => ['bg' => '#d4edda', 'text' => '#155724'],
+            'DISATTIVAZIONE_CANTIERE' => ['bg' => '#f8d7da', 'text' => '#721c24']
+        ];
+        
+        $tipo_style = $tipo_colors[$tipo] ?? ['bg' => '#e9ecef', 'text' => '#495057'];
+        
+        echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+        
+        // Header with checkbox and ID
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">';
+        echo '<div style="display: flex; align-items: center;">';
+        echo '<input type="checkbox" class="log-checkbox" name="log_indices[]" value="' . $global_index . '" onchange="updateSelectedCount()" style="margin-right: 10px; cursor: pointer;">';
+        echo '<span style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID: ' . $global_index . '</span>';
+        echo '<span style="background: ' . $env_bg . '; color: ' . $env_color . '; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 10px;">' . htmlspecialchars($ambiente) . '</span>';
+        echo '<span style="background: ' . $tipo_style['bg'] . '; color: ' . $tipo_style['text'] . '; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">' . htmlspecialchars($tipo) . '</span>';
+        echo '</div>';
+        echo '<span style="color: #666; font-size: 12px;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+        echo '</div>';
+        
+        // Content
+        echo '<div style="font-family: monospace; font-size: 12px; line-height: 1.6;">';
+        for ($i = 1; $i < count($entry); $i++) {
+            $line = $entry[$i];
+            if (empty(trim($line))) continue;
+            
+            // Highlight important fields
+            if (strpos($line, 'Destinatario:') === 0) {
+                echo '<span style="color: #0066a2; font-weight: bold;">' . htmlspecialchars($line) . '</span><br>';
+            } elseif (strpos($line, 'Oggetto:') === 0) {
+                echo '<span style="color: #495057; font-weight: bold;">' . htmlspecialchars($line) . '</span><br>';
+            } elseif (strpos($line, 'Stato:') === 0) {
+                $is_success = strpos($line, 'INVIATA CON SUCCESSO') !== false;
+                $is_failed = strpos($line, 'INVIO FALLITO') !== false;
+                $color = $is_success ? '#28a745' : ($is_failed ? '#dc3545' : '#6c757d');
+                echo '<span style="color: ' . $color . '; font-weight: bold;">' . htmlspecialchars($line) . '</span><br>';
+            } else {
+                echo htmlspecialchars($line) . '<br>';
+            }
+        }
+        echo '</div>';
+        
+        echo '</div>';
+        
+        $global_index++;
+    }
+    
+    // Close form
+    echo '</form>';
+    
+    // Pagination controls (bottom)
+    if ($total_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_page . ' di ' . $total_pages . '</span>';
+        
+        if ($current_page > 1) {
+            echo '<button type="button" onclick="window.location.href=\'?log_page=' . ($current_page - 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_page; $i <= $end_page; $i++) {
+            $style = $i === $current_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button type="button" onclick="window.location.href=\'?log_page=' . $i . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_page < $total_pages) {
+            echo '<button type="button" onclick="window.location.href=\'?log_page=' . ($current_page + 1) . '&tab=log-email\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessuna email registrata</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il log verrà popolato quando vengono inviate email HSE.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End content-log-email
+
+// ================== LOG DISATTIVAZIONI TAB ==================
+echo '<div id="content-log-disattivazioni" class="tab-content" style="display: none;">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">🔴 Log Disattivazioni HSE</h3>';
+
+$log_dis_file = ABSPATH . 'log_mail/log_hse_disattivazioni.txt';
+
+if (file_exists($log_dis_file)) {
+    $log_dis_content = file_get_contents($log_dis_file);
+    $log_dis_lines = array_filter(explode("\n", $log_dis_content), function($line) {
+        return !empty(trim($line));
+    });
+    
+    // Reverse to show newest first
+    $log_dis_lines = array_reverse($log_dis_lines);
+    
+    // Pagination
+    $per_page_dis = 20;
+    $current_dis_page = isset($_GET['dis_page']) ? max(1, intval($_GET['dis_page'])) : 1;
+    $total_dis_entries = count($log_dis_lines);
+    $total_dis_pages = ceil($total_dis_entries / $per_page_dis);
+    $offset_dis = ($current_dis_page - 1) * $per_page_dis;
+    $page_dis_entries = array_slice($log_dis_lines, $offset_dis, $per_page_dis);
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">';
+    echo '<strong>ℹ️ Informazioni:</strong> Log delle disattivazioni automatiche per documenti HSE scaduti. Totale: ' . $total_dis_entries . ' voci.';
+    echo '</div>';
+    
+    // Pagination controls (top)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-bottom: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page - 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        $start_dis_page = max(1, $current_dis_page - 2);
+        $end_dis_page = min($total_dis_pages, $current_dis_page + 2);
+        
+        for ($i = $start_dis_page; $i <= $end_dis_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="window.location.href=\'?dis_page=' . $i . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page + 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+    // Display log entries
+    $entry_num = $total_dis_entries - $offset_dis;
+    foreach ($page_dis_entries as $line) {
+        if (preg_match('/\[(.*?)\] \[USER ID: (\d+)\] (.*)/', $line, $matches)) {
+            $timestamp = $matches[1];
+            $user_id_match = $matches[2];
+            $message = $matches[3];
+            
+            echo '<div style="border: 1px solid #f5c6cb; border-radius: 8px; padding: 15px; margin-bottom: 10px; background: #f8d7da; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">';
+            
+            // Header
+            echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+            echo '<div>';
+            echo '<span style="background: #721c24; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-right: 10px;">ID LOG: ' . $entry_num . '</span>';
+            if (!empty($user_id_match)) {
+                echo '<span style="background: #856404; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;">USER ID: ' . htmlspecialchars($user_id_match) . '</span>';
+            }
+            echo '</div>';
+            echo '<span style="color: #721c24; font-size: 12px; font-weight: bold;">🕒 ' . htmlspecialchars($timestamp) . '</span>';
+            echo '</div>';
+            
+            // Content
+            echo '<div style="padding: 10px; background: white; border-radius: 4px; border-left: 4px solid #dc3545;">';
+            echo '<p style="margin: 0; color: #721c24; font-size: 14px; line-height: 1.5;"><strong>🔴 ' . htmlspecialchars($message) . '</strong></p>';
+            echo '</div>';
+            
+            echo '</div>';
+        } else {
+            // Fallback for non-standard format
+            echo '<div style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #f8f9fa;">';
+            echo '<p style="margin: 0; font-family: monospace; font-size: 12px; color: #666;">' . htmlspecialchars($line) . '</p>';
+            echo '</div>';
+        }
+        $entry_num--;
+    }
+    
+    // Pagination controls (bottom)
+    if ($total_dis_pages > 1) {
+        echo '<div style="margin-top: 15px; text-align: center;">';
+        echo '<span style="margin-right: 10px;">Pagina ' . $current_dis_page . ' di ' . $total_dis_pages . '</span>';
+        
+        if ($current_dis_page > 1) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page - 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">← Precedente</button>';
+        }
+        
+        for ($i = $start_dis_page; $i <= $end_dis_page; $i++) {
+            $style = $i === $current_dis_page ? 'background: #0066a2; color: white;' : 'background: #f0f0f0;';
+            echo '<button onclick="window.location.href=\'?dis_page=' . $i . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer; ' . $style . '">' . $i . '</button>';
+        }
+        
+        if ($current_dis_page < $total_dis_pages) {
+            echo '<button onclick="window.location.href=\'?dis_page=' . ($current_dis_page + 1) . '&tab=log-disattivazioni\'" style="padding: 5px 10px; margin: 0 2px; cursor: pointer;">Successiva →</button>';
+        }
+        echo '</div>';
+    }
+    
+} else {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">📭 Nessuna disattivazione registrata</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Il log verrà popolato quando il cron esegue disattivazioni automatiche.</p>';
+    echo '</div>';
+}
+
+echo '</div>'; // End content-log-disattivazioni
 
 // ================== JAVASCRIPT ESTESO ==================
 ?>
@@ -5795,8 +6411,11 @@ function debugCantieriSystem() {
 // ================== INIZIALIZZAZIONE ESTESA ==================
 
 document.addEventListener("DOMContentLoaded", function() {
-    // Inizializza stato tab
-    showTab('richieste');
+    // Inizializza stato tab - controlla se c'è un tab nell'URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    const defaultTab = tabParam || 'richieste';
+    showTab(defaultTab);
     
     // Inizializza filtri richieste
     var rows = document.querySelectorAll(".cantiere-row");
@@ -7380,6 +7999,60 @@ echo '}';
 echo '';
 echo 'function closeMezzoDetailsModal() {';
 echo '    document.getElementById("mezzo-details-modal").style.display = "none";';
+echo '}';
+echo '';
+echo '// ================== LOG DELETION FUNCTIONS ==================';
+echo '';
+echo 'function toggleAllLogs(checked) {';
+echo '    const checkboxes = document.querySelectorAll(\'.log-checkbox\');';
+echo '    checkboxes.forEach(function(cb) {';
+echo '        cb.checked = checked;';
+echo '    });';
+echo '    updateSelectedCount();';
+echo '}';
+echo '';
+echo 'function updateSelectedCount() {';
+echo '    const checkboxes = document.querySelectorAll(\'.log-checkbox:checked\');';
+echo '    const count = checkboxes.length;';
+echo '    const countSpan = document.getElementById(\'selected-count\');';
+echo '    const selectAllCheckbox = document.getElementById(\'select-all-logs\');';
+echo '    ';
+echo '    if (countSpan) {';
+echo '        if (count > 0) {';
+echo '            countSpan.textContent = \'(\' + count + \' selezionat\' + (count === 1 ? \'a\' : \'e\') + \')\';';
+echo '            countSpan.style.fontWeight = \'bold\';';
+echo '            countSpan.style.color = \'#dc3545\';';
+echo '        } else {';
+echo '            countSpan.textContent = \'\';';
+echo '        }';
+echo '    }';
+echo '    ';
+echo '    // Update select all checkbox state';
+echo '    const allCheckboxes = document.querySelectorAll(\'.log-checkbox\');';
+echo '    if (selectAllCheckbox && allCheckboxes.length > 0) {';
+echo '        selectAllCheckbox.checked = count === allCheckboxes.length;';
+echo '    }';
+echo '}';
+echo '';
+echo 'function confirmLogDeletion() {';
+echo '    const checkboxes = document.querySelectorAll(\'.log-checkbox:checked\');';
+echo '    if (checkboxes.length === 0) {';
+echo '        alert(\'⚠️ Seleziona almeno una voce da eliminare\');';
+echo '        return false;';
+echo '    }';
+echo '    ';
+echo '    return confirm(\'Confermi di voler eliminare \' + checkboxes.length + \' \' + (checkboxes.length === 1 ? \'voce\' : \'voci\') + \' dal log?\\n\\nQuesta azione non può essere annullata.\');';
+echo '}';
+echo '';
+echo 'function deleteAllLogs() {';
+echo '    // Select all checkboxes';
+echo '    const checkboxes = document.querySelectorAll(\'.log-checkbox\');';
+echo '    checkboxes.forEach(function(cb) {';
+echo '        cb.checked = true;';
+echo '    });';
+echo '    ';
+echo '    // Submit the form';
+echo '    document.getElementById(\'log-delete-form\').submit();';
 echo '}';
 echo '</script>';
 ?>
