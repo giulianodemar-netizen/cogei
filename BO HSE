@@ -1646,6 +1646,24 @@ function getRecentHseUpdates() {
 
 $recent_hse_updates = getRecentHseUpdates();
 
+// Add JavaScript function for accordion BEFORE the HTML that uses it
+?>
+<script>
+function toggleHseUpdatesAccordion() {
+    const content = document.getElementById('hse-updates-content');
+    const arrow = document.getElementById('hse-accordion-arrow');
+    
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+    } else {
+        content.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
+</script>
+<?php
+
 if (!empty($recent_hse_updates)) {
     echo '<div style="background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #17a2b8; overflow: hidden;">';
     
@@ -7979,21 +7997,6 @@ echo '}';
 echo '';
 echo 'function closeMezzoDetailsModal() {';
 echo '    document.getElementById("mezzo-details-modal").style.display = "none";';
-echo '}';
-echo '';
-echo '// ================== HSE UPDATES ACCORDION ==================';
-echo '';
-echo 'function toggleHseUpdatesAccordion() {';
-echo '    const content = document.getElementById(\'hse-updates-content\');';
-echo '    const arrow = document.getElementById(\'hse-accordion-arrow\');';
-echo '    ';
-echo '    if (content.style.display === \'none\' || content.style.display === \'\') {';
-echo '        content.style.display = \'block\';';
-echo '        arrow.style.transform = \'rotate(180deg)\';';
-echo '    } else {';
-echo '        content.style.display = \'none\';';
-echo '        arrow.style.transform = \'rotate(0deg)\';';
-echo '    }';
 echo '}';
 echo '';
 echo '// ================== LOG DELETION FUNCTIONS ==================';
