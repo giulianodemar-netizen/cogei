@@ -64,7 +64,15 @@ class HseMailLogger {
     public static function log($params) {
         self::init();
         
-        $timestamp = date('d/m/Y H:i:s');
+        // Use WordPress timezone if available, otherwise Europe/Rome
+        if (function_exists('wp_timezone')) {
+            $timezone = wp_timezone();
+        } else {
+            $timezone = new DateTimeZone('Europe/Rome');
+        }
+        $now = new DateTime('now', $timezone);
+        $timestamp = $now->format('d/m/Y H:i:s');
+        
         $ambiente = isset($params['ambiente']) ? strtoupper($params['ambiente']) : 'PROD';
         $tipo_email = $params['tipo_email'] ?? 'non_specificato';
         $destinatario = $params['destinatario'] ?? 'N/A';

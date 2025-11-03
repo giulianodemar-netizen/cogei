@@ -1885,18 +1885,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
-                    // Invia notifica admin con informazioni dettagliate
-                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', [
-                        'Personale' => $nearest_personale_exp 
-                            ? "scadenza " . $nearest_personale_exp . " (giorni: " . $nearest_personale_days . ")"
-                            : "scadenza N/A (giorni: N/A)",
-                        'Automezzi' => $nearest_automezzi_exp 
-                            ? "scadenza " . $nearest_automezzi_exp . " (giorni: " . $nearest_automezzi_days . ")"
-                            : "scadenza N/A (giorni: N/A)",
-                        'Attrezzi' => $nearest_attrezzi_exp 
-                            ? "scadenza " . $nearest_attrezzi_exp . " (giorni: " . $nearest_attrezzi_days . ")"
-                            : "scadenza N/A (giorni: N/A)"
-                    ]);
+                    // Prepare details for admin notification
+                    $notification_details = [];
+                    
+                    // Group tracked changes by type for better readability
+                    $updates = [];
+                    $new_items = [];
+                    $files = [];
+                    
+                    foreach ($tracked_changes as $change) {
+                        $change_type = $change['type'] ?? 'update';
+                        $field = $change['field'] ?? 'N/A';
+                        
+                        if ($change_type === 'update') {
+                            $old_val = $change['old_value'] ?? 'N/A';
+                            $new_val = $change['new_value'] ?? 'N/A';
+                            $updates[] = "$field: $old_val → $new_val";
+                        } elseif ($change_type === 'new') {
+                            $new_val = $change['new_value'] ?? 'N/A';
+                            $new_items[] = "$field: $new_val";
+                        } elseif ($change_type === 'file') {
+                            $filename = $change['filename'] ?? 'N/A';
+                            $files[] = "$field: $filename";
+                        }
+                    }
+                    
+                    if (!empty($updates)) {
+                        $notification_details['📝 Modifiche'] = implode(', ', array_slice($updates, 0, 5)) . (count($updates) > 5 ? ' (+' . (count($updates) - 5) . ' altre)' : '');
+                    }
+                    if (!empty($new_items)) {
+                        $notification_details['➕ Nuovi elementi'] = implode(', ', $new_items);
+                    }
+                    if (!empty($files)) {
+                        $notification_details['📎 File caricati'] = implode(', ', array_slice($files, 0, 3)) . (count($files) > 3 ? ' (+' . (count($files) - 3) . ' altri)' : '');
+                    }
+                    
+                    // Add nearest expiry info if available
+                    if ($nearest_personale_exp) {
+                        $notification_details['⚠️ Prossima scadenza Personale'] = "$nearest_personale_exp (giorni: $nearest_personale_days)";
+                    }
+                    if ($nearest_automezzi_exp) {
+                        $notification_details['⚠️ Prossima scadenza Automezzi'] = "$nearest_automezzi_exp (giorni: $nearest_automezzi_days)";
+                    }
+                    if ($nearest_attrezzi_exp) {
+                        $notification_details['⚠️ Prossima scadenza Attrezzi'] = "$nearest_attrezzi_exp (giorni: $nearest_attrezzi_days)";
+                    }
+                    
+                    // Send admin notification with detailed changes
+                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', $notification_details);
                 }
             }
         } elseif (isset($_POST['hse_cantiere_submit_parte_b'])) {
