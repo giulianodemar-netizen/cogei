@@ -1920,18 +1920,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         $notification_details['📎 File caricati'] = implode(', ', array_slice($files, 0, 3)) . (count($files) > 3 ? ' (+' . (count($files) - 3) . ' altri)' : '');
                     }
                     
-                    // Add nearest expiry info if available
-                    if ($nearest_personale_exp) {
-                        $notification_details['⚠️ Prossima scadenza Personale'] = "$nearest_personale_exp (giorni: $nearest_personale_days)";
-                    }
-                    if ($nearest_automezzi_exp) {
-                        $notification_details['⚠️ Prossima scadenza Automezzi'] = "$nearest_automezzi_exp (giorni: $nearest_automezzi_days)";
-                    }
-                    if ($nearest_attrezzi_exp) {
-                        $notification_details['⚠️ Prossima scadenza Attrezzi'] = "$nearest_attrezzi_exp (giorni: $nearest_attrezzi_days)";
+                    // Fallback if no specific changes were tracked
+                    if (empty($notification_details)) {
+                        $notification_details['ℹ️ Aggiornamento'] = 'Parte A aggiornata (dettagli generici)';
                     }
                     
-                    // Send admin notification with detailed changes
+                    // Send admin notification with ONLY the actual changes (no expiry dates)
                     sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', $notification_details);
                 }
             }
