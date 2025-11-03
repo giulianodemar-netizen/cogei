@@ -1688,7 +1688,7 @@ if (!empty($recent_hse_updates)) {
         echo '<strong>Email:</strong> ' . htmlspecialchars($update['email']);
         echo '</div>';
         echo '</div>';
-        echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', $update['timestamp']) . '</span>';
+        echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', strtotime($update['timestamp'])) . '</span>';
         echo '</div>';
         
         echo '<div style="margin-top: 10px;">';
