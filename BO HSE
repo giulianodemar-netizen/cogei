@@ -1630,7 +1630,7 @@ function getRecentHseUpdates() {
                 'user_id' => $user_id,
                 'rag_soc' => $rag_soc ?: $user->display_name,
                 'email' => $user->user_email,
-                'timestamp' => is_numeric($filtered_changes[0]['timestamp']) ? date('Y-m-d H:i:s', $filtered_changes[0]['timestamp']) : $filtered_changes[0]['timestamp'],
+                'timestamp' => is_numeric($filtered_changes[0]['timestamp']) ? $filtered_changes[0]['timestamp'] : strtotime($filtered_changes[0]['timestamp']),
                 'changes' => $filtered_changes
             ];
         }
@@ -1638,7 +1638,9 @@ function getRecentHseUpdates() {
     
     // Sort by timestamp descending
     usort($recent_updates, function($a, $b) {
-        return strtotime($b['timestamp']) - strtotime($a['timestamp']);
+        $a_time = is_numeric($a['timestamp']) ? $a['timestamp'] : strtotime($a['timestamp']);
+        $b_time = is_numeric($b['timestamp']) ? $b['timestamp'] : strtotime($b['timestamp']);
+        return $b_time - $a_time;
     });
     
     return $recent_updates;
@@ -1688,7 +1690,7 @@ if (!empty($recent_hse_updates)) {
         echo '<strong>Email:</strong> ' . htmlspecialchars($update['email']);
         echo '</div>';
         echo '</div>';
-        echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', strtotime($update['timestamp'])) . '</span>';
+        echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', $update['timestamp']) . '</span>';
         echo '</div>';
         
         echo '<div style="margin-top: 10px;">';
