@@ -1632,6 +1632,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                     'new_value' => $new_assicurazione
                                 ];
                             }
+                            
+                            // Check targa (license plate) change
+                            $old_targa = $old_mezzo['targa'] ?? '';
+                            $new_targa = $new_mezzo['targa'] ?? '';
+                            if ($old_targa != $new_targa && !empty($new_targa)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Targa - ' . $mezzo_desc,
+                                    'old_value' => $old_targa ?: 'Non impostata',
+                                    'new_value' => $new_targa
+                                ];
+                            }
                         }
                     }
                     
@@ -1691,6 +1703,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                         'new_value' => $new_date
                                     ];
                                 }
+                            }
+                        }
+                        
+                        // Track file uploads for personnel
+                        $file_fields = [
+                            'hse_idoneita_file_' . $i => 'Idoneità Sanitaria File',
+                            'hse_unilav_file_' . $i => 'UNILAV File',
+                            'hse_formazione_antincendio_' . $i => 'Formazione Antincendio File',
+                            'hse_formazione_primo_soccorso_' . $i => 'Formazione Primo Soccorso File',
+                            'hse_formazione_preposti_' . $i => 'Formazione Preposti File',
+                            'hse_formazione_rspp_' . $i => 'Formazione RSPP File',
+                            'hse_formazione_rls_' . $i => 'Formazione RLS File',
+                            'hse_formazione_aspp_' . $i => 'Formazione ASPP File',
+                            'hse_formazione_ple_' . $i => 'Formazione PLE File',
+                            'hse_formazione_carrelli_' . $i => 'Formazione Carrelli File'
+                        ];
+                        
+                        foreach ($file_fields as $file_key => $label) {
+                            if (!empty($_FILES[$file_key]['name'])) {
+                                $filename = sanitize_file_name($_FILES[$file_key]['name']);
+                                $tracked_changes[] = [
+                                    'type' => 'file',
+                                    'field' => $label . ' - ' . $person_name,
+                                    'filename' => $filename,
+                                    'new_value' => 'File caricato/aggiornato'
+                                ];
                             }
                         }
                     }
