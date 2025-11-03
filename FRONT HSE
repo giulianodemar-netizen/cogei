@@ -1773,11 +1773,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     // Save tracked changes - ALWAYS save if Parte A was submitted
                     trackHseChanges($hse_current_user_id, $tracked_changes);
                     
-                    // Invia notifica admin
+                    // Calculate nearest expiries for notification
+                    $nearest_personale_exp = null;
+                    $nearest_personale_days = PHP_INT_MAX;
+                    $today = new DateTime();
+                    
+                    foreach ($hse_personale_data as $person) {
+                        $person_name = $person['nome'] . ' ' . $person['cognome'];
+                        $expiry_dates = [
+                            'UNILAV' => $person['unilav_data_scadenza'] ?? '',
+                            'Idoneità Sanitaria' => $person['idoneita_sanitaria_scadenza'] ?? ''
+                        ];
+                        
+                        foreach ($expiry_dates as $type => $date_str) {
+                            if (!empty($date_str)) {
+                                try {
+                                    $expiry_date = DateTime::createFromFormat('Y-m-d', $date_str);
+                                    if (!$expiry_date) {
+                                        $expiry_date = DateTime::createFromFormat('d/m/Y', $date_str);
+                                    }
+                                    if ($expiry_date) {
+                                        $interval = $today->diff($expiry_date);
+                                        $days = (int)$interval->format('%r%a');
+                                        if (abs($days) < abs($nearest_personale_days)) {
+                                            $nearest_personale_days = $days;
+                                            $nearest_personale_exp = "$type - $person_name: " . $expiry_date->format('d/m/Y');
+                                        }
+                                    }
+                                } catch (Exception $e) {}
+                            }
+                        }
+                    }
+                    
+                    $nearest_automezzi_exp = null;
+                    $nearest_automezzi_days = PHP_INT_MAX;
+                    
+                    foreach ($hse_automezzi_data as $mezzo) {
+                        $mezzo_desc = $mezzo['descrizione_automezzo'];
+                        $expiry_dates = [
+                            'Revisione' => $mezzo['scadenza_revisione'] ?? '',
+                            'Assicurazione' => $mezzo['scadenza_assicurazione'] ?? ''
+                        ];
+                        
+                        foreach ($expiry_dates as $type => $date_str) {
+                            if (!empty($date_str)) {
+                                try {
+                                    $expiry_date = DateTime::createFromFormat('Y-m-d', $date_str);
+                                    if (!$expiry_date) {
+                                        $expiry_date = DateTime::createFromFormat('d/m/Y', $date_str);
+                                    }
+                                    if ($expiry_date) {
+                                        $interval = $today->diff($expiry_date);
+                                        $days = (int)$interval->format('%r%a');
+                                        if (abs($days) < abs($nearest_automezzi_days)) {
+                                            $nearest_automezzi_days = $days;
+                                            $nearest_automezzi_exp = "$type - $mezzo_desc: " . $expiry_date->format('d/m/Y');
+                                        }
+                                    }
+                                } catch (Exception $e) {}
+                            }
+                        }
+                    }
+                    
+                    $nearest_attrezzi_exp = null;
+                    $nearest_attrezzi_days = PHP_INT_MAX;
+                    
+                    foreach ($hse_attrezzi_data as $attrezzo) {
+                        $attrezzo_desc = $attrezzo['descrizione_attrezzo'];
+                        $date_str = $attrezzo['data_prossima_revisione'] ?? '';
+                        
+                        if (!empty($date_str)) {
+                            try {
+                                $expiry_date = DateTime::createFromFormat('Y-m-d', $date_str);
+                                if (!$expiry_date) {
+                                    $expiry_date = DateTime::createFromFormat('d/m/Y', $date_str);
+                                }
+                                if ($expiry_date) {
+                                    $interval = $today->diff($expiry_date);
+                                    $days = (int)$interval->format('%r%a');
+                                    if (abs($days) < abs($nearest_attrezzi_days)) {
+                                        $nearest_attrezzi_days = $days;
+                                        $nearest_attrezzi_exp = "$attrezzo_desc: " . $expiry_date->format('d/m/Y');
+                                    }
+                                }
+                            } catch (Exception $e) {}
+                        }
+                    }
+                    
+                    // Invia notifica admin con informazioni dettagliate
                     sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', [
-                        'Personale' => $hse_new_count . ' persone',
-                        'Automezzi' => $hse_new_automezzi_count,
-                        'Attrezzi' => $hse_new_attrezzi_count
+                        'Personale' => $nearest_personale_exp 
+                            ? "scadenza " . $nearest_personale_exp . " (giorni: " . $nearest_personale_days . ")"
+                            : "scadenza N/A (giorni: N/A)",
+                        'Automezzi' => $nearest_automezzi_exp 
+                            ? "scadenza " . $nearest_automezzi_exp . " (giorni: " . $nearest_automezzi_days . ")"
+                            : "scadenza N/A (giorni: N/A)",
+                        'Attrezzi' => $nearest_attrezzi_exp 
+                            ? "scadenza " . $nearest_attrezzi_exp . " (giorni: " . $nearest_attrezzi_days . ")"
+                            : "scadenza N/A (giorni: N/A)"
                     ]);
                 }
             }
