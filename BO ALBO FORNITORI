@@ -1968,7 +1968,10 @@ echo '<div id="tab-registrazione-content" style="display: ' . ($current_tab === 
 echo '<h3 style="color: #0066a2; margin-top: 0;">📝 Utenti in Fase di Completamento Registrazione</h3>';
 
 echo '<div style="margin-bottom: 15px; padding: 15px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
-echo '<strong>ℹ️ Informazioni:</strong> Questa sezione mostra gli utenti NON attivi che hanno documenti obbligatori mancanti o utenti pronti per la verifica (tutti i documenti completati ma non ancora attivati).';
+echo '<strong>ℹ️ Informazioni:</strong> Questa sezione mostra:<br>';
+echo '• Utenti NON attivi con documenti obbligatori mancanti<br>';
+echo '• Utenti pronti per la verifica (tutti i documenti completati e non scaduti, anche se autodisattivati)<br>';
+echo '• Gli utenti autodisattivati con tutti i documenti validi sono considerati pronti per la verifica';
 echo '</div>';
 
 $users_in_registration = getAllUsersInRegistrationPhase();
@@ -2012,7 +2015,9 @@ if (empty($users_in_registration)) {
     }
     echo '</div>';
     
-    // Display users
+    // Display users in a 2-column grid
+    echo '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;">';
+    
     foreach ($users_in_registration as $reg_user) {
         $border_color = $reg_user['is_ready_for_review'] ? '#28a745' : '#ffc107';
         $bg_color = $reg_user['is_ready_for_review'] ? '#d4edda' : '#fff3cd';
@@ -2020,7 +2025,7 @@ if (empty($users_in_registration)) {
         
         $data_attrs = 'data-ready="' . ($reg_user['is_ready_for_review'] ? '1' : '0') . '"';
         
-        echo '<div class="registration-user-card" ' . $data_attrs . ' style="border: 2px solid ' . $border_color . '; border-radius: 8px; padding: 0; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+        echo '<div class="registration-user-card" ' . $data_attrs . ' style="border: 2px solid ' . $border_color . '; border-radius: 8px; padding: 0; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
         
         // Header
         echo '<div style="background: ' . $header_bg . '; color: white; padding: 15px; border-radius: 6px 6px 0 0;">';
@@ -2153,6 +2158,8 @@ if (empty($users_in_registration)) {
         echo '</div>'; // End content padding
         echo '</div>'; // End user card
     }
+    
+    echo '</div>'; // End 2-column grid
 }
 
 echo '</div>'; // End tab-registrazione-content
