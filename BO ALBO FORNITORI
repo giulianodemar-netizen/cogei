@@ -986,17 +986,40 @@ function getAllUsersInRegistrationPhase() {
             $document_fields['user_registration_scad_rct_rco_forni'] = 'RCT-RCO (Forniture)';
         }
         
-        // Check document completion status
+        // Check document completion status and expiry
         $completed_docs = [];
         $missing_docs = [];
+        $expired_docs = [];
         $total_required = count($document_fields);
         
         foreach ($document_fields as $field => $label) {
             $value = get_user_meta($user_id, $field, true);
             if (!empty($value)) {
+                // Check if document is expired
+                $is_expired = false;
+                $converted_date = str_replace("/", "-", $value);
+                try {
+                    $now = new DateTime("now");
+                    $expiry_date = new DateTime($converted_date . ' 23:59:59');
+                    $interval = $now->diff($expiry_date);
+                    $days = (int)$interval->format('%r%a');
+                    
+                    if ($days < 0) {
+                        $is_expired = true;
+                        $expired_docs[] = [
+                            'label' => $label,
+                            'value' => $value,
+                            'days_expired' => abs($days)
+                        ];
+                    }
+                } catch (Exception $e) {
+                    // Se la data non è valida, consideriamola come non scaduta per sicurezza
+                }
+                
                 $completed_docs[] = [
                     'label' => $label,
-                    'value' => $value
+                    'value' => $value,
+                    'is_expired' => $is_expired
                 ];
             } else {
                 $missing_docs[] = $label;
@@ -1005,7 +1028,13 @@ function getAllUsersInRegistrationPhase() {
         
         $filled_count = count($completed_docs);
         $is_incomplete = $filled_count < $total_required;
-        $is_ready_for_review = $filled_count === $total_required && $status !== 'Attivo';
+        $has_expired = !empty($expired_docs);
+        
+        // NUOVA LOGICA: Pronto per verifica SOLO se:
+        // - Tutti i documenti obbligatori sono compilati
+        // - Nessun documento è scaduto
+        // - Lo stato non è già Attivo
+        $is_ready_for_review = $filled_count === $total_required && !$has_expired && $status !== 'Attivo';
         
         // SOLO utenti NON attivi con almeno un documento mancante OPPURE con tutti i documenti ma non ancora attivati
         if ($status !== 'Attivo' && ($is_incomplete || $is_ready_for_review)) {
@@ -1018,10 +1047,12 @@ function getAllUsersInRegistrationPhase() {
                 'registration_date' => date('d/m/Y H:i', strtotime($user->user_registered)),
                 'completed_docs' => $completed_docs,
                 'missing_docs' => $missing_docs,
+                'expired_docs' => $expired_docs,
                 'filled_count' => $filled_count,
                 'total_required' => $total_required,
                 'percentage' => round(($filled_count / $total_required) * 100),
-                'is_ready_for_review' => $is_ready_for_review
+                'is_ready_for_review' => $is_ready_for_review,
+                'has_expired' => $has_expired
             ];
         }
     }
