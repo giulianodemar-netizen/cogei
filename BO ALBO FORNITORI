@@ -509,9 +509,17 @@ function checkDocumentChangesAndDisableUser($user_id) {
             'stato' => determineSupplierStatus($user_id)
         ]);
         
-        // NUOVO: Per utenti nuovi che iniziano a caricare documenti, invia notifica admin
+        // NUOVO: Per utenti nuovi che iniziano a caricare documenti, invia notifica admin SOLO SE NON GIÀ NOTIFICATO
         if ($is_new_user && $filled_documents > 0) {
-            sendAdminNewUserProgressNotification($user_id, $filled_documents, $total_required, $rag_soc);
+            // Verifica se già notificato con hash dei documenti correnti
+            $current_state_hash = md5(json_encode($live_data));
+            $last_notified_state = get_user_meta($user_id, 'last_notified_document_changes', true);
+            
+            // Invia notifica solo se lo stato è cambiato
+            if ($last_notified_state !== $current_state_hash) {
+                sendAdminNewUserProgressNotification($user_id, $filled_documents, $total_required, $rag_soc);
+                update_user_meta($user_id, 'last_notified_document_changes', $current_state_hash);
+            }
         }
         
         return false; // No comparison possible on first run
@@ -547,7 +555,14 @@ function checkDocumentChangesAndDisableUser($user_id) {
     if (!empty($changed_documents)) {
         // NUOVO REQ 1: Verifica se le modifiche sono già state notificate
         $last_notified_changes = get_user_meta($user_id, 'last_notified_document_changes', true);
-        $current_changes_hash = md5(json_encode($changed_documents));
+        
+        // Per nuovi utenti, usiamo lo stato completo dei documenti come hash
+        // Per utenti esistenti, usiamo solo le modifiche
+        if ($is_new_user) {
+            $current_changes_hash = md5(json_encode($live_data));
+        } else {
+            $current_changes_hash = md5(json_encode($changed_documents));
+        }
         
         // Se le modifiche sono identiche all'ultima notifica, non inviare email
         if ($last_notified_changes === $current_changes_hash) {
