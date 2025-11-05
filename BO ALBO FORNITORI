@@ -2045,9 +2045,17 @@ if (empty($users_in_registration)) {
         if (!empty($reg_user['completed_docs'])) {
             echo '<div style="background: #d4edda; padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
             foreach ($reg_user['completed_docs'] as $doc) {
-                echo '<div style="padding: 6px 0; border-bottom: 1px solid #c3e6cb; font-size: 13px;">';
-                echo '<strong style="color: #155724;">✓ ' . htmlspecialchars($doc['label']) . '</strong><br>';
-                echo '<span style="color: #155724; margin-left: 15px;">Scadenza: ' . htmlspecialchars($doc['value']) . '</span>';
+                $is_expired = isset($doc['is_expired']) && $doc['is_expired'];
+                $bg_color = $is_expired ? '#fff3cd' : 'transparent';
+                $text_color = $is_expired ? '#856404' : '#155724';
+                $icon = $is_expired ? '⚠️' : '✓';
+                
+                echo '<div style="padding: 6px 0; border-bottom: 1px solid #c3e6cb; font-size: 13px; background: ' . $bg_color . '; padding: 8px; margin-bottom: 4px; border-radius: 4px;">';
+                echo '<strong style="color: ' . $text_color . ';">' . $icon . ' ' . htmlspecialchars($doc['label']) . '</strong><br>';
+                echo '<span style="color: ' . $text_color . '; margin-left: 15px;">Scadenza: ' . htmlspecialchars($doc['value']) . '</span>';
+                if ($is_expired) {
+                    echo '<span style="color: #dc3545; margin-left: 10px; font-weight: bold;">⚠️ SCADUTO</span>';
+                }
                 echo '</div>';
             }
             echo '</div>';
@@ -2056,8 +2064,23 @@ if (empty($users_in_registration)) {
         }
         echo '</div>';
         
-        // Missing documents
+        // Missing documents OR Expired documents section
         echo '<div>';
+        
+        // Show expired documents if present
+        if (!empty($reg_user['expired_docs'])) {
+            echo '<h4 style="color: #ffc107; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #ffc107;">⚠️ Documenti Scaduti (' . count($reg_user['expired_docs']) . ')</h4>';
+            echo '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 4px solid #ffc107; margin-bottom: 15px;">';
+            foreach ($reg_user['expired_docs'] as $doc) {
+                echo '<div style="padding: 6px 0; border-bottom: 1px solid #ffeeba; font-size: 13px;">';
+                echo '<strong style="color: #856404;">⚠️ ' . htmlspecialchars($doc['label']) . '</strong><br>';
+                echo '<span style="color: #856404; margin-left: 15px;">Scaduto da: ' . $doc['days_expired'] . ' giorni</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Then show missing documents
         echo '<h4 style="color: #dc3545; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #dc3545;">✗ Documenti Mancanti (' . count($reg_user['missing_docs']) . ')</h4>';
         if (!empty($reg_user['missing_docs'])) {
             echo '<div style="background: #f8d7da; padding: 12px; border-radius: 6px; border-left: 4px solid #dc3545;">';
@@ -2073,6 +2096,14 @@ if (empty($users_in_registration)) {
         echo '</div>';
         
         echo '</div>'; // End grid
+        
+        // Warning message if documents are expired
+        if (!empty($reg_user['expired_docs']) && $reg_user['filled_count'] === $reg_user['total_required']) {
+            echo '<div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+            echo '<strong style="color: #856404;">⚠️ Attenzione:</strong> ';
+            echo '<span style="color: #856404;">L\'utente ha tutti i documenti obbligatori compilati ma alcuni sono scaduti. Aggiorna le date scadute prima di poter attivare l\'utente.</span>';
+            echo '</div>';
+        }
         
         // Action buttons (only for ready users)
         if ($reg_user['is_ready_for_review']) {
