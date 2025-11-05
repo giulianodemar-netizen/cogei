@@ -969,10 +969,8 @@ function getAllUsersInRegistrationPhase() {
         $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
         $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
         
-        // Check if user is new (within 7 days)
-        $registration_time = strtotime($user->user_registered);
-        $days_since_registration = (time() - $registration_time) / (60 * 60 * 24);
-        $is_new_user = $days_since_registration <= 7;
+        // Check user status
+        $status = determineSupplierStatus($user_id);
         
         // Get required documents based on type
         $document_fields = [
@@ -1007,18 +1005,17 @@ function getAllUsersInRegistrationPhase() {
         
         $filled_count = count($completed_docs);
         $is_incomplete = $filled_count < $total_required;
-        $is_ready_for_review = $filled_count === $total_required;
+        $is_ready_for_review = $filled_count === $total_required && $status !== 'Attivo';
         
-        // Include users that are new OR have incomplete documents
-        if ($is_incomplete || ($is_new_user && $filled_count > 0)) {
+        // SOLO utenti NON attivi con almeno un documento mancante OPPURE con tutti i documenti ma non ancora attivati
+        if ($status !== 'Attivo' && ($is_incomplete || $is_ready_for_review)) {
             $users_in_registration[] = [
                 'user_id' => $user_id,
                 'rag_soc' => $rag_soc ?: 'N/A',
                 'email' => $user->user_email,
                 'tipo' => $tipo ?: 'N/A',
+                'status' => $status,
                 'registration_date' => date('d/m/Y H:i', strtotime($user->user_registered)),
-                'days_since_registration' => round($days_since_registration, 1),
-                'is_new_user' => $is_new_user,
                 'completed_docs' => $completed_docs,
                 'missing_docs' => $missing_docs,
                 'filled_count' => $filled_count,
@@ -1419,7 +1416,12 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
     
     // Redirect
     $current_url = $_SERVER['REQUEST_URI'];
-    $redirect_url = remove_query_arg(['action', 'user_id', 'new_status', 'msg', 'action_type', 'target_user_id', 'user_email', 'user_name'], $current_url);
+    $redirect_url = remove_query_arg(['action', 'user_id', 'new_status', 'msg', 'action_type', 'target_user_id', 'user_email', 'user_name', 'return_to'], $current_url);
+    
+    // Check if we need to return to a specific tab
+    if (isset($_GET['return_to']) && $_GET['return_to'] === 'registrazione') {
+        $redirect_url = add_query_arg('tab', 'registrazione', $redirect_url);
+    }
     
     if ($success && !empty($success_info)) {
         $redirect_params = array(
@@ -1935,7 +1937,7 @@ echo '<div id="tab-registrazione-content" style="display: ' . ($current_tab === 
 echo '<h3 style="color: #0066a2; margin-top: 0;">📝 Utenti in Fase di Completamento Registrazione</h3>';
 
 echo '<div style="margin-bottom: 15px; padding: 15px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
-echo '<strong>ℹ️ Informazioni:</strong> Questa sezione mostra gli utenti che hanno iniziato la registrazione ma non hanno ancora completato tutti i documenti obbligatori. Gli utenti pronti per la verifica sono evidenziati in verde.';
+echo '<strong>ℹ️ Informazioni:</strong> Questa sezione mostra gli utenti NON attivi che hanno documenti obbligatori mancanti o utenti pronti per la verifica (tutti i documenti completati ma non ancora attivati).';
 echo '</div>';
 
 $users_in_registration = getAllUsersInRegistrationPhase();
@@ -1943,11 +1945,29 @@ $users_in_registration = getAllUsersInRegistrationPhase();
 if (empty($users_in_registration)) {
     echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
     echo '<p style="font-size: 16px; color: #666; margin: 0;">✅ Nessun utente in fase di registrazione</p>';
-    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Tutti gli utenti hanno completato i documenti obbligatori oppure non hanno ancora iniziato.</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Tutti gli utenti sono attivi oppure non hanno ancora iniziato a caricare documenti.</p>';
     echo '</div>';
 } else {
+    // Filters
+    echo '<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">';
+    echo '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">';
+    echo '<div style="display: flex; gap: 15px; align-items: center;">';
+    echo '<strong>🔍 Filtri:</strong>';
+    echo '<label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">';
+    echo '<input type="checkbox" id="filter-ready-review" onchange="filterRegistrationUsers()" checked>';
+    echo '<span>Pronti per verifica (' . array_reduce($users_in_registration, function($c, $u) { return $c + ($u['is_ready_for_review'] ? 1 : 0); }, 0) . ')</span>';
+    echo '</label>';
+    echo '<label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">';
+    echo '<input type="checkbox" id="filter-in-progress" onchange="filterRegistrationUsers()" checked>';
+    echo '<span>In completamento (' . array_reduce($users_in_registration, function($c, $u) { return $c + (!$u['is_ready_for_review'] ? 1 : 0); }, 0) . ')</span>';
+    echo '</label>';
+    echo '</div>';
+    echo '<button onclick="clearRegistrationFilters()" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">Pulisci Filtri</button>';
+    echo '</div>';
+    echo '</div>';
+    
     echo '<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
-    echo '<strong>📊 Statistiche:</strong> <strong>' . count($users_in_registration) . '</strong> utent' . (count($users_in_registration) === 1 ? 'e' : 'i') . ' in fase di registrazione';
+    echo '<strong>📊 Statistiche:</strong> <strong id="total-users-count">' . count($users_in_registration) . '</strong> utent' . (count($users_in_registration) === 1 ? 'e' : 'i') . ' in fase di registrazione';
     
     // Count ready for review
     $ready_count = 0;
@@ -1967,14 +1987,16 @@ if (empty($users_in_registration)) {
         $bg_color = $reg_user['is_ready_for_review'] ? '#d4edda' : '#fff3cd';
         $header_bg = $reg_user['is_ready_for_review'] ? '#28a745' : '#ffc107';
         
-        echo '<div style="border: 2px solid ' . $border_color . '; border-radius: 8px; padding: 0; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+        $data_attrs = 'data-ready="' . ($reg_user['is_ready_for_review'] ? '1' : '0') . '"';
+        
+        echo '<div class="registration-user-card" ' . $data_attrs . ' style="border: 2px solid ' . $border_color . '; border-radius: 8px; padding: 0; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
         
         // Header
         echo '<div style="background: ' . $header_bg . '; color: white; padding: 15px; border-radius: 6px 6px 0 0;">';
         echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
         echo '<div>';
         echo '<h4 style="margin: 0; font-size: 18px;">' . htmlspecialchars($reg_user['rag_soc']) . '</h4>';
-        echo '<p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 13px;">ID: ' . $reg_user['user_id'] . ' | Email: ' . htmlspecialchars($reg_user['email']) . '</p>';
+        echo '<p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 13px;">ID: ' . $reg_user['user_id'] . ' | Email: ' . htmlspecialchars($reg_user['email']) . ' | Stato: ' . htmlspecialchars($reg_user['status']) . '</p>';
         echo '</div>';
         echo '<div style="text-align: right;">';
         if ($reg_user['is_ready_for_review']) {
@@ -1993,7 +2015,7 @@ if (empty($users_in_registration)) {
         echo '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">';
         echo '<div><strong>Tipo:</strong> ' . htmlspecialchars($reg_user['tipo']) . '</div>';
         echo '<div><strong>Registrato il:</strong> ' . $reg_user['registration_date'] . '</div>';
-        echo '<div><strong>Giorni dalla registrazione:</strong> ' . $reg_user['days_since_registration'] . '</div>';
+        echo '<div><strong>Stato attuale:</strong> <span style="color: #dc3545; font-weight: bold;">' . htmlspecialchars($reg_user['status']) . '</span></div>';
         echo '</div>';
         
         // Progress bar
@@ -2051,6 +2073,21 @@ if (empty($users_in_registration)) {
         echo '</div>';
         
         echo '</div>'; // End grid
+        
+        // Action buttons (only for ready users)
+        if ($reg_user['is_ready_for_review']) {
+            echo '<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e9ecef;">';
+            echo '<div style="display: flex; justify-content: flex-end; gap: 10px;">';
+            
+            $current_url = $_SERVER['REQUEST_URI'];
+            $base_url = strtok($current_url, '?');
+            $activate_url = $base_url . '?action=toggle_user_status&user_id=' . $reg_user['user_id'] . '&new_status=Attivo&return_to=registrazione';
+            
+            echo '<a href="' . esc_url($activate_url) . '" onclick="return confirm(\'Confermi l\\\'attivazione di ' . addslashes($reg_user['rag_soc']) . '?\\n\\nVerifica che tutti i documenti siano corretti prima di procedere.\')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; text-decoration: none; display: inline-block;">✅ ATTIVA UTENTE</a>';
+            echo '</div>';
+            echo '</div>';
+        }
+        
         echo '</div>'; // End content padding
         echo '</div>'; // End user card
     }
@@ -2934,6 +2971,46 @@ function switchToDisattivazioniPage(page) {
     url.searchParams.set('tab', 'disattivazioni');
     url.searchParams.set('dis_page', page);
     window.location.href = url.toString();
+}
+
+// ================== REGISTRATION TAB FILTER FUNCTIONS ==================
+
+function filterRegistrationUsers() {
+    const showReady = document.getElementById('filter-ready-review').checked;
+    const showInProgress = document.getElementById('filter-in-progress').checked;
+    
+    const cards = document.querySelectorAll('.registration-user-card');
+    let visibleCount = 0;
+    
+    cards.forEach(function(card) {
+        const isReady = card.getAttribute('data-ready') === '1';
+        let shouldShow = false;
+        
+        if (isReady && showReady) {
+            shouldShow = true;
+        } else if (!isReady && showInProgress) {
+            shouldShow = true;
+        }
+        
+        if (shouldShow) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Update count
+    const countElement = document.getElementById('total-users-count');
+    if (countElement) {
+        countElement.textContent = visibleCount;
+    }
+}
+
+function clearRegistrationFilters() {
+    document.getElementById('filter-ready-review').checked = true;
+    document.getElementById('filter-in-progress').checked = true;
+    filterRegistrationUsers();
 }
 
 // ================== LOG DELETION FUNCTIONS ==================
