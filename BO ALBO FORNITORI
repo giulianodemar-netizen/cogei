@@ -1443,6 +1443,58 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                 );
             }
             break;
+            
+        case 'remove_autodisable_notification':
+            // Remove the forced_supplier_status (autodisable status) but keep user disabled
+            // This clears the "AUTO-DISATTIVATO" flag from both the tab and main table
+            $old_status = determineSupplierStatus($user_id);
+            
+            // Delete the forced_supplier_status meta to clear autodisable
+            delete_user_meta($user_id, 'forced_supplier_status');
+            
+            // Get user data for sync
+            $user = get_userdata($user_id);
+            $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+            $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+            $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
+            $rct_rco = get_user_meta($user_id, $rct_rco_field, true);
+            $ccia = get_user_meta($user_id, 'user_registration_scad_CCIAA', true);
+            $white_list = get_user_meta($user_id, 'user_registration_scad_wit', true);
+            $soa = get_user_meta($user_id, 'user_registration_scad_soa', true);
+            $durc = get_user_meta($user_id, 'user_registration_scad_durc', true);
+            $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
+            
+            // Calculate the new dynamic status without forced status
+            $new_dynamic_status = determineSupplierStatus($user_id);
+            
+            // Sync to copy table with the dynamic status
+            $copy_data = getSupplierCopyData($user_id);
+            $richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti'])) ? $copy_data['richiesta_documenti'] : 0;
+            
+            $sync_data = [
+                'tipo' => $tipo ?: '',
+                'ragione_sociale' => $rag_soc ?: '',
+                'email' => $user->user_email,
+                'piva' => $user->display_name,
+                'rct_rco' => $rct_rco ?: '',
+                'cciaa' => $ccia ?: '',
+                'white_list' => $white_list ?: '',
+                'soa' => $soa ?: '',
+                'durc' => $durc ?: '',
+                'altre_scadenze' => $altre ?: '',
+                'stato' => $new_dynamic_status,
+                'richiesta_documenti' => $richiesta_documenti
+            ];
+            
+            updateSupplierCopyData($user_id, $sync_data);
+            
+            $success = true;
+            $success_info = array(
+                'action_type' => 'remove_notification',
+                'user_email' => $user->user_email,
+                'user_name' => $rag_soc ?: $user->display_name
+            );
+            break;
     }
     
     // Redirect
@@ -1669,6 +1721,15 @@ if (isset($_GET['msg'])) {
                 $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
                 $msg_text .= "• <strong>Azione:</strong> Rimosso flag 'Richiesti Documenti'";
                 break;
+                
+            case 'remove_notification':
+                $msg_text = "🗑️ <strong>RIMOSSA NOTIFICA AUTODISATTIVAZIONE</strong><br>";
+                $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                $msg_text .= "• <strong>Azione:</strong> Lo stato 'Auto-Disattivato' è stato rimosso dal sistema<br>";
+                $msg_text .= "• <strong>Nota:</strong> L'utente rimane DISABILITATO fino all'attivazione manuale";
+                break;
         }
     }
     
@@ -1702,6 +1763,13 @@ if (!empty($users_with_changes)) {
     
     // Accordion Content (initially collapsed)
     echo '<div id="document-changes-content" style="display: none; padding: 20px;">';
+    
+    // Add warning message
+    echo '<div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; font-size: 13px; color: #856404;">';
+    echo '<strong>⚠️ Importante:</strong> Se decidi di <strong>rimuovere la notifica</strong>, lo stato di "auto-disattivato" scomparirà dal sistema, ';
+    echo 'ma l\'utente <strong>rimarrà disabilitato</strong> fino a quando non verrà attivato manualmente.';
+    echo '</div>';
+    
     echo '<div style="display: grid; gap: 15px;">';
     foreach ($users_with_changes as $user_info) {
         echo '<div style="background: #f8d7da; border: 1px solid #dc3545; border-radius: 6px; padding: 15px; border-left: 4px solid #dc3545;">';
@@ -1727,6 +1795,21 @@ if (!empty($users_with_changes)) {
         }
         echo '</div>';
         echo '</div>';
+        
+        // Add action buttons
+        echo '<div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #dc3545; display: flex; gap: 10px; justify-content: flex-end;">';
+        
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $remove_notification_url = $base_url . '?action=remove_autodisable_notification&user_id=' . $user_info['user_id'];
+        $activate_url = $base_url . '?action=toggle_user_status&user_id=' . $user_info['user_id'] . '&new_status=Attivo';
+        
+        echo '<a href="' . esc_url($remove_notification_url) . '" onclick="return confirm(\'Confermi di voler rimuovere la notifica di autodisattivazione per ' . addslashes($user_info['rag_soc']) . '?\\n\\nATTENZIONE: Lo stato AUTO-DISATTIVATO sarà rimosso, ma l\\\'utente rimarrà DISABILITATO fino all\\\'attivazione manuale.\')" style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; text-decoration: none; display: inline-block;">🗑️ Rimuovi Notifica</a>';
+        
+        echo '<a href="' . esc_url($activate_url) . '" onclick="return confirm(\'Confermi l\\\'attivazione di ' . addslashes($user_info['rag_soc']) . '?\\n\\nL\\\'utente verrà attivato e la notifica di autodisattivazione sarà rimossa.\')" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; text-decoration: none; display: inline-block;">✅ Attiva Utente</a>';
+        
+        echo '</div>';
+        
         echo '</div>';
     }
     echo '</div>';
