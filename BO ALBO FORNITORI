@@ -454,6 +454,11 @@ function checkDocumentChangesAndDisableUser($user_id) {
     $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     
+    // Check if user is newly registered (within 7 days and has no documents yet)
+    $registration_time = strtotime($user->user_registered);
+    $days_since_registration = (time() - $registration_time) / (60 * 60 * 24);
+    $is_new_user = $days_since_registration <= 7;
+    
     // Document fields to monitor
     $document_fields = [
         'user_registration_scad_CCIAA' => 'CCIAA',
@@ -477,6 +482,15 @@ function checkDocumentChangesAndDisableUser($user_id) {
         $live_data[$field] = get_user_meta($user_id, $field, true);
     }
     
+    // Count how many required documents are filled
+    $filled_documents = 0;
+    $total_required = count($document_fields);
+    foreach ($live_data as $value) {
+        if (!empty($value)) {
+            $filled_documents++;
+        }
+    }
+    
     // Get copy table data
     $copy_data = getSupplierCopyData($user_id);
     if (!$copy_data) {
@@ -494,6 +508,20 @@ function checkDocumentChangesAndDisableUser($user_id) {
             'altre_scadenze' => $live_data['user_registration_scadenza_altre_scadenze'] ?? '',
             'stato' => determineSupplierStatus($user_id)
         ]);
+        
+        // NUOVO: Per utenti nuovi che iniziano a caricare documenti, invia notifica admin SOLO SE NON GIÀ NOTIFICATO
+        if ($is_new_user && $filled_documents > 0) {
+            // Verifica se già notificato con hash dei documenti correnti
+            $current_state_hash = md5(json_encode($live_data));
+            $last_notified_state = get_user_meta($user_id, 'last_notified_document_changes', true);
+            
+            // Invia notifica solo se lo stato è cambiato
+            if ($last_notified_state !== $current_state_hash) {
+                sendAdminNewUserProgressNotification($user_id, $filled_documents, $total_required, $rag_soc);
+                update_user_meta($user_id, 'last_notified_document_changes', $current_state_hash);
+            }
+        }
+        
         return false; // No comparison possible on first run
     }
     
@@ -523,27 +551,67 @@ function checkDocumentChangesAndDisableUser($user_id) {
         }
     }
     
-    // If changes detected, disable user and send notification
+    // If changes detected, process based on user status
     if (!empty($changed_documents)) {
-        // Force disable user status
-        update_user_meta($user_id, 'forced_supplier_status', 'Disattivo');
+        // NUOVO REQ 1: Verifica se le modifiche sono già state notificate
+        $last_notified_changes = get_user_meta($user_id, 'last_notified_document_changes', true);
         
-        // Log the automatic disabling
-        $log_file = ABSPATH . 'auto_disattivazione_documenti.txt';
-        $timestamp = date('d/m/Y H:i:s');
-        $log_entry = "[{$timestamp}] AUTO-DISATTIVAZIONE - ID: {$user_id} | Ragione Sociale: {$rag_soc} | Documenti modificati: " . count($changed_documents) . "\n";
-        
-        if (!file_exists($log_file)) {
-            $header = "LOG AUTO-DISATTIVAZIONI PER MODIFICHE DOCUMENTI - " . date('Y') . "\n";
-            $header .= str_repeat("=", 80) . "\n\n";
-            file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
+        // Per nuovi utenti, usiamo lo stato completo dei documenti come hash
+        // Per utenti esistenti, usiamo solo le modifiche
+        if ($is_new_user) {
+            $current_changes_hash = md5(json_encode($live_data));
+        } else {
+            $current_changes_hash = md5(json_encode($changed_documents));
         }
-        file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
         
-        // Send notification email to admin
-        sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc);
+        // Se le modifiche sono identiche all'ultima notifica, non inviare email
+        if ($last_notified_changes === $current_changes_hash) {
+            return $changed_documents; // Modifiche già notificate, non reinviare email
+        }
         
-        return $changed_documents; // Return array of changed documents
+        // NUOVO REQ 2: Gestione utenti nuovi vs esistenti
+        if ($is_new_user && $filled_documents < $total_required) {
+            // Utente nuovo in fase di registrazione: invia notifica progresso, NON disattivare
+            sendAdminNewUserProgressNotification($user_id, $filled_documents, $total_required, $rag_soc);
+            
+            // Salva hash delle modifiche notificate
+            update_user_meta($user_id, 'last_notified_document_changes', $current_changes_hash);
+            
+            return $changed_documents;
+        } elseif ($is_new_user && $filled_documents === $total_required) {
+            // Utente nuovo ha completato tutti i documenti: invia notifica completamento
+            sendAdminNewUserCompletionNotification($user_id, $rag_soc);
+            
+            // Salva hash delle modifiche notificate
+            update_user_meta($user_id, 'last_notified_document_changes', $current_changes_hash);
+            
+            return $changed_documents;
+        } else {
+            // Utente esistente con modifiche: comportamento originale (disattiva e notifica)
+            
+            // Force disable user status
+            update_user_meta($user_id, 'forced_supplier_status', 'Disattivo');
+            
+            // Log the automatic disabling
+            $log_file = ABSPATH . 'auto_disattivazione_documenti.txt';
+            $timestamp = date('d/m/Y H:i:s');
+            $log_entry = "[{$timestamp}] AUTO-DISATTIVAZIONE - ID: {$user_id} | Ragione Sociale: {$rag_soc} | Documenti modificati: " . count($changed_documents) . "\n";
+            
+            if (!file_exists($log_file)) {
+                $header = "LOG AUTO-DISATTIVAZIONI PER MODIFICHE DOCUMENTI - " . date('Y') . "\n";
+                $header .= str_repeat("=", 80) . "\n\n";
+                file_put_contents($log_file, $header, FILE_APPEND | LOCK_EX);
+            }
+            file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
+            
+            // Send notification email to admin
+            sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_soc);
+            
+            // Salva hash delle modifiche notificate
+            update_user_meta($user_id, 'last_notified_document_changes', $current_changes_hash);
+            
+            return $changed_documents; // Return array of changed documents
+        }
     }
     
     return false; // No changes detected
@@ -630,6 +698,160 @@ Copyright © 2023 Cogei. All Rights Reserved.
         $documenti_log,
         !$inviamail // debug_mode
     );
+}
+
+// NUOVO REQ 2: Funzione per inviare notifica admin progresso utente nuovo
+function sendAdminNewUserProgressNotification($user_id, $filled_count, $total_count, $rag_soc) {
+    $inviamail = $GLOBALS["inviamail"];
+    
+    $admin_email = 'ufficio_qualita@cogei.net';
+    $user = get_userdata($user_id);
+    $user_email = $user ? $user->user_email : 'N/A';
+    
+    $subject = "NUOVO UTENTE: Caricamento documenti in corso";
+    
+    $percentage = round(($filled_count / $total_count) * 100);
+    
+    $body = "<html>
+<head>
+<title>Progresso Registrazione Nuovo Utente</title>
+</head>
+<body>
+<div style='background: #17a2b8; color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>📝 Nuovo Utente - Registrazione in Corso</h2>
+</div>
+
+<p>Ciao Admin,</p>
+
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha <strong>iniziato a caricare i documenti necessari</strong>.</p>
+
+<div style='background: #d1ecf1; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #0c5460;'>📊 Progresso caricamento:</h3>
+<div style='background: #e9ecef; border-radius: 10px; height: 30px; margin: 10px 0;'>
+<div style='background: linear-gradient(90deg, #17a2b8, #138496); height: 30px; width: {$percentage}%; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;'>
+{$percentage}%
+</div>
+</div>
+<p style='margin: 5px 0 0 0; color: #0c5460;'><strong>{$filled_count}</strong> di <strong>{$total_count}</strong> documenti obbligatori caricati</p>
+</div>
+
+<div style='background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #856404;'>ℹ️ Informazioni:</h3>
+• Utente appena registrato (ultimi 7 giorni)<br>
+• Sta completando la documentazione richiesta<br>
+• NON è stato disattivato automaticamente<br>
+• Riceverai una notifica quando completerà tutti i documenti<br>
+</div>
+
+<p><strong>Data notifica:</strong> " . date('d/m/Y H:i:s') . "</p>
+<p><strong>Email utente:</strong> {$user_email}</p>
+
+<p>L'utente sta procedendo con la registrazione. Attendi che completi tutti i documenti prima di procedere con la verifica.</p>
+
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 30px; border-radius: 4px;'>
+<div style='text-align: center; color: white; font-size: 12px;'>
+COGEI SRL - Sistema di Controllo Registrazioni<br>
+Copyright © 2023 Cogei. All Rights Reserved.
+</div>
+</div>
+</body>
+</html>";
+    
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
+        $email_sent = mail($admin_email, $subject, $body, $headers);
+    }
+    
+    // Log centralizzato
+    AlboFornitoriMailLogger::log([
+        'ambiente' => $inviamail ? 'PROD' : 'DEBUG',
+        'tipo_email' => 'NOTIFICA_ADMIN_PROGRESSO_NUOVO_UTENTE',
+        'destinatario' => $admin_email,
+        'oggetto' => $subject,
+        'user_id' => $user_id,
+        'user_name' => $rag_soc ?: 'N/A',
+        'user_email' => $user_email,
+        'email_sent' => $email_sent,
+        'note' => "Progresso: {$filled_count}/{$total_count} documenti ({$percentage}%)"
+    ]);
+}
+
+// NUOVO REQ 2: Funzione per inviare notifica admin completamento documenti utente nuovo
+function sendAdminNewUserCompletionNotification($user_id, $rag_soc) {
+    $inviamail = $GLOBALS["inviamail"];
+    
+    $admin_email = 'ufficio_qualita@cogei.net';
+    $user = get_userdata($user_id);
+    $user_email = $user ? $user->user_email : 'N/A';
+    
+    $subject = "NUOVO UTENTE: Documenti completati - Pronto per la revisione";
+    
+    $body = "<html>
+<head>
+<title>Completamento Registrazione Nuovo Utente</title>
+</head>
+<body>
+<div style='background: #28a745; color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>✅ Nuovo Utente - Documenti Completati</h2>
+</div>
+
+<p>Ciao Admin,</p>
+
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha <strong>completato il caricamento di tutti i documenti obbligatori</strong>!</p>
+
+<div style='background: #d4edda; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #155724;'>✓ Stato completamento:</h3>
+<p style='margin: 5px 0; color: #155724; font-size: 18px;'><strong>100%</strong> - Tutti i documenti obbligatori caricati</p>
+</div>
+
+<div style='background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #856404;'>🔍 Azione richiesta:</h3>
+• Verifica manualmente i documenti caricati<br>
+• Controlla che le date di scadenza siano corrette<br>
+• Attiva l'utente dal pannello BO se tutto è conforme<br>
+</div>
+
+<p><strong>Data notifica:</strong> " . date('d/m/Y H:i:s') . "</p>
+<p><strong>Email utente:</strong> {$user_email}</p>
+
+<p>L'utente è ora <strong>pronto per la revisione e attivazione</strong>.</p>
+
+<div class='footer' style='background: #03679e; padding: 10px; margin-top: 30px; border-radius: 4px;'>
+<div style='text-align: center; color: white; font-size: 12px;'>
+COGEI SRL - Sistema di Controllo Registrazioni<br>
+Copyright © 2023 Cogei. All Rights Reserved.
+</div>
+</div>
+</body>
+</html>";
+    
+    $headers = "MIME-Version: 1.0" . "\r\n";
+    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+    $headers .= 'From: <sistema-automatico@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    
+    $email_sent = false;
+    if ($inviamail) {
+        $email_sent = mail($admin_email, $subject, $body, $headers);
+    }
+    
+    // Log centralizzato
+    AlboFornitoriMailLogger::log([
+        'ambiente' => $inviamail ? 'PROD' : 'DEBUG',
+        'tipo_email' => 'NOTIFICA_ADMIN_COMPLETAMENTO_NUOVO_UTENTE',
+        'destinatario' => $admin_email,
+        'oggetto' => $subject,
+        'user_id' => $user_id,
+        'user_name' => $rag_soc ?: 'N/A',
+        'user_email' => $user_email,
+        'email_sent' => $email_sent,
+        'note' => "Tutti i documenti obbligatori completati - Pronto per attivazione"
+    ]);
 }
 
 // Function to collect all users with document changes for summary display
@@ -730,6 +952,119 @@ function checkDocumentChangesWithoutAction($user_id) {
     }
     
     return empty($changed_documents) ? false : $changed_documents;
+}
+
+// NUOVO REQ 3: Funzione per ottenere tutti gli utenti in fase di completamento registrazione
+function getAllUsersInRegistrationPhase() {
+    $suppliers = get_users([
+        'role' => 'subscriber',
+        'orderby' => 'ID',
+        'order' => 'DESC'
+    ]);
+    
+    $users_in_registration = [];
+    
+    foreach ($suppliers as $user) {
+        $user_id = $user->ID;
+        $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+        $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+        
+        // Check user status
+        $status = determineSupplierStatus($user_id);
+        
+        // Get required documents based on type
+        $document_fields = [
+            'user_registration_scad_CCIAA' => 'CCIAA',
+            'user_registration_scad_wit' => 'White List',
+            'user_registration_scad_durc' => 'DURC',
+            'user_registration_scadenza_altre_scadenze' => 'Altre Scadenze'
+        ];
+        
+        if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
+            $document_fields['user_registration_scad_rct_rco'] = 'RCT-RCO';
+        } elseif ($tipo === 'Forniture') {
+            $document_fields['user_registration_scad_rct_rco_forni'] = 'RCT-RCO (Forniture)';
+        }
+        
+        // Check document completion status and expiry
+        $completed_docs = [];
+        $missing_docs = [];
+        $expired_docs = [];
+        $total_required = count($document_fields);
+        
+        foreach ($document_fields as $field => $label) {
+            $value = get_user_meta($user_id, $field, true);
+            if (!empty($value)) {
+                // Check if document is expired
+                $is_expired = false;
+                $converted_date = str_replace("/", "-", $value);
+                try {
+                    $now = new DateTime("now");
+                    $expiry_date = new DateTime($converted_date . ' 23:59:59');
+                    $interval = $now->diff($expiry_date);
+                    $days = (int)$interval->format('%r%a');
+                    
+                    if ($days < 0) {
+                        $is_expired = true;
+                        $expired_docs[] = [
+                            'label' => $label,
+                            'value' => $value,
+                            'days_expired' => abs($days)
+                        ];
+                    }
+                } catch (Exception $e) {
+                    // Se la data non è valida, consideriamola come non scaduta per sicurezza
+                }
+                
+                $completed_docs[] = [
+                    'label' => $label,
+                    'value' => $value,
+                    'is_expired' => $is_expired
+                ];
+            } else {
+                $missing_docs[] = $label;
+            }
+        }
+        
+        $filled_count = count($completed_docs);
+        $is_incomplete = $filled_count < $total_required;
+        $has_expired = !empty($expired_docs);
+        
+        // NUOVA LOGICA: Pronto per verifica SOLO se:
+        // - Tutti i documenti obbligatori sono compilati
+        // - Nessun documento è scaduto
+        // - Lo stato non è già Attivo
+        $is_ready_for_review = $filled_count === $total_required && !$has_expired && $status !== 'Attivo';
+        
+        // SOLO utenti NON attivi con almeno un documento mancante OPPURE con tutti i documenti ma non ancora attivati
+        if ($status !== 'Attivo' && ($is_incomplete || $is_ready_for_review)) {
+            $users_in_registration[] = [
+                'user_id' => $user_id,
+                'rag_soc' => $rag_soc ?: 'N/A',
+                'email' => $user->user_email,
+                'tipo' => $tipo ?: 'N/A',
+                'status' => $status,
+                'registration_date' => date('d/m/Y H:i', strtotime($user->user_registered)),
+                'completed_docs' => $completed_docs,
+                'missing_docs' => $missing_docs,
+                'expired_docs' => $expired_docs,
+                'filled_count' => $filled_count,
+                'total_required' => $total_required,
+                'percentage' => round(($filled_count / $total_required) * 100),
+                'is_ready_for_review' => $is_ready_for_review,
+                'has_expired' => $has_expired
+            ];
+        }
+    }
+    
+    // Sort: ready for review first, then by percentage completion
+    usort($users_in_registration, function($a, $b) {
+        if ($a['is_ready_for_review'] && !$b['is_ready_for_review']) return -1;
+        if (!$a['is_ready_for_review'] && $b['is_ready_for_review']) return 1;
+        return $b['percentage'] - $a['percentage'];
+    });
+    
+    return $users_in_registration;
 }
 
 // ================== GESTIONE RICHIESTE DOCUMENTI ==================
@@ -1108,11 +1443,68 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                 );
             }
             break;
+            
+        case 'remove_autodisable_notification':
+            // Remove the forced_supplier_status (autodisable status) but keep user disabled
+            // This clears the "AUTO-DISATTIVATO" flag from both the tab and main table
+            $old_status = determineSupplierStatus($user_id);
+            
+            // Delete the forced_supplier_status meta to clear autodisable
+            delete_user_meta($user_id, 'forced_supplier_status');
+            
+            // Get user data for sync
+            $user = get_userdata($user_id);
+            $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+            $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
+            $rct_rco_field = ($tipo === 'Forniture') ? 'user_registration_scad_rct_rco_forni' : 'user_registration_scad_rct_rco';
+            $rct_rco = get_user_meta($user_id, $rct_rco_field, true);
+            $ccia = get_user_meta($user_id, 'user_registration_scad_CCIAA', true);
+            $white_list = get_user_meta($user_id, 'user_registration_scad_wit', true);
+            $soa = get_user_meta($user_id, 'user_registration_scad_soa', true);
+            $durc = get_user_meta($user_id, 'user_registration_scad_durc', true);
+            $altre = get_user_meta($user_id, 'user_registration_scadenza_altre_scadenze', true);
+            
+            // Calculate the new dynamic status without forced status
+            $new_dynamic_status = determineSupplierStatus($user_id);
+            
+            // Sync to copy table with the dynamic status
+            $copy_data = getSupplierCopyData($user_id);
+            $richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti'])) ? $copy_data['richiesta_documenti'] : 0;
+            
+            $sync_data = [
+                'tipo' => $tipo ?: '',
+                'ragione_sociale' => $rag_soc ?: '',
+                'email' => $user->user_email,
+                'piva' => $user->display_name,
+                'rct_rco' => $rct_rco ?: '',
+                'cciaa' => $ccia ?: '',
+                'white_list' => $white_list ?: '',
+                'soa' => $soa ?: '',
+                'durc' => $durc ?: '',
+                'altre_scadenze' => $altre ?: '',
+                'stato' => $new_dynamic_status,
+                'richiesta_documenti' => $richiesta_documenti
+            ];
+            
+            updateSupplierCopyData($user_id, $sync_data);
+            
+            $success = true;
+            $success_info = array(
+                'action_type' => 'remove_notification',
+                'user_email' => $user->user_email,
+                'user_name' => $rag_soc ?: $user->display_name
+            );
+            break;
     }
     
     // Redirect
     $current_url = $_SERVER['REQUEST_URI'];
-    $redirect_url = remove_query_arg(['action', 'user_id', 'new_status', 'msg', 'action_type', 'target_user_id', 'user_email', 'user_name'], $current_url);
+    $redirect_url = remove_query_arg(['action', 'user_id', 'new_status', 'msg', 'action_type', 'target_user_id', 'user_email', 'user_name', 'return_to'], $current_url);
+    
+    // Check if we need to return to a specific tab
+    if (isset($_GET['return_to']) && $_GET['return_to'] === 'registrazione') {
+        $redirect_url = add_query_arg('tab', 'registrazione', $redirect_url);
+    }
     
     if ($success && !empty($success_info)) {
         $redirect_params = array(
@@ -1203,6 +1595,7 @@ $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'fornit
 
 echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #0066a2;">';
 echo '<button onclick="switchTab(\'fornitori\')" id="tab-fornitori" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'fornitori' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'fornitori' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📋 Fornitori</button>';
+echo '<button onclick="switchTab(\'registrazione\')" id="tab-registrazione" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'registrazione' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'registrazione' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📝 Utenti in Registrazione</button>';
 echo '<button onclick="switchTab(\'log\')" id="tab-log" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'log' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'log' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📧 Log Email</button>';
 echo '<button onclick="switchTab(\'disattivazioni\')" id="tab-disattivazioni" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'disattivazioni' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'disattivazioni' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">🔴 Log Disattivazioni</button>';
 echo '</div>';
@@ -1328,6 +1721,15 @@ if (isset($_GET['msg'])) {
                 $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
                 $msg_text .= "• <strong>Azione:</strong> Rimosso flag 'Richiesti Documenti'";
                 break;
+                
+            case 'remove_notification':
+                $msg_text = "🗑️ <strong>RIMOSSA NOTIFICA AUTODISATTIVAZIONE</strong><br>";
+                $msg_text .= "• <strong>ID:</strong> {$target_user_id}<br>";
+                $msg_text .= "• <strong>Nome:</strong> {$user_name}<br>";
+                $msg_text .= "• <strong>Email:</strong> {$user_email}<br>";
+                $msg_text .= "• <strong>Azione:</strong> Lo stato 'Auto-Disattivato' è stato rimosso dal sistema<br>";
+                $msg_text .= "• <strong>Nota:</strong> L'utente rimane DISABILITATO fino all'attivazione manuale";
+                break;
         }
     }
     
@@ -1361,6 +1763,13 @@ if (!empty($users_with_changes)) {
     
     // Accordion Content (initially collapsed)
     echo '<div id="document-changes-content" style="display: none; padding: 20px;">';
+    
+    // Add warning message
+    echo '<div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; font-size: 13px; color: #856404;">';
+    echo '<strong>⚠️ Importante:</strong> Se decidi di <strong>rimuovere la notifica</strong>, lo stato di "auto-disattivato" scomparirà dal sistema, ';
+    echo 'ma l\'utente <strong>rimarrà disabilitato</strong> fino a quando non verrà attivato manualmente.';
+    echo '</div>';
+    
     echo '<div style="display: grid; gap: 15px;">';
     foreach ($users_with_changes as $user_info) {
         echo '<div style="background: #f8d7da; border: 1px solid #dc3545; border-radius: 6px; padding: 15px; border-left: 4px solid #dc3545;">';
@@ -1386,6 +1795,21 @@ if (!empty($users_with_changes)) {
         }
         echo '</div>';
         echo '</div>';
+        
+        // Add action buttons
+        echo '<div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #dc3545; display: flex; gap: 10px; justify-content: flex-end;">';
+        
+        $current_url = $_SERVER['REQUEST_URI'];
+        $base_url = strtok($current_url, '?');
+        $remove_notification_url = $base_url . '?action=remove_autodisable_notification&user_id=' . $user_info['user_id'];
+        $activate_url = $base_url . '?action=toggle_user_status&user_id=' . $user_info['user_id'] . '&new_status=Attivo';
+        
+        echo '<a href="' . esc_url($remove_notification_url) . '" onclick="return confirm(\'Confermi di voler rimuovere la notifica di autodisattivazione per ' . addslashes($user_info['rag_soc']) . '?\\n\\nATTENZIONE: Lo stato AUTO-DISATTIVATO sarà rimosso, ma l\\\'utente rimarrà DISABILITATO fino all\\\'attivazione manuale.\')" style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; text-decoration: none; display: inline-block;">🗑️ Rimuovi Notifica</a>';
+        
+        echo '<a href="' . esc_url($activate_url) . '" onclick="return confirm(\'Confermi l\\\'attivazione di ' . addslashes($user_info['rag_soc']) . '?\\n\\nL\\\'utente verrà attivato e la notifica di autodisattivazione sarà rimossa.\')" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; text-decoration: none; display: inline-block;">✅ Attiva Utente</a>';
+        
+        echo '</div>';
+        
         echo '</div>';
     }
     echo '</div>';
@@ -1621,6 +2045,207 @@ echo '</div>'; // Close scrollable wrapper
 
 // Close fornitori tab
 echo '</div>'; // End tab-fornitori-content
+
+// ================== NUOVO REQ 3: TAB UTENTI IN REGISTRAZIONE ==================
+echo '<div id="tab-registrazione-content" style="display: ' . ($current_tab === 'registrazione' ? 'block' : 'none') . ';">';
+echo '<h3 style="color: #0066a2; margin-top: 0;">📝 Utenti in Fase di Completamento Registrazione</h3>';
+
+echo '<div style="margin-bottom: 15px; padding: 15px; background: #e7f3ff; border-left: 4px solid #0066a2; border-radius: 4px;">';
+echo '<strong>ℹ️ Informazioni:</strong> Questa sezione mostra:<br>';
+echo '• Utenti NON attivi con documenti obbligatori mancanti<br>';
+echo '• Utenti pronti per la verifica (tutti i documenti completati e non scaduti, anche se autodisattivati)<br>';
+echo '• Gli utenti autodisattivati con tutti i documenti validi sono considerati pronti per la verifica';
+echo '</div>';
+
+$users_in_registration = getAllUsersInRegistrationPhase();
+
+if (empty($users_in_registration)) {
+    echo '<div style="padding: 30px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 2px dashed #ddd;">';
+    echo '<p style="font-size: 16px; color: #666; margin: 0;">✅ Nessun utente in fase di registrazione</p>';
+    echo '<p style="font-size: 13px; color: #999; margin: 10px 0 0 0;">Tutti gli utenti sono attivi oppure non hanno ancora iniziato a caricare documenti.</p>';
+    echo '</div>';
+} else {
+    // Filters
+    echo '<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">';
+    echo '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">';
+    echo '<div style="display: flex; gap: 15px; align-items: center;">';
+    echo '<strong>🔍 Filtri:</strong>';
+    echo '<label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">';
+    echo '<input type="checkbox" id="filter-ready-review" onchange="filterRegistrationUsers()" checked>';
+    echo '<span>Pronti per verifica (' . array_reduce($users_in_registration, function($c, $u) { return $c + ($u['is_ready_for_review'] ? 1 : 0); }, 0) . ')</span>';
+    echo '</label>';
+    echo '<label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">';
+    echo '<input type="checkbox" id="filter-in-progress" onchange="filterRegistrationUsers()" checked>';
+    echo '<span>In completamento (' . array_reduce($users_in_registration, function($c, $u) { return $c + (!$u['is_ready_for_review'] ? 1 : 0); }, 0) . ')</span>';
+    echo '</label>';
+    echo '</div>';
+    echo '<button onclick="clearRegistrationFilters()" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">Pulisci Filtri</button>';
+    echo '</div>';
+    echo '</div>';
+    
+    echo '<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+    echo '<strong>📊 Statistiche:</strong> <strong id="total-users-count">' . count($users_in_registration) . '</strong> utent' . (count($users_in_registration) === 1 ? 'e' : 'i') . ' in fase di registrazione';
+    
+    // Count ready for review
+    $ready_count = 0;
+    foreach ($users_in_registration as $reg_user) {
+        if ($reg_user['is_ready_for_review']) {
+            $ready_count++;
+        }
+    }
+    if ($ready_count > 0) {
+        echo ' | <strong style="color: #28a745;">' . $ready_count . '</strong> pront' . ($ready_count === 1 ? 'o' : 'i') . ' per la verifica';
+    }
+    echo '</div>';
+    
+    // Display users in a responsive 2-column grid (1 column on smaller screens)
+    echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; margin-bottom: 20px;">';
+    
+    foreach ($users_in_registration as $reg_user) {
+        $border_color = $reg_user['is_ready_for_review'] ? '#28a745' : '#ffc107';
+        $bg_color = $reg_user['is_ready_for_review'] ? '#d4edda' : '#fff3cd';
+        $header_bg = $reg_user['is_ready_for_review'] ? '#28a745' : '#ffc107';
+        
+        $data_attrs = 'data-ready="' . ($reg_user['is_ready_for_review'] ? '1' : '0') . '"';
+        
+        echo '<div class="registration-user-card" ' . $data_attrs . ' style="border: 2px solid ' . $border_color . '; border-radius: 8px; padding: 0; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+        
+        // Header
+        echo '<div style="background: ' . $header_bg . '; color: white; padding: 15px; border-radius: 6px 6px 0 0;">';
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;">';
+        echo '<div style="flex: 1; min-width: 0;">';
+        echo '<h4 style="margin: 0; font-size: 18px; word-break: break-word;">' . htmlspecialchars($reg_user['rag_soc']) . '</h4>';
+        echo '<p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 13px; word-break: break-all;">ID: ' . $reg_user['user_id'] . ' | Email: ' . htmlspecialchars($reg_user['email']) . ' | Stato: ' . htmlspecialchars($reg_user['status']) . '</p>';
+        echo '</div>';
+        echo '<div style="text-align: right; flex-shrink: 0;">';
+        if ($reg_user['is_ready_for_review']) {
+            echo '<span style="background: white; color: #28a745; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; white-space: nowrap; display: inline-block;">✅ PRONTO PER VERIFICA</span>';
+        } else {
+            echo '<span style="background: white; color: #856404; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; white-space: nowrap; display: inline-block;">⏳ IN COMPLETAMENTO</span>';
+        }
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+        
+        // Content
+        echo '<div style="padding: 20px;">';
+        
+        // Info row
+        echo '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">';
+        echo '<div><strong>Tipo:</strong> ' . htmlspecialchars($reg_user['tipo']) . '</div>';
+        echo '<div><strong>Registrato il:</strong> ' . $reg_user['registration_date'] . '</div>';
+        echo '<div><strong>Stato attuale:</strong> <span style="color: #dc3545; font-weight: bold;">' . htmlspecialchars($reg_user['status']) . '</span></div>';
+        echo '</div>';
+        
+        // Progress bar
+        echo '<div style="margin-bottom: 20px;">';
+        echo '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">';
+        echo '<strong style="font-size: 16px;">📊 Progresso Documenti</strong>';
+        echo '<span style="font-size: 18px; font-weight: bold; color: ' . $header_bg . ';">' . $reg_user['percentage'] . '%</span>';
+        echo '</div>';
+        echo '<div style="background: #e9ecef; border-radius: 10px; height: 35px; position: relative; overflow: hidden;">';
+        echo '<div style="background: linear-gradient(90deg, ' . $header_bg . ', ' . ($reg_user['is_ready_for_review'] ? '#1e7e34' : '#e0a800') . '); height: 35px; width: ' . $reg_user['percentage'] . '%; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; transition: width 0.3s ease;">';
+        if ($reg_user['percentage'] > 20) {
+            echo $reg_user['filled_count'] . '/' . $reg_user['total_required'];
+        }
+        echo '</div>';
+        if ($reg_user['percentage'] <= 20) {
+            echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #666;">' . $reg_user['filled_count'] . '/' . $reg_user['total_required'] . '</div>';
+        }
+        echo '</div>';
+        echo '</div>';
+        
+        // Documents sections
+        echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">';
+        
+        // Completed documents
+        echo '<div>';
+        echo '<h4 style="color: #28a745; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #28a745;">✓ Documenti Completati (' . count($reg_user['completed_docs']) . ')</h4>';
+        if (!empty($reg_user['completed_docs'])) {
+            echo '<div style="background: #d4edda; padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            foreach ($reg_user['completed_docs'] as $doc) {
+                $is_expired = isset($doc['is_expired']) && $doc['is_expired'];
+                $bg_color = $is_expired ? '#fff3cd' : 'transparent';
+                $text_color = $is_expired ? '#856404' : '#155724';
+                $icon = $is_expired ? '⚠️' : '✓';
+                
+                echo '<div style="padding: 6px 0; border-bottom: 1px solid #c3e6cb; font-size: 13px; background: ' . $bg_color . '; padding: 8px; margin-bottom: 4px; border-radius: 4px;">';
+                echo '<strong style="color: ' . $text_color . ';">' . $icon . ' ' . htmlspecialchars($doc['label']) . '</strong><br>';
+                echo '<span style="color: ' . $text_color . '; margin-left: 15px;">Scadenza: ' . htmlspecialchars($doc['value']) . '</span>';
+                if ($is_expired) {
+                    echo '<span style="color: #dc3545; margin-left: 10px; font-weight: bold;">⚠️ SCADUTO</span>';
+                }
+                echo '</div>';
+            }
+            echo '</div>';
+        } else {
+            echo '<p style="color: #6c757d; font-style: italic; font-size: 13px;">Nessun documento caricato</p>';
+        }
+        echo '</div>';
+        
+        // Missing documents OR Expired documents section
+        echo '<div>';
+        
+        // Show expired documents if present
+        if (!empty($reg_user['expired_docs'])) {
+            echo '<h4 style="color: #ffc107; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #ffc107;">⚠️ Documenti Scaduti (' . count($reg_user['expired_docs']) . ')</h4>';
+            echo '<div style="background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 4px solid #ffc107; margin-bottom: 15px;">';
+            foreach ($reg_user['expired_docs'] as $doc) {
+                echo '<div style="padding: 6px 0; border-bottom: 1px solid #ffeeba; font-size: 13px;">';
+                echo '<strong style="color: #856404;">⚠️ ' . htmlspecialchars($doc['label']) . '</strong><br>';
+                echo '<span style="color: #856404; margin-left: 15px;">Scaduto da: ' . $doc['days_expired'] . ' giorni</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        }
+        
+        // Then show missing documents
+        echo '<h4 style="color: #dc3545; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #dc3545;">✗ Documenti Mancanti (' . count($reg_user['missing_docs']) . ')</h4>';
+        if (!empty($reg_user['missing_docs'])) {
+            echo '<div style="background: #f8d7da; padding: 12px; border-radius: 6px; border-left: 4px solid #dc3545;">';
+            foreach ($reg_user['missing_docs'] as $doc) {
+                echo '<div style="padding: 6px 0; border-bottom: 1px solid #f5c6cb; font-size: 13px;">';
+                echo '<strong style="color: #721c24;">✗ ' . htmlspecialchars($doc) . '</strong>';
+                echo '</div>';
+            }
+            echo '</div>';
+        } else {
+            echo '<p style="color: #28a745; font-weight: bold; font-size: 13px;">✓ Tutti i documenti obbligatori completati!</p>';
+        }
+        echo '</div>';
+        
+        echo '</div>'; // End grid
+        
+        // Warning message if documents are expired
+        if (!empty($reg_user['expired_docs']) && $reg_user['filled_count'] === $reg_user['total_required']) {
+            echo '<div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+            echo '<strong style="color: #856404;">⚠️ Attenzione:</strong> ';
+            echo '<span style="color: #856404;">L\'utente ha tutti i documenti obbligatori compilati ma alcuni sono scaduti. Aggiorna le date scadute prima di poter attivare l\'utente.</span>';
+            echo '</div>';
+        }
+        
+        // Action buttons (only for ready users)
+        if ($reg_user['is_ready_for_review']) {
+            echo '<div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e9ecef;">';
+            echo '<div style="display: flex; justify-content: flex-end; gap: 10px;">';
+            
+            $current_url = $_SERVER['REQUEST_URI'];
+            $base_url = strtok($current_url, '?');
+            $activate_url = $base_url . '?action=toggle_user_status&user_id=' . $reg_user['user_id'] . '&new_status=Attivo&return_to=registrazione';
+            
+            echo '<a href="' . esc_url($activate_url) . '" onclick="return confirm(\'Confermi l\\\'attivazione di ' . addslashes($reg_user['rag_soc']) . '?\\n\\nVerifica che tutti i documenti siano corretti prima di procedere.\')" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; text-decoration: none; display: inline-block;">✅ ATTIVA UTENTE</a>';
+            echo '</div>';
+            echo '</div>';
+        }
+        
+        echo '</div>'; // End content padding
+        echo '</div>'; // End user card
+    }
+    
+    echo '</div>'; // End 2-column grid
+}
+
+echo '</div>'; // End tab-registrazione-content
 
 // ================== LOG EMAIL TAB ==================
 echo '<div id="tab-log-content" style="display: ' . ($current_tab === 'log' ? 'block' : 'none') . ';">';
@@ -2435,6 +3060,7 @@ window.onclick = function(event) {
 function switchTab(tabName) {
     // Hide all tab contents
     document.getElementById('tab-fornitori-content').style.display = 'none';
+    document.getElementById('tab-registrazione-content').style.display = 'none';
     document.getElementById('tab-log-content').style.display = 'none';
     document.getElementById('tab-disattivazioni-content').style.display = 'none';
     
@@ -2454,6 +3080,15 @@ function switchTab(tabName) {
         // Update URL without reload
         var url = new URL(window.location);
         url.searchParams.set('tab', 'fornitori');
+        window.history.pushState({}, '', url);
+    } else if (tabName === 'registrazione') {
+        document.getElementById('tab-registrazione-content').style.display = 'block';
+        document.getElementById('tab-registrazione').style.background = '#0066a2';
+        document.getElementById('tab-registrazione').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'registrazione');
         window.history.pushState({}, '', url);
     } else if (tabName === 'log') {
         document.getElementById('tab-log-content').style.display = 'block';
@@ -2488,6 +3123,46 @@ function switchToDisattivazioniPage(page) {
     url.searchParams.set('tab', 'disattivazioni');
     url.searchParams.set('dis_page', page);
     window.location.href = url.toString();
+}
+
+// ================== REGISTRATION TAB FILTER FUNCTIONS ==================
+
+function filterRegistrationUsers() {
+    const showReady = document.getElementById('filter-ready-review').checked;
+    const showInProgress = document.getElementById('filter-in-progress').checked;
+    
+    const cards = document.querySelectorAll('.registration-user-card');
+    let visibleCount = 0;
+    
+    cards.forEach(function(card) {
+        const isReady = card.getAttribute('data-ready') === '1';
+        let shouldShow = false;
+        
+        if (isReady && showReady) {
+            shouldShow = true;
+        } else if (!isReady && showInProgress) {
+            shouldShow = true;
+        }
+        
+        if (shouldShow) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Update count
+    const countElement = document.getElementById('total-users-count');
+    if (countElement) {
+        countElement.textContent = visibleCount;
+    }
+}
+
+function clearRegistrationFilters() {
+    document.getElementById('filter-ready-review').checked = true;
+    document.getElementById('filter-in-progress').checked = true;
+    filterRegistrationUsers();
 }
 
 // ================== LOG DELETION FUNCTIONS ==================
