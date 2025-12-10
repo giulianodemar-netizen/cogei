@@ -1112,106 +1112,129 @@ function boq_renderQuestionnairesTab() {
     global $wpdb;
     
     $questionnaire_id = isset($_GET['edit']) ? intval($_GET['edit']) : 0;
+    $create_new = isset($_GET['create']) && $_GET['create'] === 'new';
     $questionnaire = $questionnaire_id > 0 ? boq_getQuestionnaire($questionnaire_id) : null;
     
-    ?>
-    <div style="margin-bottom: 30px;">
-        <h2>
-            <?php echo $questionnaire ? 'Modifica Questionario' : 'Crea Nuovo Questionario'; ?>
-        </h2>
-        
-        <form method="POST" style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
-            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-            <input type="hidden" name="boq_action" value="save_questionnaire">
-            <?php if ($questionnaire): ?>
-                <input type="hidden" name="questionnaire_id" value="<?php echo $questionnaire['id']; ?>">
-            <?php endif; ?>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Titolo *</label>
-                <input type="text" name="title" required
-                       value="<?php echo $questionnaire ? esc_attr($questionnaire['title']) : ''; ?>"
-                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Descrizione</label>
-                <textarea name="description" rows="4"
-                          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"><?php echo $questionnaire ? esc_textarea($questionnaire['description']) : ''; ?></textarea>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Stato</label>
-                <select name="status" style="padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-                    <option value="draft" <?php echo ($questionnaire && $questionnaire['status'] === 'draft') ? 'selected' : ''; ?>>Bozza</option>
-                    <option value="published" <?php echo ($questionnaire && $questionnaire['status'] === 'published') ? 'selected' : ''; ?>>Pubblicato</option>
-                </select>
-            </div>
-            
-            <button type="submit" style="background: #03679e; color: white; padding: 10px 30px; border: none; border-radius: 5px; cursor: pointer;">
-                Salva Questionario
-            </button>
-            
-            <?php if ($questionnaire): ?>
-                <a href="?" style="display: inline-block; padding: 10px 30px; margin-left: 10px; text-decoration: none; color: #666;">
-                    Annulla
-                </a>
-            <?php endif; ?>
-        </form>
-    </div>
+    // Get all questionnaires
+    $questionnaires = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}cogei_questionnaires ORDER BY created_at DESC", ARRAY_A);
+    $has_questionnaires = !empty($questionnaires);
     
-    <?php if ($questionnaire): ?>
-        <!-- Gestione Aree, Domande, Opzioni -->
-        <div style="margin-top: 40px;">
-            <h2>Aree e Domande</h2>
-            <?php boq_renderAreasEditor($questionnaire['id']); ?>
+    // Show create form if: editing, creating new, or no questionnaires exist
+    $show_form = $questionnaire || $create_new || !$has_questionnaires;
+    
+    if ($show_form): ?>
+        <div style="margin-bottom: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">
+                    <?php echo $questionnaire ? 'Modifica Questionario' : 'Crea Nuovo Questionario'; ?>
+                </h2>
+                <?php if ($has_questionnaires && !$questionnaire): ?>
+                    <a href="?boq_tab=questionnaires" style="padding: 8px 15px; background: #999; color: white; text-decoration: none; border-radius: 3px;">
+                        ← Torna alla Lista
+                    </a>
+                <?php endif; ?>
+            </div>
+            
+            <form method="POST" style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
+                <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
+                <input type="hidden" name="boq_action" value="save_questionnaire">
+                <?php if ($questionnaire): ?>
+                    <input type="hidden" name="questionnaire_id" value="<?php echo $questionnaire['id']; ?>">
+                <?php endif; ?>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Titolo *</label>
+                    <input type="text" name="title" required
+                           value="<?php echo $questionnaire ? esc_attr($questionnaire['title']) : ''; ?>"
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Descrizione</label>
+                    <textarea name="description" rows="4"
+                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"><?php echo $questionnaire ? esc_textarea($questionnaire['description']) : ''; ?></textarea>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Stato</label>
+                    <select name="status" style="padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+                        <option value="draft" <?php echo ($questionnaire && $questionnaire['status'] === 'draft') ? 'selected' : ''; ?>>Bozza</option>
+                        <option value="published" <?php echo ($questionnaire && $questionnaire['status'] === 'published') ? 'selected' : ''; ?>>Pubblicato</option>
+                    </select>
+                </div>
+                
+                <button type="submit" style="background: #03679e; color: white; padding: 10px 30px; border: none; border-radius: 5px; cursor: pointer;">
+                    Salva Questionario
+                </button>
+                
+                <?php if ($questionnaire): ?>
+                    <a href="?" style="display: inline-block; padding: 10px 30px; margin-left: 10px; text-decoration: none; color: #666;">
+                        Annulla
+                    </a>
+                <?php endif; ?>
+            </form>
         </div>
+        
+        <?php if ($questionnaire): ?>
+            <!-- Gestione Aree, Domande, Opzioni -->
+            <div style="margin-top: 40px;">
+                <h2>Aree e Domande</h2>
+                <?php boq_renderAreasEditor($questionnaire['id']); ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($has_questionnaires): ?>
+            <hr style="margin: 40px 0; border: none; border-top: 2px solid #ddd;">
+        <?php endif; ?>
     <?php endif; ?>
     
-    <hr style="margin: 40px 0; border: none; border-top: 2px solid #ddd;">
-    
-    <!-- Lista Questionari -->
-    <h2>Questionari Esistenti</h2>
-    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-        <thead>
-            <tr style="background: #03679e; color: white;">
-                <th style="padding: 12px; text-align: left;">ID</th>
-                <th style="padding: 12px; text-align: left;">Titolo</th>
-                <th style="padding: 12px; text-align: left;">Stato</th>
-                <th style="padding: 12px; text-align: left;">Data Creazione</th>
-                <th style="padding: 12px; text-align: center;">Azioni</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-            $questionnaires = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}cogei_questionnaires ORDER BY created_at DESC", ARRAY_A);
-            foreach ($questionnaires as $q):
-            ?>
-            <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 12px;"><?php echo $q['id']; ?></td>
-                <td style="padding: 12px;"><strong><?php echo esc_html($q['title']); ?></strong></td>
-                <td style="padding: 12px;">
-                    <span style="padding: 4px 12px; border-radius: 3px; <?php echo $q['status'] === 'published' ? 'background: #4caf50; color: white;' : 'background: #ff9800; color: white;'; ?>">
-                        <?php echo esc_html($q['status']); ?>
-                    </span>
-                </td>
-                <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($q['created_at'])); ?></td>
-                <td style="padding: 12px; text-align: center;">
-                    <a href="?boq_tab=questionnaires&edit=<?php echo $q['id']; ?>" style="color: #03679e; text-decoration: none; margin: 0 5px;">✏️ Modifica</a>
-                    |
-                    <a href="?boq_tab=assignments&send=<?php echo $q['id']; ?>" style="color: #4caf50; text-decoration: none; margin: 0 5px;">📤 Invia</a>
-                    |
-                    <form method="POST" style="display: inline;" onsubmit="return confirm('Eliminare questo questionario?');">
-                        <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-                        <input type="hidden" name="boq_action" value="delete_questionnaire">
-                        <input type="hidden" name="questionnaire_id" value="<?php echo $q['id']; ?>">
-                        <button type="submit" style="background: none; border: none; color: #f44336; cursor: pointer; text-decoration: underline;">🗑️ Elimina</button>
-                    </form>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+    <?php if ($has_questionnaires && !$show_form): ?>
+        <!-- Lista Questionari -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">Questionari Esistenti</h2>
+            <a href="?boq_tab=questionnaires&create=new" style="padding: 10px 20px; background: #4caf50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                ➕ Crea Nuovo Questionario
+            </a>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+                <tr style="background: #03679e; color: white;">
+                    <th style="padding: 12px; text-align: left;">ID</th>
+                    <th style="padding: 12px; text-align: left;">Titolo</th>
+                    <th style="padding: 12px; text-align: left;">Stato</th>
+                    <th style="padding: 12px; text-align: left;">Data Creazione</th>
+                    <th style="padding: 12px; text-align: center;">Azioni</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($questionnaires as $q): ?>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 12px;"><?php echo $q['id']; ?></td>
+                    <td style="padding: 12px;"><strong><?php echo esc_html($q['title']); ?></strong></td>
+                    <td style="padding: 12px;">
+                        <span style="padding: 4px 12px; border-radius: 3px; <?php echo $q['status'] === 'published' ? 'background: #4caf50; color: white;' : 'background: #ff9800; color: white;'; ?>">
+                            <?php echo esc_html($q['status']); ?>
+                        </span>
+                    </td>
+                    <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($q['created_at'])); ?></td>
+                    <td style="padding: 12px; text-align: center;">
+                        <a href="?boq_tab=questionnaires&edit=<?php echo $q['id']; ?>" style="color: #03679e; text-decoration: none; margin: 0 5px;">✏️ Modifica</a>
+                        |
+                        <a href="?boq_tab=assignments&send=<?php echo $q['id']; ?>" style="color: #4caf50; text-decoration: none; margin: 0 5px;">📤 Invia</a>
+                        |
+                        <form method="POST" style="display: inline;" onsubmit="return confirm('Eliminare questo questionario?');">
+                            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
+                            <input type="hidden" name="boq_action" value="delete_questionnaire">
+                            <input type="hidden" name="questionnaire_id" value="<?php echo $q['id']; ?>">
+                            <button type="submit" style="background: none; border: none; color: #f44336; cursor: pointer; text-decoration: underline;">🗑️ Elimina</button>
+                        </form>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
     <?php
 }
 
@@ -1258,7 +1281,7 @@ function boq_renderAreasEditor($questionnaire_id) {
     ?>
     <!-- JavaScript-based Editor -->
     <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #03679e; margin-bottom: 20px;">
-        <strong>💡 Modalità User-Friendly:</strong> Aggiungi/modifica aree, domande e opzioni qui sotto. Tutte le modifiche vengono salvate quando premi il pulsante "💾 Salva Tutto" in basso.
+        <strong>💡 Modalità User-Friendly:</strong> Aggiungi/modifica aree, domande e opzioni qui sotto. Trascina le domande e le opzioni per riordinarle. Tutte le modifiche vengono salvate quando premi il pulsante "💾 Salva Tutto" in basso.
     </div>
     
     <div id="boq-editor-container"></div>
@@ -1276,6 +1299,8 @@ function boq_renderAreasEditor($questionnaire_id) {
     // Stato dell'editor
     let boqEditorState = <?php echo json_encode($existing_data); ?>;
     let boqNextTempId = -1;
+    let boqDraggedItem = null;
+    let boqDraggedContext = null;
     
     // Render completo dell'editor
     function boqRenderEditor() {
@@ -1320,23 +1345,65 @@ function boq_renderAreasEditor($questionnaire_id) {
             } else {
                 area.questions.forEach((question, qIdx) => {
                     const questionDiv = document.createElement('div');
-                    questionDiv.style.cssText = 'background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 10px;';
+                    questionDiv.style.cssText = 'background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 10px; cursor: move;';
+                    questionDiv.draggable = true;
+                    questionDiv.dataset.areaIdx = areaIdx;
+                    questionDiv.dataset.qIdx = qIdx;
+                    
+                    // Drag events for questions
+                    questionDiv.addEventListener('dragstart', (e) => {
+                        boqDraggedItem = {type: 'question', areaIdx, qIdx};
+                        questionDiv.style.opacity = '0.5';
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    
+                    questionDiv.addEventListener('dragend', (e) => {
+                        questionDiv.style.opacity = '1';
+                        boqDraggedItem = null;
+                    });
+                    
+                    questionDiv.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        if (boqDraggedItem && boqDraggedItem.type === 'question' && boqDraggedItem.areaIdx === areaIdx) {
+                            e.dataTransfer.dropEffect = 'move';
+                            questionDiv.style.borderTop = '3px solid #03679e';
+                        }
+                    });
+                    
+                    questionDiv.addEventListener('dragleave', (e) => {
+                        questionDiv.style.borderTop = '';
+                    });
+                    
+                    questionDiv.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        questionDiv.style.borderTop = '';
+                        if (boqDraggedItem && boqDraggedItem.type === 'question' && boqDraggedItem.areaIdx === areaIdx) {
+                            const fromIdx = boqDraggedItem.qIdx;
+                            const toIdx = qIdx;
+                            if (fromIdx !== toIdx) {
+                                const item = boqEditorState[areaIdx].questions.splice(fromIdx, 1)[0];
+                                boqEditorState[areaIdx].questions.splice(toIdx, 0, item);
+                                // Update sort_order
+                                boqEditorState[areaIdx].questions.forEach((q, idx) => q.sort_order = idx);
+                                boqRenderEditor();
+                            }
+                        }
+                    });
                     
                     // Question header
                     const questionHeader = `
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                            <div style="flex: 1;">
-                                <textarea onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'text', this.value)" 
-                                          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2">${boqEsc(question.text)}</textarea>
-                                <div style="margin-top: 5px;">
-                                    <label style="margin-right: 15px;">
-                                        <input type="checkbox" ${question.is_required ? 'checked' : ''} onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'is_required', this.checked ? 1 : 0)"> 
-                                        Obbligatoria
-                                    </label>
-                                    <label>
-                                        Ordine: <input type="number" value="${question.sort_order}" onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'sort_order', parseInt(this.value))" 
-                                                 style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
-                                    </label>
+                            <div style="display: flex; align-items: start; gap: 10px; flex: 1;">
+                                <div style="color: #999; font-size: 1.2em; cursor: move; padding: 5px;">☰</div>
+                                <div style="flex: 1;">
+                                    <textarea onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'text', this.value)" 
+                                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2">${boqEsc(question.text)}</textarea>
+                                    <div style="margin-top: 5px;">
+                                        <label>
+                                            <input type="checkbox" ${question.is_required ? 'checked' : ''} onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'is_required', this.checked ? 1 : 0)"> 
+                                            Obbligatoria
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                             <button onclick="boqDeleteQuestion(${areaIdx}, ${qIdx})" style="background: #f44336; color: white; padding: 5px 10px; border: none; border-radius: 3px; cursor: pointer; margin-left: 10px;">🗑️</button>
@@ -1356,17 +1423,62 @@ function boq_renderAreasEditor($questionnaire_id) {
                         
                         question.options.forEach((option, oIdx) => {
                             const optionLi = document.createElement('li');
-                            optionLi.style.cssText = 'padding: 8px; background: white; margin: 5px 0; border-radius: 3px; display: flex; gap: 10px; align-items: center;';
+                            optionLi.style.cssText = 'padding: 8px; background: white; margin: 5px 0; border-radius: 3px; display: flex; gap: 10px; align-items: center; cursor: move;';
+                            optionLi.draggable = true;
+                            optionLi.dataset.areaIdx = areaIdx;
+                            optionLi.dataset.qIdx = qIdx;
+                            optionLi.dataset.oIdx = oIdx;
+                            
+                            // Drag events for options
+                            optionLi.addEventListener('dragstart', (e) => {
+                                boqDraggedItem = {type: 'option', areaIdx, qIdx, oIdx};
+                                optionLi.style.opacity = '0.5';
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.stopPropagation();
+                            });
+                            
+                            optionLi.addEventListener('dragend', (e) => {
+                                optionLi.style.opacity = '1';
+                                boqDraggedItem = null;
+                            });
+                            
+                            optionLi.addEventListener('dragover', (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (boqDraggedItem && boqDraggedItem.type === 'option' && boqDraggedItem.areaIdx === areaIdx && boqDraggedItem.qIdx === qIdx) {
+                                    e.dataTransfer.dropEffect = 'move';
+                                    optionLi.style.borderTop = '2px solid #03679e';
+                                }
+                            });
+                            
+                            optionLi.addEventListener('dragleave', (e) => {
+                                optionLi.style.borderTop = '';
+                            });
+                            
+                            optionLi.addEventListener('drop', (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                optionLi.style.borderTop = '';
+                                if (boqDraggedItem && boqDraggedItem.type === 'option' && boqDraggedItem.areaIdx === areaIdx && boqDraggedItem.qIdx === qIdx) {
+                                    const fromIdx = boqDraggedItem.oIdx;
+                                    const toIdx = oIdx;
+                                    if (fromIdx !== toIdx) {
+                                        const item = boqEditorState[areaIdx].questions[qIdx].options.splice(fromIdx, 1)[0];
+                                        boqEditorState[areaIdx].questions[qIdx].options.splice(toIdx, 0, item);
+                                        // Update sort_order
+                                        boqEditorState[areaIdx].questions[qIdx].options.forEach((opt, idx) => opt.sort_order = idx);
+                                        boqRenderEditor();
+                                    }
+                                }
+                            });
+                            
                             optionLi.innerHTML = `
+                                <div style="color: #999; font-size: 1em; cursor: move;">☰</div>
                                 <input type="text" value="${boqEsc(option.text)}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'text', this.value)" 
                                        style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
                                 <label style="display: flex; align-items: center; gap: 5px;">
                                     Peso: <input type="number" step="0.01" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
                                            style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 5px;">
-                                    Ordine: <input type="number" value="${option.sort_order}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'sort_order', parseInt(this.value))" 
-                                             style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
                                 </label>
                                 <button onclick="boqDeleteOption(${areaIdx}, ${qIdx}, ${oIdx})" style="background: #f44336; color: white; padding: 4px 10px; border: none; border-radius: 3px; cursor: pointer;">✕</button>
                             `;
