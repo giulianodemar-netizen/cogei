@@ -650,6 +650,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
         echo '<div class="notice notice-success"><p>Opzione eliminata con successo</p></div>';
     }
     
+    // AZIONE: Salva Struttura Completa (JavaScript Editor)
+    if ($action === 'save_structure') {
+        $questionnaire_id = intval($_POST['questionnaire_id']);
+        $structure_json = stripslashes($_POST['structure']);
+        $structure = json_decode($structure_json, true);
+        
+        if (!$structure || !is_array($structure)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Struttura non valida']);
+            exit;
+        }
+        
+        // Prima elimina tutti i dati esistenti per questo questionario
+        $existing_areas = boq_getAreas($questionnaire_id);
+        foreach ($existing_areas as $area) {
+            $questions = boq_getQuestions($area['id']);
+            foreach ($questions as $question) {
+                // Elimina opzioni
+                $wpdb->delete($wpdb->prefix . 'cogei_options', ['question_id' => $question['id']], ['%d']);
+            }
+            // Elimina domande
+            $wpdb->delete($wpdb->prefix . 'cogei_questions', ['area_id' => $area['id']], ['%d']);
+        }
+        // Elimina aree
+        $wpdb->delete($wpdb->prefix . 'cogei_areas', ['questionnaire_id' => $questionnaire_id], ['%d']);
+        
+        // Ora inserisci la nuova struttura
+        foreach ($structure as $area_data) {
+            // Inserisci area
+            $area_insert = [
+                'questionnaire_id' => $questionnaire_id,
+                'title' => sanitize_text_field($area_data['title']),
+                'weight' => floatval($area_data['weight']),
+                'sort_order' => intval($area_data['sort_order'])
+            ];
+            $wpdb->insert($wpdb->prefix . 'cogei_areas', $area_insert, ['%d', '%s', '%f', '%d']);
+            $area_id = $wpdb->insert_id;
+            
+            // Inserisci domande
+            if (!empty($area_data['questions'])) {
+                foreach ($area_data['questions'] as $question_data) {
+                    $question_insert = [
+                        'area_id' => $area_id,
+                        'text' => sanitize_textarea_field($question_data['text']),
+                        'is_required' => intval($question_data['is_required']),
+                        'sort_order' => intval($question_data['sort_order'])
+                    ];
+                    $wpdb->insert($wpdb->prefix . 'cogei_questions', $question_insert, ['%d', '%s', '%d', '%d']);
+                    $question_id = $wpdb->insert_id;
+                    
+                    // Inserisci opzioni
+                    if (!empty($question_data['options'])) {
+                        foreach ($question_data['options'] as $option_data) {
+                            $option_insert = [
+                                'question_id' => $question_id,
+                                'text' => sanitize_text_field($option_data['text']),
+                                'weight' => floatval($option_data['weight']),
+                                'sort_order' => intval($option_data['sort_order'])
+                            ];
+                            $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d']);
+                        }
+                    }
+                }
+            }
+        }
+        
+        http_response_code(200);
+        echo json_encode(['success' => true]);
+        exit;
+    }
+    
     // AZIONE: Invia Questionario
     if ($action === 'send_questionnaire') {
         $questionnaire_id = intval($_POST['questionnaire_id']);
@@ -1145,143 +1216,304 @@ function boq_renderQuestionnairesTab() {
 }
 
 /**
- * Editor per Aree, Domande e Opzioni
+ * Editor per Aree, Domande e Opzioni - Versione JavaScript User-Friendly
  */
 function boq_renderAreasEditor($questionnaire_id) {
     global $wpdb;
+    
+    // Carica dati esistenti
     $areas = boq_getAreas($questionnaire_id);
+    $existing_data = [];
+    foreach ($areas as $area) {
+        $questions_data = [];
+        $questions = boq_getQuestions($area['id']);
+        foreach ($questions as $question) {
+            $options_data = [];
+            $options = boq_getOptions($question['id']);
+            foreach ($options as $option) {
+                $options_data[] = [
+                    'id' => $option['id'],
+                    'text' => $option['text'],
+                    'weight' => $option['weight'],
+                    'sort_order' => $option['sort_order']
+                ];
+            }
+            $questions_data[] = [
+                'id' => $question['id'],
+                'text' => $question['text'],
+                'is_required' => $question['is_required'],
+                'sort_order' => $question['sort_order'],
+                'options' => $options_data
+            ];
+        }
+        $existing_data[] = [
+            'id' => $area['id'],
+            'title' => $area['title'],
+            'weight' => $area['weight'],
+            'sort_order' => $area['sort_order'],
+            'questions' => $questions_data
+        ];
+    }
     
     ?>
-    <div style="background: #f0f0f0; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <h3>Aggiungi Nuova Area</h3>
-        <form method="POST" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end;">
-            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-            <input type="hidden" name="boq_action" value="save_area">
-            <input type="hidden" name="questionnaire_id" value="<?php echo $questionnaire_id; ?>">
-            
-            <div>
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Titolo Area</label>
-                <input type="text" name="area_title" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-            </div>
-            
-            <div>
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Peso</label>
-                <input type="number" name="area_weight" step="0.01" value="1.00" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-            </div>
-            
-            <div>
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Ordine</label>
-                <input type="number" name="area_sort_order" value="0" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-            </div>
-            
-            <button type="submit" style="background: #4caf50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
-                Aggiungi Area
-            </button>
-        </form>
+    <!-- JavaScript-based Editor -->
+    <div style="background: #e3f2fd; padding: 15px; border-left: 4px solid #03679e; margin-bottom: 20px;">
+        <strong>💡 Modalità User-Friendly:</strong> Aggiungi/modifica aree, domande e opzioni qui sotto. Tutte le modifiche vengono salvate quando premi il pulsante "💾 Salva Tutto" in basso.
     </div>
     
-    <?php foreach ($areas as $area): ?>
-        <div style="background: white; border: 2px solid #03679e; border-radius: 5px; padding: 20px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0; color: #03679e;">
-                    📊 <?php echo esc_html($area['title']); ?>
-                    <span style="font-size: 0.8em; color: #666;">(Peso: <?php echo $area['weight']; ?>, Ordine: <?php echo $area['sort_order']; ?>)</span>
-                </h3>
-                <form method="POST" style="display: inline;" onsubmit="return confirm('Eliminare questa area?');">
-                    <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-                    <input type="hidden" name="boq_action" value="delete_area">
-                    <input type="hidden" name="area_id" value="<?php echo $area['id']; ?>">
-                    <button type="submit" style="background: #f44336; color: white; padding: 5px 15px; border: none; border-radius: 3px; cursor: pointer;">🗑️ Elimina Area</button>
-                </form>
-            </div>
+    <div id="boq-editor-container"></div>
+    
+    <div style="margin-top: 20px; padding: 20px; background: #f9f9f9; border-radius: 5px; text-align: center;">
+        <button id="boq-add-area-btn" style="background: #4caf50; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em; margin-right: 10px;">
+            ➕ Aggiungi Area
+        </button>
+        <button id="boq-save-all-btn" style="background: #03679e; color: white; padding: 12px 40px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.2em; font-weight: bold;">
+            💾 Salva Tutto
+        </button>
+    </div>
+    
+    <script>
+    // Stato dell'editor
+    let boqEditorState = <?php echo json_encode($existing_data); ?>;
+    let boqNextTempId = -1;
+    
+    // Render completo dell'editor
+    function boqRenderEditor() {
+        const container = document.getElementById('boq-editor-container');
+        container.innerHTML = '';
+        
+        if (boqEditorState.length === 0) {
+            container.innerHTML = '<div style="padding: 40px; text-align: center; color: #999; background: #f9f9f9; border-radius: 5px;">Nessuna area. Clicca "Aggiungi Area" per iniziare.</div>';
+            return;
+        }
+        
+        boqEditorState.forEach((area, areaIdx) => {
+            const areaDiv = document.createElement('div');
+            areaDiv.style.cssText = 'background: white; border: 2px solid #03679e; border-radius: 5px; padding: 20px; margin-bottom: 20px;';
             
-            <!-- Form Aggiungi Domanda -->
-            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
-                <strong>Aggiungi Domanda:</strong>
-                <form method="POST" style="margin-top: 10px;">
-                    <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-                    <input type="hidden" name="boq_action" value="save_question">
-                    <input type="hidden" name="area_id" value="<?php echo $area['id']; ?>">
-                    
-                    <div style="display: grid; grid-template-columns: 3fr auto auto auto; gap: 10px; align-items: end;">
-                        <div>
-                            <textarea name="question_text" required placeholder="Testo della domanda..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"></textarea>
+            // Area Header con edit
+            const areaHeader = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #03679e;">
+                    <div style="flex: 1;">
+                        <input type="text" value="${boqEsc(area.title)}" onchange="boqUpdateArea(${areaIdx}, 'title', this.value)" 
+                               style="font-size: 1.2em; font-weight: bold; color: #03679e; padding: 5px; border: 1px solid #ddd; border-radius: 3px; width: 60%;" placeholder="Titolo Area">
+                        <div style="margin-top: 8px;">
+                            <label style="margin-right: 15px;">
+                                Peso: <input type="number" step="0.01" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
+                                       style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
+                            </label>
+                            <label>
+                                Ordine: <input type="number" value="${area.sort_order}" onchange="boqUpdateArea(${areaIdx}, 'sort_order', parseInt(this.value))" 
+                                         style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
+                            </label>
                         </div>
-                        <div>
-                            <label><input type="checkbox" name="is_required" checked> Obbligatoria</label>
-                        </div>
-                        <div>
-                            <input type="number" name="question_sort_order" value="0" placeholder="Ordine" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-                        </div>
-                        <button type="submit" style="background: #2196f3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">Aggiungi</button>
                     </div>
-                </form>
-            </div>
-            
-            <!-- Lista Domande -->
-            <?php 
-            $questions = boq_getQuestions($area['id']);
-            foreach ($questions as $question): 
-            ?>
-                <div style="background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: start;">
-                        <div style="flex: 1;">
-                            <strong>❓ <?php echo esc_html($question['text']); ?></strong>
-                            <?php if ($question['is_required']): ?>
-                                <span style="color: red;">*</span>
-                            <?php endif; ?>
-                            <span style="font-size: 0.8em; color: #666;">(Ordine: <?php echo $question['sort_order']; ?>)</span>
-                        </div>
-                        <form method="POST" style="display: inline;" onsubmit="return confirm('Eliminare questa domanda?');">
-                            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-                            <input type="hidden" name="boq_action" value="delete_question">
-                            <input type="hidden" name="question_id" value="<?php echo $question['id']; ?>">
-                            <button type="submit" style="background: #f44336; color: white; padding: 3px 10px; border: none; border-radius: 3px; cursor: pointer; font-size: 0.9em;">🗑️</button>
-                        </form>
-                    </div>
-                    
-                    <!-- Form Aggiungi Opzione -->
-                    <div style="background: #f0f0f0; padding: 10px; border-radius: 3px; margin-top: 10px;">
-                        <form method="POST">
-                            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-                            <input type="hidden" name="boq_action" value="save_option">
-                            <input type="hidden" name="question_id" value="<?php echo $question['id']; ?>">
-                            
-                            <div style="display: grid; grid-template-columns: 2fr 1fr auto auto; gap: 10px; align-items: end;">
-                                <input type="text" name="option_text" required placeholder="Testo opzione..." style="padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
-                                <input type="number" name="option_weight" step="0.01" value="0.00" required placeholder="Peso" style="padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
-                                <input type="number" name="option_sort_order" value="0" placeholder="Ordine" style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
-                                <button type="submit" style="background: #4caf50; color: white; padding: 6px 15px; border: none; border-radius: 3px; cursor: pointer;">+ Opzione</button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                    <!-- Lista Opzioni -->
-                    <?php 
-                    $options = boq_getOptions($question['id']);
-                    if (!empty($options)): 
-                    ?>
-                        <ul style="list-style: none; padding: 10px 0 0 0; margin: 10px 0 0 0;">
-                            <?php foreach ($options as $option): ?>
-                                <li style="padding: 8px; background: #fafafa; margin: 5px 0; border-radius: 3px; display: flex; justify-content: space-between; align-items: center;">
-                                    <span>
-                                        ✓ <?php echo esc_html($option['text']); ?>
-                                        <span style="color: #666; font-size: 0.9em;">(Peso: <?php echo $option['weight']; ?>, Ordine: <?php echo $option['sort_order']; ?>)</span>
-                                    </span>
-                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Eliminare questa opzione?');">
-                                        <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
-                                        <input type="hidden" name="boq_action" value="delete_option">
-                                        <input type="hidden" name="option_id" value="<?php echo $option['id']; ?>">
-                                        <button type="submit" style="background: #f44336; color: white; padding: 2px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">✕</button>
-                                    </form>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
+                    <button onclick="boqDeleteArea(${areaIdx})" style="background: #f44336; color: white; padding: 8px 15px; border: none; border-radius: 3px; cursor: pointer;">🗑️ Elimina Area</button>
                 </div>
-            <?php endforeach; ?>
-        </div>
-    <?php endforeach; ?>
+            `;
+            areaDiv.innerHTML = areaHeader;
+            
+            // Questions
+            const questionsDiv = document.createElement('div');
+            if (!area.questions || area.questions.length === 0) {
+                questionsDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #999; background: #f9f9f9; border-radius: 3px; margin-bottom: 10px;">Nessuna domanda. Aggiungi una domanda con il pulsante sotto.</div>';
+            } else {
+                area.questions.forEach((question, qIdx) => {
+                    const questionDiv = document.createElement('div');
+                    questionDiv.style.cssText = 'background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 10px;';
+                    
+                    // Question header
+                    const questionHeader = `
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                            <div style="flex: 1;">
+                                <textarea onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'text', this.value)" 
+                                          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2">${boqEsc(question.text)}</textarea>
+                                <div style="margin-top: 5px;">
+                                    <label style="margin-right: 15px;">
+                                        <input type="checkbox" ${question.is_required ? 'checked' : ''} onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'is_required', this.checked ? 1 : 0)"> 
+                                        Obbligatoria
+                                    </label>
+                                    <label>
+                                        Ordine: <input type="number" value="${question.sort_order}" onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'sort_order', parseInt(this.value))" 
+                                                 style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
+                                    </label>
+                                </div>
+                            </div>
+                            <button onclick="boqDeleteQuestion(${areaIdx}, ${qIdx})" style="background: #f44336; color: white; padding: 5px 10px; border: none; border-radius: 3px; cursor: pointer; margin-left: 10px;">🗑️</button>
+                        </div>
+                    `;
+                    questionDiv.innerHTML = questionHeader;
+                    
+                    // Options
+                    const optionsDiv = document.createElement('div');
+                    optionsDiv.style.cssText = 'background: #f0f0f0; padding: 10px; border-radius: 3px;';
+                    
+                    if (!question.options || question.options.length === 0) {
+                        optionsDiv.innerHTML = '<div style="color: #999; padding: 5px;">Nessuna opzione. Aggiungi con il pulsante sotto.</div>';
+                    } else {
+                        const optionsList = document.createElement('ul');
+                        optionsList.style.cssText = 'list-style: none; padding: 0; margin: 0 0 10px 0;';
+                        
+                        question.options.forEach((option, oIdx) => {
+                            const optionLi = document.createElement('li');
+                            optionLi.style.cssText = 'padding: 8px; background: white; margin: 5px 0; border-radius: 3px; display: flex; gap: 10px; align-items: center;';
+                            optionLi.innerHTML = `
+                                <input type="text" value="${boqEsc(option.text)}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'text', this.value)" 
+                                       style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
+                                <label style="display: flex; align-items: center; gap: 5px;">
+                                    Peso: <input type="number" step="0.01" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
+                                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 5px;">
+                                    Ordine: <input type="number" value="${option.sort_order}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'sort_order', parseInt(this.value))" 
+                                             style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
+                                </label>
+                                <button onclick="boqDeleteOption(${areaIdx}, ${qIdx}, ${oIdx})" style="background: #f44336; color: white; padding: 4px 10px; border: none; border-radius: 3px; cursor: pointer;">✕</button>
+                            `;
+                            optionsList.appendChild(optionLi);
+                        });
+                        optionsDiv.appendChild(optionsList);
+                    }
+                    
+                    // Add option button
+                    const addOptionBtn = document.createElement('button');
+                    addOptionBtn.textContent = '+ Aggiungi Opzione';
+                    addOptionBtn.style.cssText = 'background: #4caf50; color: white; padding: 6px 15px; border: none; border-radius: 3px; cursor: pointer; width: 100%;';
+                    addOptionBtn.onclick = () => boqAddOption(areaIdx, qIdx);
+                    optionsDiv.appendChild(addOptionBtn);
+                    
+                    questionDiv.appendChild(optionsDiv);
+                    questionsDiv.appendChild(questionDiv);
+                });
+            }
+            areaDiv.appendChild(questionsDiv);
+            
+            // Add question button
+            const addQuestionBtn = document.createElement('button');
+            addQuestionBtn.textContent = '+ Aggiungi Domanda';
+            addQuestionBtn.style.cssText = 'background: #2196f3; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; width: 100%;';
+            addQuestionBtn.onclick = () => boqAddQuestion(areaIdx);
+            areaDiv.appendChild(addQuestionBtn);
+            
+            container.appendChild(areaDiv);
+        });
+    }
+    
+    // Helper: Escape HTML
+    function boqEsc(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+    
+    // CRUD Functions
+    function boqAddArea() {
+        boqEditorState.push({
+            id: boqNextTempId--,
+            title: 'Nuova Area',
+            weight: 1.00,
+            sort_order: boqEditorState.length,
+            questions: []
+        });
+        boqRenderEditor();
+    }
+    
+    function boqUpdateArea(areaIdx, field, value) {
+        boqEditorState[areaIdx][field] = value;
+    }
+    
+    function boqDeleteArea(areaIdx) {
+        if (confirm('Eliminare questa area e tutte le sue domande?')) {
+            boqEditorState.splice(areaIdx, 1);
+            boqRenderEditor();
+        }
+    }
+    
+    function boqAddQuestion(areaIdx) {
+        if (!boqEditorState[areaIdx].questions) boqEditorState[areaIdx].questions = [];
+        boqEditorState[areaIdx].questions.push({
+            id: boqNextTempId--,
+            text: 'Nuova Domanda',
+            is_required: 1,
+            sort_order: boqEditorState[areaIdx].questions.length,
+            options: []
+        });
+        boqRenderEditor();
+    }
+    
+    function boqUpdateQuestion(areaIdx, qIdx, field, value) {
+        boqEditorState[areaIdx].questions[qIdx][field] = value;
+    }
+    
+    function boqDeleteQuestion(areaIdx, qIdx) {
+        if (confirm('Eliminare questa domanda e tutte le sue opzioni?')) {
+            boqEditorState[areaIdx].questions.splice(qIdx, 1);
+            boqRenderEditor();
+        }
+    }
+    
+    function boqAddOption(areaIdx, qIdx) {
+        if (!boqEditorState[areaIdx].questions[qIdx].options) boqEditorState[areaIdx].questions[qIdx].options = [];
+        boqEditorState[areaIdx].questions[qIdx].options.push({
+            id: boqNextTempId--,
+            text: 'Nuova Opzione',
+            weight: 0.00,
+            sort_order: boqEditorState[areaIdx].questions[qIdx].options.length
+        });
+        boqRenderEditor();
+    }
+    
+    function boqUpdateOption(areaIdx, qIdx, oIdx, field, value) {
+        boqEditorState[areaIdx].questions[qIdx].options[oIdx][field] = value;
+    }
+    
+    function boqDeleteOption(areaIdx, qIdx, oIdx) {
+        if (confirm('Eliminare questa opzione?')) {
+            boqEditorState[areaIdx].questions[qIdx].options.splice(oIdx, 1);
+            boqRenderEditor();
+        }
+    }
+    
+    // Save All
+    async function boqSaveAll() {
+        const btn = document.getElementById('boq-save-all-btn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Salvataggio in corso...';
+        
+        try {
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'boq_action': 'save_structure',
+                    'boq_nonce': '<?php echo wp_create_nonce('boq_admin_action'); ?>',
+                    'questionnaire_id': '<?php echo $questionnaire_id; ?>',
+                    'structure': JSON.stringify(boqEditorState)
+                })
+            });
+            
+            if (response.ok) {
+                alert('✅ Struttura salvata con successo!');
+                window.location.reload();
+            } else {
+                throw new Error('Errore nel salvataggio');
+            }
+        } catch (error) {
+            alert('❌ Errore durante il salvataggio: ' + error.message);
+            btn.disabled = false;
+            btn.textContent = '💾 Salva Tutto';
+        }
+    }
+    
+    // Event Listeners
+    document.getElementById('boq-add-area-btn').addEventListener('click', boqAddArea);
+    document.getElementById('boq-save-all-btn').addEventListener('click', boqSaveAll);
+    
+    // Initial Render
+    boqRenderEditor();
+    </script>
     <?php
 }
 
