@@ -1323,13 +1323,9 @@ function boq_renderAreasEditor($questionnaire_id) {
                         <input type="text" value="${boqEsc(area.title)}" onchange="boqUpdateArea(${areaIdx}, 'title', this.value)" 
                                style="font-size: 1.2em; font-weight: bold; color: #03679e; padding: 5px; border: 1px solid #ddd; border-radius: 3px; width: 60%;" placeholder="Titolo Area">
                         <div style="margin-top: 8px;">
-                            <label style="margin-right: 15px;">
+                            <label>
                                 Peso: <input type="number" step="0.01" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
                                        style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
-                            </label>
-                            <label>
-                                Ordine: <input type="number" value="${area.sort_order}" onchange="boqUpdateArea(${areaIdx}, 'sort_order', parseInt(this.value))" 
-                                         style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
                             </label>
                         </div>
                     </div>
@@ -1656,19 +1652,43 @@ function boq_renderAssignmentsTab() {
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
                         Utente HSE da Valutare * <span style="color: red;">(Obbligatorio)</span>
                     </label>
-                    <select name="target_user_id" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+                    <input type="text" id="boq-user-search" placeholder="🔍 Cerca utente..." 
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 5px;">
+                    <select name="target_user_id" id="boq-user-select" required size="8" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
                         <option value="">-- Seleziona l'utente HSE da valutare --</option>
                         <?php
                         // Cerca utenti con ruolo HSE o subscriber
                         $users = get_users(['role__in' => ['hse', 'subscriber']]);
                         foreach ($users as $user):
                         ?>
-                            <option value="<?php echo $user->ID; ?>">
+                            <option value="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($user->display_name)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>">
                                 <?php echo esc_html($user->display_name); ?> (<?php echo esc_html($user->user_email); ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <small style="color: #666;">Seleziona l'utente HSE il cui operato verrà valutato tramite questo questionario</small>
+                    <small style="color: #666;">Cerca e seleziona l'utente HSE il cui operato verrà valutato tramite questo questionario</small>
+                    
+                    <script>
+                    // Search functionality for user select
+                    document.getElementById('boq-user-search').addEventListener('input', function(e) {
+                        const searchTerm = e.target.value.toLowerCase();
+                        const select = document.getElementById('boq-user-select');
+                        const options = select.getElementsByTagName('option');
+                        
+                        for (let i = 1; i < options.length; i++) { // Skip first option
+                            const option = options[i];
+                            const name = option.getAttribute('data-name') || '';
+                            const email = option.getAttribute('data-email') || '';
+                            const text = option.textContent.toLowerCase();
+                            
+                            if (name.includes(searchTerm) || email.includes(searchTerm) || text.includes(searchTerm)) {
+                                option.style.display = '';
+                            } else {
+                                option.style.display = 'none';
+                            }
+                        }
+                    });
+                    </script>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
