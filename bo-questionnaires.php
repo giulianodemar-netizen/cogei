@@ -17,7 +17,7 @@
  * - cogei_areas: aree tematiche (id, questionnaire_id, title, weight, sort_order, created_at, updated_at)
  * - cogei_questions: domande (id, area_id, text, is_required, sort_order, created_at, updated_at)
  * - cogei_options: opzioni risposta (id, question_id, text, weight, sort_order)
- * - cogei_assignments: assegnazioni questionari (id, questionnaire_id, target_user_id, target_email, sent_by, sent_at, status, token)
+ * - cogei_assignments: assegnazioni questionari (id, questionnaire_id, target_user_id (HSE), inspector_email, sent_by, sent_at, status, token)
  * - cogei_responses: risposte (id, assignment_id, question_id, selected_option_id, computed_score, answered_at)
  * 
  * INTEGRAZIONE WORDPRESS:
@@ -124,8 +124,8 @@ function boq_createQuestionnaireTablesIfNotExists() {
     $sql_assignments = "CREATE TABLE IF NOT EXISTS $table_assignments (
         id int(11) NOT NULL AUTO_INCREMENT,
         questionnaire_id int(11) NOT NULL,
-        target_user_id int(11),
-        target_email varchar(255) NOT NULL,
+        target_user_id int(11) NOT NULL,
+        inspector_email varchar(255) NOT NULL,
         sent_by int(11),
         sent_at datetime DEFAULT CURRENT_TIMESTAMP,
         status enum('pending','completed','expired') DEFAULT 'pending',
@@ -137,6 +137,20 @@ function boq_createQuestionnaireTablesIfNotExists() {
         KEY status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_assignments);
+    
+    // Migrazione: rinomina target_email in inspector_email se esiste
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_assignments LIKE 'target_email'");
+    if (!empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_assignments CHANGE target_email inspector_email VARCHAR(255) NOT NULL");
+    }
+    
+    // Migrazione: rendi target_user_id NOT NULL se necessario
+    $column_info = $wpdb->get_row("SHOW COLUMNS FROM $table_assignments LIKE 'target_user_id'");
+    if ($column_info && strpos($column_info->Type, 'int') !== false && strpos($column_info->Null, 'YES') !== false) {
+        // Prima imposta un valore di default per i record esistenti senza target_user_id
+        $wpdb->query("UPDATE $table_assignments SET target_user_id = 0 WHERE target_user_id IS NULL");
+        $wpdb->query("ALTER TABLE $table_assignments MODIFY target_user_id INT(11) NOT NULL");
+    }
     
     // 📝 TABELLA RISPOSTE
     $table_responses = $wpdb->prefix . 'cogei_responses';
@@ -339,25 +353,29 @@ function boq_sendQuestionnaireEmail($assignment_id) {
         return false;
     }
     
+    // Get HSE user info
+    $hse_user = get_userdata($assignment['target_user_id']);
+    $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+    
     $token = $assignment['token'];
-    $target_email = $assignment['target_email'];
+    $inspector_email = $assignment['inspector_email'];
     
     // Genera link
     $link = add_query_arg('boq_token', $token, site_url());
     
-    $to = $target_email;
-    $subject = "Questionario Valutazione Fornitore - " . esc_html($questionnaire['title']);
+    $to = $inspector_email;
+    $subject = "Questionario Valutazione HSE - " . esc_html($questionnaire['title']);
     
     $body = "<html>
 <head>
-<title>Questionario Valutazione</title>
+<title>Questionario Valutazione HSE</title>
 </head>
 <body>
 <div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'>
     <img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' />
 </div>
-<p>Gentile Fornitore,</p>
-<p>Le è stato assegnato il seguente questionario di valutazione:</p>
+<p>Gentile Ispettore,</p>
+<p>Le è stato assegnato il seguente questionario per valutare l'operato dell'utente HSE: <strong>" . esc_html($hse_name) . "</strong></p>
 <h3>" . esc_html($questionnaire['title']) . "</h3>
 <p>" . esc_html($questionnaire['description']) . "</p>
 <p>Per compilare il questionario, clicchi sul link seguente:</p>
@@ -384,7 +402,7 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     }
     
     // Log (opzionale - può essere integrato con sistema logging esistente)
-    error_log("Email questionario inviata a $target_email - Token: $token - Sent: " . ($email_sent ? 'YES' : 'NO'));
+    error_log("Email questionario inviata a $inspector_email per valutare HSE user ID " . $assignment['target_user_id'] . " ($hse_name) - Token: $token - Sent: " . ($email_sent ? 'YES' : 'NO'));
     
     return $email_sent;
 }
@@ -404,7 +422,7 @@ if (isset($_GET['boq_csv_export']) && $_GET['boq_csv_export'] === '1') {
     header('Expires: 0');
     
     echo "\xEF\xBB\xBF"; // BOM UTF-8
-    echo "ID,Questionario,Destinatario,Email,Data Invio,Stato,Punteggio,Valutazione\n";
+    echo "ID,Questionario,Utente HSE,Email Ispettore,Data Invio,Stato,Punteggio,Valutazione\n";
     
     $assignments = $wpdb->get_results("
         SELECT a.*, q.title as questionnaire_title 
@@ -422,19 +440,19 @@ if (isset($_GET['boq_csv_export']) && $_GET['boq_csv_export'] === '1') {
             $evaluation = boq_evaluateScore($score);
         }
         
-        $user_name = 'N/A';
+        $hse_user_name = 'N/A';
         if ($assignment['target_user_id']) {
             $user = get_userdata($assignment['target_user_id']);
             if ($user) {
-                $user_name = $user->display_name;
+                $hse_user_name = $user->display_name;
             }
         }
         
         $row = [
             $assignment['id'],
             '"' . str_replace('"', '""', $assignment['questionnaire_title'] ?: 'N/A') . '"',
-            '"' . str_replace('"', '""', $user_name) . '"',
-            '"' . str_replace('"', '""', $assignment['target_email']) . '"',
+            '"' . str_replace('"', '""', $hse_user_name) . '"',
+            '"' . str_replace('"', '""', $assignment['inspector_email']) . '"',
             '"' . date('d/m/Y H:i', strtotime($assignment['sent_at'])) . '"',
             '"' . $assignment['status'] . '"',
             round($score, 4),
@@ -635,46 +653,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
     // AZIONE: Invia Questionario
     if ($action === 'send_questionnaire') {
         $questionnaire_id = intval($_POST['questionnaire_id']);
-        $target_user_id = isset($_POST['target_user_id']) ? intval($_POST['target_user_id']) : null;
-        $target_email = sanitize_email($_POST['target_email']);
+        $target_user_id = intval($_POST['target_user_id']);
+        $inspector_email = sanitize_email($_POST['inspector_email']);
         
-        // Se specificato user_id, prendi la sua email
-        if ($target_user_id) {
-            $user = get_userdata($target_user_id);
-            if ($user) {
-                $target_email = $user->user_email;
-            }
-        }
-        
-        if (empty($target_email)) {
-            echo '<div class="notice notice-error"><p>Email destinatario non valida</p></div>';
+        // Validazione: target_user_id è obbligatorio
+        if (empty($target_user_id) || $target_user_id <= 0) {
+            echo '<div class="notice notice-error"><p>Devi selezionare un utente HSE</p></div>';
+        } elseif (empty($inspector_email)) {
+            echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
         } else {
-            $token = boq_generateToken();
-            
-            $assignment_data = [
-                'questionnaire_id' => $questionnaire_id,
-                'target_user_id' => $target_user_id,
-                'target_email' => $target_email,
-                'sent_by' => get_current_user_id(),
-                'token' => $token,
-                'status' => 'pending'
-            ];
-            
-            $wpdb->insert(
-                $wpdb->prefix . 'cogei_assignments',
-                $assignment_data,
-                ['%d', '%d', '%s', '%d', '%s', '%s']
-            );
-            
-            $assignment_id = $wpdb->insert_id;
-            
-            // Invia email
-            $email_sent = boq_sendQuestionnaireEmail($assignment_id);
-            
-            if ($email_sent) {
-                echo '<div class="notice notice-success"><p>Questionario inviato con successo a ' . esc_html($target_email) . '</p></div>';
+            // Verifica che l'utente HSE esista
+            $user = get_userdata($target_user_id);
+            if (!$user) {
+                echo '<div class="notice notice-error"><p>Utente HSE non valido</p></div>';
             } else {
-                echo '<div class="notice notice-warning"><p>Questionario creato ma email non inviata. Token: ' . esc_html($token) . '</p></div>';
+                $token = boq_generateToken();
+                
+                $assignment_data = [
+                    'questionnaire_id' => $questionnaire_id,
+                    'target_user_id' => $target_user_id,
+                    'inspector_email' => $inspector_email,
+                    'sent_by' => get_current_user_id(),
+                    'token' => $token,
+                    'status' => 'pending'
+                ];
+                
+                $wpdb->insert(
+                    $wpdb->prefix . 'cogei_assignments',
+                    $assignment_data,
+                    ['%d', '%d', '%s', '%d', '%s', '%s']
+                );
+                
+                $assignment_id = $wpdb->insert_id;
+                
+                // Invia email
+                $email_sent = boq_sendQuestionnaireEmail($assignment_id);
+                
+                if ($email_sent) {
+                    echo '<div class="notice notice-success"><p>Questionario inviato con successo a ' . esc_html($inspector_email) . ' per valutare l\'utente HSE: ' . esc_html($user->display_name) . '</p></div>';
+                } else {
+                    echo '<div class="notice notice-warning"><p>Questionario creato ma email non inviata. Token: ' . esc_html($token) . '</p></div>';
+                }
             }
         }
     }
@@ -1280,6 +1299,9 @@ function boq_renderAssignmentsTab() {
         ?>
         <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 30px;">
             <h2>📤 Invia Questionario: <?php echo esc_html($questionnaire['title']); ?></h2>
+            <p style="background: #e3f2fd; padding: 12px; border-left: 4px solid #03679e; margin-bottom: 20px;">
+                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato dell'utente HSE selezionato.
+            </p>
             
             <form method="POST">
                 <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
@@ -1288,10 +1310,10 @@ function boq_renderAssignmentsTab() {
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
-                        Seleziona Utente HSE (opzionale)
+                        Utente HSE da Valutare * <span style="color: red;">(Obbligatorio)</span>
                     </label>
-                    <select name="target_user_id" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-                        <option value="">-- Seleziona utente o inserisci email manualmente --</option>
+                    <select name="target_user_id" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+                        <option value="">-- Seleziona l'utente HSE da valutare --</option>
                         <?php
                         // Cerca utenti con ruolo HSE o subscriber
                         $users = get_users(['role__in' => ['hse', 'subscriber']]);
@@ -1302,16 +1324,17 @@ function boq_renderAssignmentsTab() {
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <small style="color: #666;">Seleziona l'utente HSE il cui operato verrà valutato tramite questo questionario</small>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
-                        Oppure Email Manuale *
+                        Email Ispettore * <span style="color: red;">(Obbligatorio)</span>
                     </label>
-                    <input type="email" name="target_email" 
+                    <input type="email" name="inspector_email" required
                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
-                           placeholder="email@example.com">
-                    <small style="color: #666;">Se selezionato un utente, questa email sarà ignorata</small>
+                           placeholder="ispettore@example.com">
+                    <small style="color: #666;">Inserisci l'email dell'ispettore che compilerà il questionario di valutazione</small>
                 </div>
                 
                 <button type="submit" style="background: #4caf50; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em;">
@@ -1333,8 +1356,8 @@ function boq_renderAssignmentsTab() {
             <tr style="background: #03679e; color: white;">
                 <th style="padding: 12px; text-align: left;">ID</th>
                 <th style="padding: 12px; text-align: left;">Questionario</th>
-                <th style="padding: 12px; text-align: left;">Destinatario</th>
-                <th style="padding: 12px; text-align: left;">Email</th>
+                <th style="padding: 12px; text-align: left;">Utente HSE</th>
+                <th style="padding: 12px; text-align: left;">Email Ispettore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
                 <th style="padding: 12px; text-align: center;">Stato</th>
                 <th style="padding: 12px; text-align: center;">Azioni</th>
@@ -1351,19 +1374,19 @@ function boq_renderAssignmentsTab() {
             ", ARRAY_A);
             
             foreach ($assignments as $assignment):
-                $user_name = 'N/A';
+                $hse_user_name = 'N/A';
                 if ($assignment['target_user_id']) {
                     $user = get_userdata($assignment['target_user_id']);
                     if ($user) {
-                        $user_name = $user->display_name;
+                        $hse_user_name = $user->display_name;
                     }
                 }
             ?>
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                 <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
-                <td style="padding: 12px;"><?php echo esc_html($user_name); ?></td>
-                <td style="padding: 12px;"><?php echo esc_html($assignment['target_email']); ?></td>
+                <td style="padding: 12px;"><?php echo esc_html($hse_user_name); ?></td>
+                <td style="padding: 12px;"><?php echo esc_html($assignment['inspector_email']); ?></td>
                 <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?></td>
                 <td style="padding: 12px; text-align: center;">
                     <?php
@@ -1424,7 +1447,12 @@ function boq_renderResultsTab() {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                     <div>
                         <strong>Questionario:</strong> <?php echo esc_html($assignment['questionnaire_title']); ?><br>
-                        <strong>Destinatario:</strong> <?php echo esc_html($assignment['target_email']); ?><br>
+                        <?php
+                        $hse_user = get_userdata($assignment['target_user_id']);
+                        $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+                        ?>
+                        <strong>Utente HSE Valutato:</strong> <?php echo esc_html($hse_name); ?><br>
+                        <strong>Email Ispettore:</strong> <?php echo esc_html($assignment['inspector_email']); ?><br>
                         <strong>Data Invio:</strong> <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
                     </div>
                     <div style="background: #f0f0f0; padding: 20px; border-radius: 5px; text-align: center;">
@@ -1499,7 +1527,7 @@ function boq_renderResultsTab() {
                 <tr style="background: #03679e; color: white;">
                     <th style="padding: 12px; text-align: left;">ID</th>
                     <th style="padding: 12px; text-align: left;">Questionario</th>
-                    <th style="padding: 12px; text-align: left;">Destinatario</th>
+                    <th style="padding: 12px; text-align: left;">Utente HSE</th>
                     <th style="padding: 12px; text-align: center;">Punteggio</th>
                     <th style="padding: 12px; text-align: center;">Valutazione</th>
                     <th style="padding: 12px; text-align: center;">Data</th>
@@ -1521,6 +1549,9 @@ function boq_renderResultsTab() {
                     $score = boq_calculateScore($assignment['id']);
                     $evaluation = boq_evaluateScore($score);
                     
+                    $hse_user = get_userdata($assignment['target_user_id']);
+                    $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+                    
                     // Colore valutazione
                     $eval_colors = [
                         'Eccellente' => '#4caf50',
@@ -1534,7 +1565,7 @@ function boq_renderResultsTab() {
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                     <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
-                    <td style="padding: 12px;"><?php echo esc_html($assignment['target_email']); ?></td>
+                    <td style="padding: 12px;"><?php echo esc_html($hse_name); ?></td>
                     <td style="padding: 12px; text-align: center; font-weight: bold;">
                         <?php echo round($score, 4); ?>
                     </td>
