@@ -1086,10 +1086,12 @@ function boq_renderAdminInterface() {
                    style="display: inline-block; padding: 10px 20px; text-decoration: none; <?php echo $active_tab === 'results' ? 'background: #03679e; color: white;' : 'color: #03679e;'; ?>">
                     Risultati
                 </a>
+                <?php if ($active_tab === 'assignments' || $active_tab === 'results'): ?>
                 <a href="?boq_csv_export=1" 
                    style="display: inline-block; padding: 10px 20px; text-decoration: none; color: #03679e; float: right;">
                     📥 Esporta CSV
                 </a>
+                <?php endif; ?>
             </div>
             
             <?php if ($active_tab === 'questionnaires'): ?>
@@ -1652,42 +1654,100 @@ function boq_renderAssignmentsTab() {
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
                         Utente HSE da Valutare * <span style="color: red;">(Obbligatorio)</span>
                     </label>
-                    <input type="text" id="boq-user-search" placeholder="🔍 Cerca utente..." 
-                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 5px;">
-                    <select name="target_user_id" id="boq-user-select" required size="8" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-                        <option value="">-- Seleziona l'utente HSE da valutare --</option>
+                    <input type="text" id="boq-user-search" placeholder="🔍 Cerca per nome o email..." 
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 8px; font-size: 14px;">
+                    <div id="boq-user-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 3px; background: white; display: none;">
                         <?php
                         // Cerca utenti con ruolo HSE o subscriber
                         $users = get_users(['role__in' => ['hse', 'subscriber']]);
                         foreach ($users as $user):
                         ?>
-                            <option value="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($user->display_name)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>">
-                                <?php echo esc_html($user->display_name); ?> (<?php echo esc_html($user->user_email); ?>)
-                            </option>
+                            <div class="boq-user-option" data-id="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($user->display_name)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>" 
+                                 style="padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: #333;"><?php echo esc_html($user->display_name); ?></strong>
+                                    <br>
+                                    <small style="color: #666;"><?php echo esc_html($user->user_email); ?></small>
+                                </div>
+                            </div>
                         <?php endforeach; ?>
-                    </select>
-                    <small style="color: #666;">Cerca e seleziona l'utente HSE il cui operato verrà valutato tramite questo questionario</small>
+                    </div>
+                    <input type="hidden" name="target_user_id" id="boq-user-id" required>
+                    <div id="boq-selected-user" style="margin-top: 8px; padding: 10px; background: #e3f2fd; border-radius: 3px; display: none;">
+                        <strong>Selezionato:</strong> <span id="boq-selected-user-name"></span>
+                        <button type="button" onclick="boqClearUserSelection()" style="float: right; background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕ Cambia</button>
+                    </div>
+                    <small style="color: #666; display: block; margin-top: 5px;">Cerca e seleziona l'utente HSE il cui operato verrà valutato tramite questo questionario</small>
                     
                     <script>
-                    // Search functionality for user select
-                    document.getElementById('boq-user-search').addEventListener('input', function(e) {
-                        const searchTerm = e.target.value.toLowerCase();
-                        const select = document.getElementById('boq-user-select');
-                        const options = select.getElementsByTagName('option');
+                    (function() {
+                        const searchInput = document.getElementById('boq-user-search');
+                        const userList = document.getElementById('boq-user-list');
+                        const userIdInput = document.getElementById('boq-user-id');
+                        const selectedUserDiv = document.getElementById('boq-selected-user');
+                        const selectedUserName = document.getElementById('boq-selected-user-name');
+                        const userOptions = document.querySelectorAll('.boq-user-option');
                         
-                        for (let i = 1; i < options.length; i++) { // Skip first option
-                            const option = options[i];
-                            const name = option.getAttribute('data-name') || '';
-                            const email = option.getAttribute('data-email') || '';
-                            const text = option.textContent.toLowerCase();
-                            
-                            if (name.includes(searchTerm) || email.includes(searchTerm) || text.includes(searchTerm)) {
-                                option.style.display = '';
-                            } else {
-                                option.style.display = 'none';
+                        // Show list when search input is focused
+                        searchInput.addEventListener('focus', function() {
+                            userList.style.display = 'block';
+                        });
+                        
+                        // Hide list when clicking outside
+                        document.addEventListener('click', function(e) {
+                            if (!searchInput.contains(e.target) && !userList.contains(e.target)) {
+                                userList.style.display = 'none';
                             }
-                        }
-                    });
+                        });
+                        
+                        // Search functionality
+                        searchInput.addEventListener('input', function() {
+                            const searchTerm = this.value.toLowerCase();
+                            userList.style.display = 'block';
+                            
+                            userOptions.forEach(function(option) {
+                                const name = option.getAttribute('data-name');
+                                const email = option.getAttribute('data-email');
+                                
+                                if (name.includes(searchTerm) || email.includes(searchTerm)) {
+                                    option.style.display = 'flex';
+                                } else {
+                                    option.style.display = 'none';
+                                }
+                            });
+                        });
+                        
+                        // Select user
+                        userOptions.forEach(function(option) {
+                            option.addEventListener('click', function() {
+                                const userId = this.getAttribute('data-id');
+                                const userName = this.querySelector('strong').textContent;
+                                const userEmail = this.querySelector('small').textContent;
+                                
+                                userIdInput.value = userId;
+                                selectedUserName.textContent = userName + ' (' + userEmail + ')';
+                                selectedUserDiv.style.display = 'block';
+                                searchInput.style.display = 'none';
+                                userList.style.display = 'none';
+                            });
+                            
+                            // Hover effect
+                            option.addEventListener('mouseenter', function() {
+                                this.style.backgroundColor = '#f5f5f5';
+                            });
+                            option.addEventListener('mouseleave', function() {
+                                this.style.backgroundColor = 'white';
+                            });
+                        });
+                        
+                        window.boqClearUserSelection = function() {
+                            userIdInput.value = '';
+                            selectedUserDiv.style.display = 'none';
+                            searchInput.style.display = 'block';
+                            searchInput.value = '';
+                            searchInput.focus();
+                        };
+                    })();
                     </script>
                 </div>
                 
