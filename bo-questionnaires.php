@@ -360,8 +360,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $token = $assignment['token'];
     $inspector_email = $assignment['inspector_email'];
     
-    // Genera link
-    $link = add_query_arg('boq_token', $token, site_url());
+    // Genera link - usa home_url() per ottenere l'URL pubblico del sito
+    $link = add_query_arg('boq_token', $token, home_url());
     
     $to = $inspector_email;
     $subject = "Questionario Valutazione HSE - " . esc_html($questionnaire['title']);
@@ -1835,8 +1835,8 @@ function boq_renderAssignmentsTab() {
                     }
                 }
                 
-                // Genera link questionario
-                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], site_url());
+                // Genera link questionario - usa home_url() per ottenere l'URL pubblico del sito
+                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], home_url());
             ?>
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
