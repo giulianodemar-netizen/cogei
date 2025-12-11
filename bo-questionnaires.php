@@ -337,7 +337,7 @@ function boq_evaluateScore($score) {
  * Invia email con link questionario
  */
 function boq_sendQuestionnaireEmail($assignment_id) {
-    global $wpdb, $inviamail;
+    global $wpdb;
     
     $assignment = $wpdb->get_row($wpdb->prepare(
         "SELECT * FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
@@ -396,12 +396,10 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
     $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
     
-    $email_sent = false;
-    if ($inviamail) {
-        $email_sent = wp_mail($to, $subject, $body, $headers);
-    }
+    // Invia sempre l'email (rimuovere il flag $inviamail che bloccava l'invio)
+    $email_sent = wp_mail($to, $subject, $body, $headers);
     
-    // Log (opzionale - può essere integrato con sistema logging esistente)
+    // Log per debug
     error_log("Email questionario inviata a $inspector_email per valutare HSE user ID " . $assignment['target_user_id'] . " ($hse_name) - Token: $token - Sent: " . ($email_sent ? 'YES' : 'NO'));
     
     return $email_sent;
@@ -1784,6 +1782,7 @@ function boq_renderAssignmentsTab() {
                 <th style="padding: 12px; text-align: left;">Email Ispettore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
                 <th style="padding: 12px; text-align: center;">Stato</th>
+                <th style="padding: 12px; text-align: left;">Link Questionario</th>
                 <th style="padding: 12px; text-align: center;">Azioni</th>
             </tr>
         </thead>
@@ -1805,6 +1804,9 @@ function boq_renderAssignmentsTab() {
                         $hse_user_name = $user->display_name;
                     }
                 }
+                
+                // Genera link questionario
+                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], site_url());
             ?>
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
@@ -1825,15 +1827,22 @@ function boq_renderAssignmentsTab() {
                         <?php echo esc_html($assignment['status']); ?>
                     </span>
                 </td>
+                <td style="padding: 12px;">
+                    <a href="<?php echo esc_url($questionnaire_link); ?>" target="_blank" style="color: #03679e; text-decoration: none; font-size: 0.9em; word-break: break-all;">
+                        🔗 Apri Questionario
+                    </a>
+                    <button onclick="navigator.clipboard.writeText('<?php echo esc_js($questionnaire_link); ?>'); this.textContent='✓ Copiato!'; setTimeout(() => this.textContent='📋 Copia', 2000);" 
+                            style="background: #e3f2fd; border: 1px solid #03679e; color: #03679e; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em; margin-left: 5px;">
+                        📋 Copia
+                    </button>
+                </td>
                 <td style="padding: 12px; text-align: center;">
                     <?php if ($assignment['status'] === 'completed'): ?>
                         <a href="?boq_tab=results&assignment=<?php echo $assignment['id']; ?>" style="color: #03679e; text-decoration: none;">
                             📊 Visualizza Risultato
                         </a>
                     <?php else: ?>
-                        <code style="font-size: 0.8em; background: #f0f0f0; padding: 4px 8px; border-radius: 3px;" title="Token">
-                            <?php echo substr($assignment['token'], 0, 16); ?>...
-                        </code>
+                        <span style="color: #999; font-size: 0.9em;">In attesa</span>
                     <?php endif; ?>
                 </td>
             </tr>
