@@ -773,8 +773,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
 
 /**
  * Handler per la compilazione del questionario via token
+ * Questo hook intercetta le richieste con boq_token prima che WordPress carichi la pagina
  */
-if (isset($_GET['boq_token']) && !empty($_GET['boq_token'])) {
+add_action('template_redirect', 'boq_handlePublicQuestionnaire');
+
+function boq_handlePublicQuestionnaire() {
+    if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
+        return; // Non è una richiesta per noi, lascia WordPress continuare
+    }
+    
+    global $wpdb;
     $token = sanitize_text_field($_GET['boq_token']);
     $assignment = boq_getAssignmentByToken($token);
     
