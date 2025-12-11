@@ -772,10 +772,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
 // ================== HANDLER PUBBLICO RISPOSTE ==================
 
 /**
+ * Registra il parametro query personalizzato boq_token
+ * Questo è necessario affinché WordPress riconosca il parametro
+ */
+function boq_register_query_vars($vars) {
+    $vars[] = 'boq_token';
+    return $vars;
+}
+add_filter('query_vars', 'boq_register_query_vars');
+
+/**
  * Handler per la compilazione del questionario via token
  * Questo hook intercetta le richieste con boq_token prima che WordPress carichi la pagina
+ * Usa 'parse_request' come fallback per intercettare ancora prima
  */
+add_action('parse_request', 'boq_handlePublicQuestionnaire_early', 1);
 add_action('template_redirect', 'boq_handlePublicQuestionnaire');
+
+function boq_handlePublicQuestionnaire_early() {
+    // Questo handler viene eseguito molto presto nel lifecycle di WordPress
+    if (isset($_GET['boq_token']) && !empty($_GET['boq_token'])) {
+        // Rimuove il filtro template_redirect per evitare duplicati
+        remove_action('template_redirect', 'boq_handlePublicQuestionnaire');
+        // Chiama l'handler principale
+        boq_handlePublicQuestionnaire();
+    }
+}
 
 function boq_handlePublicQuestionnaire() {
     if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
