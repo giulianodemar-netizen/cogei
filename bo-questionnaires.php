@@ -174,6 +174,11 @@ function boq_createQuestionnaireTablesIfNotExists() {
 // Esegui creazione tabelle
 boq_createQuestionnaireTablesIfNotExists();
 
+// Registra lo shortcode sull'hook 'init' di WordPress
+add_action('init', function() {
+    add_shortcode('boq_questionnaire_form', 'boq_renderPublicQuestionnaireForm');
+});
+
 
 // ================== FUNZIONI HELPER ==================
 
@@ -776,9 +781,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
  * UTILIZZO: Aggiungi [boq_questionnaire_form] alla pagina /pannello-questionario
  * 
  * Questo shortcode rileva il parametro ?boq_token= nell'URL e mostra il questionario corrispondente
+ * Lo shortcode viene registrato sull'hook 'init' (vedi riga ~177)
  */
-add_shortcode('boq_questionnaire_form', 'boq_renderPublicQuestionnaireForm');
-
 function boq_renderPublicQuestionnaireForm() {
     if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
         return '<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px 0;"><strong>⚠️ Attenzione:</strong> Per compilare un questionario è necessario utilizzare il link fornito via email.</div>';
