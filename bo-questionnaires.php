@@ -362,8 +362,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $token = $assignment['token'];
     $inspector_email = $assignment['inspector_email'];
     
-    // Genera link - punta al file standalone /questionario/
-    $link = add_query_arg('boq_token', $token, home_url('/questionario/'));
+    // Genera link - punta al file standalone /questionario/ (usa site_url perché la cartella è dentro l'installazione WP)
+    $link = add_query_arg('boq_token', $token, site_url('/questionario/'));
     
     $to = $inspector_email;
     $subject = "Questionario Valutazione HSE - " . esc_html($questionnaire['title']);
@@ -1807,8 +1807,8 @@ function boq_renderAssignmentsTab() {
                     }
                 }
                 
-                // Genera link questionario - punta al file standalone /questionario/
-                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], home_url('/questionario/'));
+                // Genera link questionario - punta al file standalone /questionario/ (usa site_url perché la cartella è dentro l'installazione WP)
+                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], site_url('/questionario/'));
             ?>
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
