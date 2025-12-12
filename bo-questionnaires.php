@@ -360,8 +360,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $token = $assignment['token'];
     $inspector_email = $assignment['inspector_email'];
     
-    // Genera link - usa home_url() per ottenere l'URL pubblico del sito
-    $link = add_query_arg('boq_token', $token, home_url());
+    // Genera link - punta alla pagina dedicata /pannello-questionario
+    $link = add_query_arg('boq_token', $token, home_url('/pannello-questionario'));
     
     $to = $inspector_email;
     $subject = "Questionario Valutazione HSE - " . esc_html($questionnaire['title']);
@@ -772,36 +772,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
 // ================== HANDLER PUBBLICO RISPOSTE ==================
 
 /**
- * Registra il parametro query personalizzato boq_token
- * Questo è necessario affinché WordPress riconosca il parametro
+ * Shortcode per mostrare il questionario nella pagina WordPress
+ * UTILIZZO: Aggiungi [boq_questionnaire_form] alla pagina /pannello-questionario
+ * 
+ * Questo shortcode rileva il parametro ?boq_token= nell'URL e mostra il questionario corrispondente
  */
-function boq_register_query_vars($vars) {
-    $vars[] = 'boq_token';
-    return $vars;
-}
-add_filter('query_vars', 'boq_register_query_vars');
+add_shortcode('boq_questionnaire_form', 'boq_renderPublicQuestionnaireForm');
 
-/**
- * Handler per la compilazione del questionario via token
- * Questo hook intercetta le richieste con boq_token prima che WordPress carichi la pagina
- * Usa 'parse_request' come fallback per intercettare ancora prima
- */
-add_action('parse_request', 'boq_handlePublicQuestionnaire_early', 1);
-add_action('template_redirect', 'boq_handlePublicQuestionnaire');
-
-function boq_handlePublicQuestionnaire_early() {
-    // Questo handler viene eseguito molto presto nel lifecycle di WordPress
-    if (isset($_GET['boq_token']) && !empty($_GET['boq_token'])) {
-        // Rimuove il filtro template_redirect per evitare duplicati
-        remove_action('template_redirect', 'boq_handlePublicQuestionnaire');
-        // Chiama l'handler principale
-        boq_handlePublicQuestionnaire();
-    }
-}
-
-function boq_handlePublicQuestionnaire() {
+function boq_renderPublicQuestionnaireForm() {
     if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
-        return; // Non è una richiesta per noi, lascia WordPress continuare
+        return '<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px 0;"><strong>⚠️ Attenzione:</strong> Per compilare un questionario è necessario utilizzare il link fornito via email.</div>';
     }
     
     global $wpdb;
@@ -809,19 +789,19 @@ function boq_handlePublicQuestionnaire() {
     $assignment = boq_getAssignmentByToken($token);
     
     if (!$assignment) {
-        wp_die('Token non valido o scaduto');
+        return '<div style="padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; margin: 20px 0;"><strong>❌ Errore:</strong> Token non valido o scaduto.</div>';
     }
     
     if ($assignment['status'] === 'completed') {
-        echo '<div style="max-width: 800px; margin: 50px auto; padding: 20px; font-family: Arial, sans-serif;">';
-        echo '<h2>Questionario già compilato</h2>';
-        echo '<p>Questo questionario è già stato completato.</p>';
         $score = boq_calculateScore($assignment['id']);
         $evaluation = boq_evaluateScore($score);
-        echo '<p><strong>Punteggio:</strong> ' . round($score, 4) . '</p>';
-        echo '<p><strong>Valutazione:</strong> ' . esc_html($evaluation) . '</p>';
-        echo '</div>';
-        exit;
+        $output = '<div style="padding: 30px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; margin: 20px 0;">';
+        $output .= '<h2 style="color: #155724;">✅ Questionario già compilato</h2>';
+        $output .= '<p>Questo questionario è già stato completato.</p>';
+        $output .= '<p><strong>Punteggio:</strong> ' . round($score, 4) . ' / 1.00</p>';
+        $output .= '<p><strong>Valutazione:</strong> <strong style="font-size: 1.2em;">' . esc_html($evaluation) . '</strong></p>';
+        $output .= '</div>';
+        return $output;
     }
     
     // Gestione submit risposte
@@ -883,202 +863,188 @@ function boq_handlePublicQuestionnaire() {
         $final_score = boq_calculateScore($assignment['id']);
         $evaluation = boq_evaluateScore($final_score);
         
-        echo '<div style="max-width: 800px; margin: 50px auto; padding: 20px; font-family: Arial, sans-serif; background: #f0f0f0; border-radius: 10px;">';
-        echo '<h2 style="color: #03679e;">Questionario completato con successo!</h2>';
-        echo '<p>Grazie per aver compilato il questionario.</p>';
-        echo '<div style="background: white; padding: 20px; margin: 20px 0; border-radius: 5px;">';
-        echo '<h3>Risultato Valutazione</h3>';
-        echo '<p><strong>Punteggio:</strong> ' . round($final_score, 4) . ' / 1.00</p>';
-        echo '<p><strong>Valutazione:</strong> <span style="font-size: 1.5em; color: #03679e;">' . esc_html($evaluation) . '</span></p>';
-        echo '</div>';
-        echo '</div>';
-        exit;
+        $output = '<div style="padding: 30px; background: #d4edda; border: 2px solid #c3e6cb; border-radius: 10px; margin: 20px 0; text-align: center;">';
+        $output .= '<h2 style="color: #03679e;">✅ Questionario completato con successo!</h2>';
+        $output .= '<p style="font-size: 1.1em;">Grazie per aver compilato il questionario.</p>';
+        $output .= '<div style="background: white; padding: 25px; margin: 20px auto; border-radius: 5px; max-width: 500px; border: 1px solid #03679e;">';
+        $output .= '<h3 style="color: #03679e; margin-top: 0;">📊 Risultato Valutazione</h3>';
+        $output .= '<p style="font-size: 1.2em;"><strong>Punteggio:</strong> ' . round($final_score, 4) . ' / 1.00</p>';
+        $output .= '<p style="font-size: 1.5em; margin: 15px 0;"><strong>Valutazione:</strong><br><span style="color: #03679e; font-weight: bold;">' . esc_html($evaluation) . '</span></p>';
+        $output .= '</div>';
+        $output .= '</div>';
+        return $output;
     }
     
-    // Mostra form questionario
+    // Mostra form questionario - usa output buffering per catturare HTML
     $questionnaire = boq_getQuestionnaire($assignment['questionnaire_id']);
     $areas = boq_getAreas($assignment['questionnaire_id']);
     
+    ob_start();
     ?>
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title><?php echo esc_html($questionnaire['title']); ?></title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background: #f5f5f5;
-                margin: 0;
-                padding: 20px;
-            }
-            .container {
-                max-width: 900px;
-                margin: 0 auto;
-                background: white;
-                padding: 30px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            .header {
-                background: #03679e;
-                text-align: center;
-                padding: 20px;
-                margin: -30px -30px 30px -30px;
-                border-radius: 10px 10px 0 0;
-            }
-            .header img {
-                max-width: 150px;
-            }
-            h1 {
-                color: #03679e;
-                margin-top: 0;
-            }
-            .description {
-                color: #666;
-                margin-bottom: 30px;
-                padding: 15px;
-                background: #f9f9f9;
-                border-left: 4px solid #03679e;
-            }
-            .area {
-                margin-bottom: 30px;
-                padding: 20px;
-                background: #f9f9f9;
-                border-radius: 5px;
-            }
-            .area-title {
-                color: #03679e;
-                font-size: 1.2em;
-                font-weight: bold;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
-                border-bottom: 2px solid #03679e;
-            }
-            .question {
-                margin-bottom: 20px;
-                padding: 15px;
-                background: white;
-                border-radius: 5px;
-            }
-            .question-text {
-                font-weight: bold;
-                margin-bottom: 10px;
-                color: #333;
-            }
-            .question-text .required {
-                color: red;
-            }
-            .option {
-                margin: 8px 0;
-                padding: 10px;
-                background: #fff;
-                border: 1px solid #ddd;
-                border-radius: 3px;
-            }
-            .option:hover {
-                background: #f0f0f0;
-            }
-            .option label {
-                cursor: pointer;
-                display: block;
-            }
-            .submit-btn {
-                background: #03679e;
-                color: white;
-                padding: 15px 40px;
-                border: none;
-                border-radius: 5px;
-                font-size: 1.1em;
-                cursor: pointer;
-                display: block;
-                margin: 30px auto 0;
-            }
-            .submit-btn:hover {
-                background: #025a85;
-            }
-            .footer {
-                background: #03679e;
-                padding: 20px;
-                margin: 30px -30px -30px -30px;
-                border-radius: 0 0 10px 10px;
-                color: white;
-                text-align: center;
-                font-size: 0.9em;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <img src="https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png" alt="Cogei">
+    <style>
+        .boq-container {
+            max-width: 900px;
+            margin: 20px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .boq-header {
+            background: #03679e;
+            text-align: center;
+            padding: 20px;
+            margin: -30px -30px 30px -30px;
+            border-radius: 10px 10px 0 0;
+        }
+        .boq-header img {
+            max-width: 150px;
+        }
+        .boq-container h1 {
+            color: #03679e;
+            margin-top: 0;
+        }
+        .boq-description {
+            color: #666;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #03679e;
+        }
+        .boq-area {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        .boq-area-title {
+            color: #03679e;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #03679e;
+        }
+        .boq-question {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+        }
+        .boq-question-text {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .boq-question-text .required {
+            color: red;
+        }
+        .boq-option {
+            margin: 8px 0;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .boq-option:hover {
+            background: #f0f0f0;
+        }
+        .boq-option label {
+            cursor: pointer;
+            display: block;
+        }
+        .boq-submit-btn {
+            background: #03679e;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            cursor: pointer;
+            display: block;
+            margin: 30px auto 0;
+        }
+        .boq-submit-btn:hover {
+            background: #025a85;
+        }
+        .boq-footer {
+            background: #03679e;
+            padding: 20px;
+            margin: 30px -30px -30px -30px;
+            border-radius: 0 0 10px 10px;
+            color: white;
+            text-align: center;
+            font-size: 0.9em;
+        }
+    </style>
+    
+    <div class="boq-container">
+        <div class="boq-header">
+            <img src="https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png" alt="Cogei">
+        </div>
+        
+        <h1><?php echo esc_html($questionnaire['title']); ?></h1>
+        
+        <?php if (!empty($questionnaire['description'])): ?>
+            <div class="boq-description">
+                <?php echo nl2br(esc_html($questionnaire['description'])); ?>
             </div>
+        <?php endif; ?>
+        
+        <form method="POST">
+            <?php wp_nonce_field('boq_submit_' . $token, 'boq_response_nonce'); ?>
             
-            <h1><?php echo esc_html($questionnaire['title']); ?></h1>
-            
-            <?php if (!empty($questionnaire['description'])): ?>
-                <div class="description">
-                    <?php echo nl2br(esc_html($questionnaire['description'])); ?>
-                </div>
-            <?php endif; ?>
-            
-            <form method="POST">
-                <?php wp_nonce_field('boq_submit_' . $token, 'boq_response_nonce'); ?>
-                
-                <?php foreach ($areas as $area): ?>
-                    <div class="area">
-                        <div class="area-title">
-                            <?php echo esc_html($area['title']); ?>
-                            <span style="font-size: 0.8em; color: #666;">(Peso: <?php echo esc_html($area['weight']); ?>)</span>
-                        </div>
-                        
-                        <?php 
-                        $questions = boq_getQuestions($area['id']);
-                        foreach ($questions as $question): 
-                        ?>
-                            <div class="question">
-                                <div class="question-text">
-                                    <?php echo esc_html($question['text']); ?>
-                                    <?php if ($question['is_required']): ?>
-                                        <span class="required">*</span>
-                                    <?php endif; ?>
+            <?php foreach ($areas as $area): ?>
+                <div class="boq-area">
+                    <div class="boq-area-title">
+                        <?php echo esc_html($area['title']); ?>
+                        <span style="font-size: 0.8em; color: #666;">(Peso: <?php echo esc_html($area['weight']); ?>)</span>
+                    </div>
+                    
+                    <?php 
+                    $questions = boq_getQuestions($area['id']);
+                    foreach ($questions as $question): 
+                    ?>
+                        <div class="boq-question">
+                            <div class="boq-question-text">
+                                <?php echo esc_html($question['text']); ?>
+                                <?php if ($question['is_required']): ?>
+                                    <span class="required">*</span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <?php 
+                            $options = boq_getOptions($question['id']);
+                            foreach ($options as $option): 
+                            ?>
+                                <div class="boq-option">
+                                    <label>
+                                        <input type="radio" 
+                                               name="responses[<?php echo $question['id']; ?>]" 
+                                               value="<?php echo $option['id']; ?>"
+                                               <?php echo $question['is_required'] ? 'required' : ''; ?>>
+                                        <?php echo esc_html($option['text']); ?>
+                                        <span style="color: #999; font-size: 0.9em;">(Peso: <?php echo esc_html($option['weight']); ?>)</span>
+                                    </label>
                                 </div>
-                                
-                                <?php 
-                                $options = boq_getOptions($question['id']);
-                                foreach ($options as $option): 
-                                ?>
-                                    <div class="option">
-                                        <label>
-                                            <input type="radio" 
-                                                   name="responses[<?php echo $question['id']; ?>]" 
-                                                   value="<?php echo $option['id']; ?>"
-                                                   <?php echo $question['is_required'] ? 'required' : ''; ?>>
-                                            <?php echo esc_html($option['text']); ?>
-                                            <span style="color: #999; font-size: 0.9em;">(Peso: <?php echo esc_html($option['weight']); ?>)</span>
-                                        </label>
-                                    </div>
-                                <?php endforeach; ?>
+                            <?php endforeach; ?>
                             </div>
                         <?php endforeach; ?>
                     </div>
                 <?php endforeach; ?>
                 
-                <button type="submit" name="boq_submit_responses" class="submit-btn">Invia Risposte</button>
+                <button type="submit" name="boq_submit_responses" class="boq-submit-btn">Invia Risposte</button>
             </form>
             
-            <div class="footer">
+            <div class="boq-footer">
                 <div>Via Francesco Lomonaco, 3 - 80121 Napoli</div>
                 <div>TEL: +39 081.230.37.82</div>
                 <div>PEC: cogei@pec.cogei.net</div>
                 <div style="margin-top: 20px; font-size: 0.8em;">COGEI SRL - P.IVA: IT06569020636 - Copyright © 2023 Cogei. All Rights Reserved.</div>
             </div>
         </div>
-    </body>
-    </html>
     <?php
-    exit;
+    return ob_get_clean();
 }
 
 
@@ -1835,8 +1801,8 @@ function boq_renderAssignmentsTab() {
                     }
                 }
                 
-                // Genera link questionario - usa home_url() per ottenere l'URL pubblico del sito
-                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], home_url());
+                // Genera link questionario - punta alla pagina dedicata /pannello-questionario
+                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], home_url('/pannello-questionario'));
             ?>
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
