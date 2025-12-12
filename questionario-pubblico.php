@@ -524,7 +524,6 @@ $hse_name = $hse_user ? $hse_user->display_name : 'Utente HSE';
                     <div class="area">
                         <div class="area-header">
                             <div class="area-title"><?php echo esc_html($area['title']); ?></div>
-                            <div class="area-weight">Peso: <?php echo esc_html($area['weight']); ?></div>
                         </div>
                         
                         <?php
@@ -558,7 +557,6 @@ $hse_name = $hse_user ? $hse_user->display_name : 'Utente HSE';
                                             >
                                             <label for="option_<?php echo $option['id']; ?>">
                                                 <?php echo esc_html($option['text']); ?>
-                                                <span style="color: #888; font-size: 13px;">(Peso: <?php echo esc_html($option['weight']); ?>)</span>
                                             </label>
                                         </div>
                                     <?php endforeach; ?>
