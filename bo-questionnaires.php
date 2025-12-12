@@ -174,11 +174,8 @@ function boq_createQuestionnaireTablesIfNotExists() {
 // Esegui creazione tabelle
 boq_createQuestionnaireTablesIfNotExists();
 
-// Registra lo shortcode sull'hook 'init' di WordPress
-add_action('init', function() {
-    add_shortcode('boq_questionnaire_form', 'boq_renderPublicQuestionnaireForm');
-});
-
+// NOTA: Il questionario pubblico usa ora un file standalone (questionario-pubblico.php)
+// posizionato nella cartella /questionario/ del server. Non serve più lo shortcode.
 
 // ================== FUNZIONI HELPER ==================
 
@@ -365,8 +362,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $token = $assignment['token'];
     $inspector_email = $assignment['inspector_email'];
     
-    // Genera link - punta alla pagina dedicata /pannello-questionario
-    $link = add_query_arg('boq_token', $token, home_url('/pannello-questionario'));
+    // Genera link - punta al file standalone /questionario/
+    $link = add_query_arg('boq_token', $token, home_url('/questionario/'));
     
     $to = $inspector_email;
     $subject = "Questionario Valutazione HSE - " . esc_html($questionnaire['title']);
@@ -782,6 +779,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
  * 
  * Questo shortcode rileva il parametro ?boq_token= nell'URL e mostra il questionario corrispondente
  * Lo shortcode viene registrato sull'hook 'init' (vedi riga ~177)
+ */
+/**
+ * NOTA: Questa funzione non è più utilizzata. Il questionario pubblico ora usa
+ * un file standalone (questionario-pubblico.php) posizionato nella cartella /questionario/
+ * Mantenuta per compatibilità ma non necessaria.
  */
 function boq_renderPublicQuestionnaireForm() {
     if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
@@ -1805,8 +1807,8 @@ function boq_renderAssignmentsTab() {
                     }
                 }
                 
-                // Genera link questionario - punta alla pagina dedicata /pannello-questionario
-                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], home_url('/pannello-questionario'));
+                // Genera link questionario - punta al file standalone /questionario/
+                $questionnaire_link = add_query_arg('boq_token', $assignment['token'], home_url('/questionario/'));
             ?>
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
