@@ -320,9 +320,9 @@ $areas = $wpdb->get_results($wpdb->prepare(
     $questionnaire['id']
 ), ARRAY_A);
 
-// Recupera info fornitore
+// Recupera info utente HSE
 $hse_user = get_userdata($assignment['target_user_id']);
-$hse_name = $hse_user ? $hse_user->display_name : 'Fornitore';
+$hse_name = $hse_user ? $hse_user->display_name : 'Utente HSE';
 
 ?>
 <!DOCTYPE html>
@@ -504,9 +504,9 @@ $hse_name = $hse_user ? $hse_user->display_name : 'Fornitore';
         </div>
         
         <div class="hse-info">
-            <p><strong>Fornitore Valutato:</strong> <?php echo esc_html($hse_name); ?></p>
+            <p><strong>Utente HSE Valutato:</strong> <?php echo esc_html($hse_name); ?></p>
             <p style="margin-top: 5px; font-size: 14px; color: #666;">
-                Questo questionario valuta l'operato dell'fornitore selezionato.
+                Questo questionario valuta l'operato dell'utente HSE selezionato.
             </p>
         </div>
         

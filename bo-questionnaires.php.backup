@@ -5,7 +5,7 @@
  * 
  * DESCRIZIONE:
  * Questo file fornisce un sistema completo e autonomo per la gestione dei questionari
- * destinati ai fornitori (Albo Fornitori). Include funzionalità per:
+ * destinati ai fornitori HSE. Include funzionalità per:
  * - Creazione e gestione questionari con aree tematiche
  * - Definizione domande e opzioni di risposta con pesi personalizzabili
  * - Invio questionari via email con token univoco
@@ -17,7 +17,7 @@
  * - cogei_areas: aree tematiche (id, questionnaire_id, title, weight, sort_order, created_at, updated_at)
  * - cogei_questions: domande (id, area_id, text, is_required, sort_order, created_at, updated_at)
  * - cogei_options: opzioni risposta (id, question_id, text, weight, sort_order)
- * - cogei_assignments: assegnazioni questionari (id, questionnaire_id, target_user_id (Fornitore), inspector_email, sent_by, sent_at, status, token)
+ * - cogei_assignments: assegnazioni questionari (id, questionnaire_id, target_user_id (HSE), inspector_email, sent_by, sent_at, status, token)
  * - cogei_responses: risposte (id, assignment_id, question_id, selected_option_id, computed_score, answered_at)
  * 
  * INTEGRAZIONE WORDPRESS:
@@ -28,9 +28,9 @@
  * 
  * CONVENZIONI:
  * Questo file segue le stesse convenzioni utilizzate in:
- * - BO Albo Fornitori (gestione cantieri e HSE)
+ * - BO HSE (gestione cantieri e HSE)
  * - BO ALBO FORNITORI (gestione fornitori)
- * - Sistema Questionari (form pubblici HSE)
+ * - FRONT HSE (form pubblici HSE)
  * Verificare questi file per comprendere meglio i pattern utilizzati.
  * 
  * @version 1.0
@@ -52,7 +52,7 @@ $inviamail = true; // Email ATTIVATE - Le email vengono inviate
 
 /**
  * Crea le tabelle necessarie per il sistema questionari
- * Pattern analogo a quello usato in BO Albo Fornitori e BO ALBO FORNITORI
+ * Pattern analogo a quello usato in BO HSE e BO ALBO FORNITORI
  */
 function boq_createQuestionnaireTablesIfNotExists() {
     global $wpdb;
@@ -355,7 +355,7 @@ function boq_sendQuestionnaireEmail($assignment_id) {
         return false;
     }
     
-    // Get supplier (fornitore) user info
+    // Get HSE user info
     $hse_user = get_userdata($assignment['target_user_id']);
     $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
     
@@ -366,18 +366,18 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $link = add_query_arg('boq_token', $token, site_url('/questionario/'));
     
     $to = $inspector_email;
-    $subject = "Questionario Valutazione Fornitore - " . esc_html($questionnaire['title']);
+    $subject = "Questionario Valutazione HSE - " . esc_html($questionnaire['title']);
     
     $body = "<html>
 <head>
-<title>Questionario Valutazione Fornitore</title>
+<title>Questionario Valutazione HSE</title>
 </head>
 <body>
 <div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'>
     <img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' />
 </div>
 <p>Gentile Ispettore,</p>
-<p>Le è stato assegnato il seguente questionario per valutare il fornitore: <strong>" . esc_html($hse_name) . "</strong></p>
+<p>Le è stato assegnato il seguente questionario per valutare l'operato dell'utente HSE: <strong>" . esc_html($hse_name) . "</strong></p>
 <h3>" . esc_html($questionnaire['title']) . "</h3>
 <p>" . esc_html($questionnaire['description']) . "</p>
 <p>Per compilare il questionario, clicchi sul link seguente:</p>
@@ -402,7 +402,7 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     $email_sent = wp_mail($to, $subject, $body, $headers);
     
     // Log per debug
-    error_log("Email questionario inviata a $inspector_email per valutare Fornitore ID " . $assignment['target_user_id'] . " ($hse_name) - Token: $token - Sent: " . ($email_sent ? 'YES' : 'NO'));
+    error_log("Email questionario inviata a $inspector_email per valutare HSE user ID " . $assignment['target_user_id'] . " ($hse_name) - Token: $token - Sent: " . ($email_sent ? 'YES' : 'NO'));
     
     return $email_sent;
 }
@@ -422,7 +422,7 @@ if (isset($_GET['boq_csv_export']) && $_GET['boq_csv_export'] === '1') {
     header('Expires: 0');
     
     echo "\xEF\xBB\xBF"; // BOM UTF-8
-    echo "ID,Questionario,Fornitore,Email Ispettore,Data Invio,Stato,Punteggio,Valutazione\n";
+    echo "ID,Questionario,Utente HSE,Email Ispettore,Data Invio,Stato,Punteggio,Valutazione\n";
     
     $assignments = $wpdb->get_results("
         SELECT a.*, q.title as questionnaire_title 
@@ -729,14 +729,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
         
         // Validazione: target_user_id è obbligatorio
         if (empty($target_user_id) || $target_user_id <= 0) {
-            echo '<div class="notice notice-error"><p>Devi selezionare un fornitore</p></div>';
+            echo '<div class="notice notice-error"><p>Devi selezionare un utente HSE</p></div>';
         } elseif (empty($inspector_email)) {
             echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
         } else {
-            // Verifica che l'fornitore esista
+            // Verifica che l'utente HSE esista
             $user = get_userdata($target_user_id);
             if (!$user) {
-                echo '<div class="notice notice-error"><p>Fornitore non valido</p></div>';
+                echo '<div class="notice notice-error"><p>Utente HSE non valido</p></div>';
             } else {
                 $token = boq_generateToken();
                 
@@ -761,7 +761,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                 $email_sent = boq_sendQuestionnaireEmail($assignment_id);
                 
                 if ($email_sent) {
-                    echo '<div class="notice notice-success"><p>Questionario inviato con successo a ' . esc_html($inspector_email) . ' per valutare l\'fornitore: ' . esc_html($user->display_name) . '</p></div>';
+                    echo '<div class="notice notice-success"><p>Questionario inviato con successo a ' . esc_html($inspector_email) . ' per valutare l\'utente HSE: ' . esc_html($user->display_name) . '</p></div>';
                 } else {
                     echo '<div class="notice notice-warning"><p>Questionario creato ma email non inviata. Token: ' . esc_html($token) . '</p></div>';
                 }
@@ -1058,7 +1058,7 @@ function boq_renderPublicQuestionnaireForm() {
 
 /**
  * Interfaccia Admin per gestione questionari
- * Stile coerente con BO Albo Fornitori e BO ALBO FORNITORI
+ * Stile coerente con BO HSE e BO ALBO FORNITORI
  */
 function boq_renderAdminInterface() {
     global $wpdb;
@@ -1086,10 +1086,6 @@ function boq_renderAdminInterface() {
                    style="display: inline-block; padding: 10px 20px; text-decoration: none; <?php echo $active_tab === 'results' ? 'background: #03679e; color: white;' : 'color: #03679e;'; ?>">
                     Risultati
                 </a>
-                <a href="?boq_tab=ratings" 
-                   style="display: inline-block; padding: 10px 20px; text-decoration: none; <?php echo $active_tab === 'ratings' ? 'background: #03679e; color: white;' : 'color: #03679e;'; ?>">
-                    ⭐ Votazioni Albo Fornitori
-                </a>
                 <?php if ($active_tab === 'assignments' || $active_tab === 'results'): ?>
                 <a href="?boq_csv_export=1" 
                    style="display: inline-block; padding: 10px 20px; text-decoration: none; color: #03679e; float: right;">
@@ -1104,8 +1100,6 @@ function boq_renderAdminInterface() {
                 <?php boq_renderAssignmentsTab(); ?>
             <?php elseif ($active_tab === 'results'): ?>
                 <?php boq_renderResultsTab(); ?>
-            <?php elseif ($active_tab === 'ratings'): ?>
-                <?php boq_renderRatingsTab(); ?>
             <?php endif; ?>
             
         </div>
@@ -1648,7 +1642,7 @@ function boq_renderAssignmentsTab() {
         <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 30px;">
             <h2>📤 Invia Questionario: <?php echo esc_html($questionnaire['title']); ?></h2>
             <p style="background: #e3f2fd; padding: 12px; border-left: 4px solid #03679e; margin-bottom: 20px;">
-                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato dell'fornitore selezionato.
+                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato dell'utente HSE selezionato.
             </p>
             
             <form method="POST">
@@ -1658,13 +1652,13 @@ function boq_renderAssignmentsTab() {
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
-                        Fornitore da Valutare * <span style="color: red;">(Obbligatorio)</span>
+                        Utente HSE da Valutare * <span style="color: red;">(Obbligatorio)</span>
                     </label>
                     <input type="text" id="boq-user-search" placeholder="🔍 Cerca per nome o email..." 
                            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 8px; font-size: 14px;">
                     <div id="boq-user-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 3px; background: white; display: none;">
                         <?php
-                        // Cerca fornitori da valutare o subscriber
+                        // Cerca utenti con ruolo HSE o subscriber
                         $users = get_users(['role__in' => ['hse', 'subscriber']]);
                         foreach ($users as $user):
                         ?>
@@ -1683,7 +1677,7 @@ function boq_renderAssignmentsTab() {
                         <strong>Selezionato:</strong> <span id="boq-selected-user-name"></span>
                         <button type="button" onclick="boqClearUserSelection()" style="float: right; background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕ Cambia</button>
                     </div>
-                    <small style="color: #666; display: block; margin-top: 5px;">Cerca e seleziona l'fornitore il cui operato verrà valutato tramite questo questionario</small>
+                    <small style="color: #666; display: block; margin-top: 5px;">Cerca e seleziona l'utente HSE il cui operato verrà valutato tramite questo questionario</small>
                     
                     <script>
                     (function() {
@@ -1786,7 +1780,7 @@ function boq_renderAssignmentsTab() {
             <tr style="background: #03679e; color: white;">
                 <th style="padding: 12px; text-align: left;">ID</th>
                 <th style="padding: 12px; text-align: left;">Questionario</th>
-                <th style="padding: 12px; text-align: left;">Fornitore</th>
+                <th style="padding: 12px; text-align: left;">Utente HSE</th>
                 <th style="padding: 12px; text-align: left;">Email Ispettore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
                 <th style="padding: 12px; text-align: center;">Stato</th>
@@ -1892,7 +1886,7 @@ function boq_renderResultsTab() {
                         $hse_user = get_userdata($assignment['target_user_id']);
                         $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
                         ?>
-                        <strong>Fornitore Valutato:</strong> <?php echo esc_html($hse_name); ?><br>
+                        <strong>Utente HSE Valutato:</strong> <?php echo esc_html($hse_name); ?><br>
                         <strong>Email Ispettore:</strong> <?php echo esc_html($assignment['inspector_email']); ?><br>
                         <strong>Data Invio:</strong> <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
                     </div>
@@ -1968,7 +1962,7 @@ function boq_renderResultsTab() {
                 <tr style="background: #03679e; color: white;">
                     <th style="padding: 12px; text-align: left;">ID</th>
                     <th style="padding: 12px; text-align: left;">Questionario</th>
-                    <th style="padding: 12px; text-align: left;">Fornitore</th>
+                    <th style="padding: 12px; text-align: left;">Utente HSE</th>
                     <th style="padding: 12px; text-align: center;">Punteggio</th>
                     <th style="padding: 12px; text-align: center;">Valutazione</th>
                     <th style="padding: 12px; text-align: center;">Data</th>
@@ -2030,186 +2024,6 @@ function boq_renderResultsTab() {
         </table>
         <?php
     }
-}
-
-/**
- * Convert normalized score (0-1) to star rating (0-5)
- * Uses half-star precision
- */
-function boq_convertScoreToStars($score) {
-    // Convert 0-1 score to 0-5 scale
-    $stars = $score * 5;
-    
-    // Round to nearest 0.5
-    $stars = round($stars * 2) / 2;
-    
-    // Clamp between 0 and 5
-    $stars = max(0, min(5, $stars));
-    
-    return $stars;
-}
-
-/**
- * Render star rating HTML
- * @param float $stars - Number of stars (0-5, can have 0.5 increments)
- * @return string HTML with star visualization
- */
-function boq_renderStarRating($stars) {
-    $full_stars = floor($stars);
-    $half_star = ($stars - $full_stars) >= 0.5;
-    $empty_stars = 5 - $full_stars - ($half_star ? 1 : 0);
-    
-    $html = '<span style="color: #FFD700; font-size: 20px; letter-spacing: 2px;">';
-    
-    // Full stars
-    for ($i = 0; $i < $full_stars; $i++) {
-        $html .= '★';
-    }
-    
-    // Half star (using a lighter star)
-    if ($half_star) {
-        $html .= '<span style="position: relative; display: inline-block;">★<span style="position: absolute; left: 0; width: 50%; overflow: hidden; color: #DDD;">★</span></span>';
-    }
-    
-    // Empty stars
-    $html .= '</span><span style="color: #DDD; font-size: 20px; letter-spacing: 2px;">';
-    for ($i = 0; $i < $empty_stars; $i++) {
-        $html .= '★';
-    }
-    $html .= '</span>';
-    
-    // Add numeric value
-    $html .= ' <span style="color: #666; font-size: 14px;">(' . number_format($stars, 1) . ')</span>';
-    
-    return $html;
-}
-
-/**
- * Tab: Votazioni Albo Fornitori
- * Shows supplier rankings based on average questionnaire scores
- */
-function boq_renderRatingsTab() {
-    global $wpdb;
-    
-    // Get all suppliers with their average scores
-    $query = "
-        SELECT 
-            a.target_user_id as user_id,
-            COUNT(DISTINCT a.id) as total_questionnaires,
-            COUNT(DISTINCT r.assignment_id) as completed_questionnaires,
-            AVG(CASE 
-                WHEN a.status = 'completed' THEN (
-                    SELECT AVG(r2.computed_score) 
-                    FROM {$wpdb->prefix}cogei_responses r2 
-                    WHERE r2.assignment_id = a.id
-                )
-                ELSE NULL 
-            END) as avg_score
-        FROM {$wpdb->prefix}cogei_assignments a
-        LEFT JOIN {$wpdb->prefix}cogei_responses r ON r.assignment_id = a.id
-        WHERE a.status = 'completed'
-        GROUP BY a.target_user_id
-        HAVING avg_score IS NOT NULL
-        ORDER BY avg_score DESC
-    ";
-    
-    $results = $wpdb->get_results($query, ARRAY_A);
-    
-    ?>
-    <div style="background: white; padding: 20px; border-radius: 5px;">
-        <h2 style="color: #03679e; margin-top: 0;">⭐ Votazioni Albo Fornitori</h2>
-        <p style="color: #666; margin-bottom: 20px;">
-            Classifica fornitori basata sulla media di tutti i questionari completati
-        </p>
-        
-        <?php if (empty($results)): ?>
-            <div style="padding: 40px; text-align: center; background: #f9f9f9; border-radius: 5px; color: #999;">
-                <p style="font-size: 18px;">📊 Nessuna valutazione disponibile</p>
-                <p>Completa alcuni questionari per vedere le votazioni dei fornitori.</p>
-            </div>
-        <?php else: ?>
-            <table style="width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                <thead>
-                    <tr style="background: #03679e; color: white;">
-                        <th style="padding: 15px; text-align: left; border-bottom: 2px solid #025a85;">Posizione</th>
-                        <th style="padding: 15px; text-align: left; border-bottom: 2px solid #025a85;">Fornitore</th>
-                        <th style="padding: 15px; text-align: center; border-bottom: 2px solid #025a85;">Valutazione</th>
-                        <th style="padding: 15px; text-align: center; border-bottom: 2px solid #025a85;">Punteggio</th>
-                        <th style="padding: 15px; text-align: center; border-bottom: 2px solid #025a85;">Questionari</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php 
-                    $position = 1;
-                    foreach ($results as $result): 
-                        $user = get_userdata($result['user_id']);
-                        $user_name = $user ? $user->display_name : 'Utente #' . $result['user_id'];
-                        $avg_score = floatval($result['avg_score']);
-                        $stars = boq_convertScoreToStars($avg_score);
-                        
-                        // Determine row background color based on rating
-                        $bg_color = '#fff';
-                        if ($stars >= 4.5) {
-                            $bg_color = '#f0fdf4'; // Green tint for excellent
-                        } elseif ($stars >= 3.5) {
-                            $bg_color = '#fefef0'; // Yellow tint for good
-                        } elseif ($stars < 2.5) {
-                            $bg_color = '#fef2f2'; // Red tint for poor
-                        }
-                    ?>
-                    <tr style="border-bottom: 1px solid #eee; background: <?php echo $bg_color; ?>;">
-                        <td style="padding: 15px; text-align: center;">
-                            <?php 
-                            // Add medals for top 3
-                            if ($position === 1) {
-                                echo '<span style="font-size: 24px;">🥇</span> ';
-                            } elseif ($position === 2) {
-                                echo '<span style="font-size: 24px;">🥈</span> ';
-                            } elseif ($position === 3) {
-                                echo '<span style="font-size: 24px;">🥉</span> ';
-                            }
-                            echo '<strong style="font-size: 18px;">' . $position . '</strong>';
-                            ?>
-                        </td>
-                        <td style="padding: 15px;">
-                            <strong style="font-size: 16px; color: #333;"><?php echo esc_html($user_name); ?></strong>
-                            <br>
-                            <span style="color: #999; font-size: 13px;">ID: <?php echo $result['user_id']; ?></span>
-                        </td>
-                        <td style="padding: 15px; text-align: center;">
-                            <?php echo boq_renderStarRating($stars); ?>
-                        </td>
-                        <td style="padding: 15px; text-align: center;">
-                            <strong style="font-size: 16px; color: #03679e;">
-                                <?php echo number_format($avg_score, 3); ?>
-                            </strong>
-                            <br>
-                            <span style="color: #999; font-size: 12px;">/ 1.000</span>
-                        </td>
-                        <td style="padding: 15px; text-align: center;">
-                            <span style="background: #03679e; color: white; padding: 5px 12px; border-radius: 15px; font-weight: bold;">
-                                <?php echo $result['completed_questionnaires']; ?>
-                            </span>
-                        </td>
-                    </tr>
-                    <?php 
-                    $position++;
-                    endforeach; 
-                    ?>
-                </tbody>
-            </table>
-            
-            <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 5px; border-left: 4px solid #03679e;">
-                <strong style="color: #03679e;">Legenda Valutazione:</strong><br>
-                <span style="color: #FFD700;">★★★★★</span> 4.5-5.0 = Eccellente<br>
-                <span style="color: #FFD700;">★★★★</span>☆ 3.5-4.4 = Molto Buono<br>
-                <span style="color: #FFD700;">★★★</span>☆☆ 2.5-3.4 = Adeguato<br>
-                <span style="color: #FFD700;">★★</span>☆☆☆ 1.5-2.4 = Critico<br>
-                <span style="color: #FFD700;">★</span>☆☆☆☆ 0.0-1.4 = Inadeguato
-            </div>
-        <?php endif; ?>
-    </div>
-    <?php
 }
 
 // ================== RENDERING PRINCIPALE ==================
