@@ -733,7 +733,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
         } elseif (empty($inspector_email)) {
             echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
         } else {
-            // Verifica che l'fornitore esista
+            // Verifica che il fornitore esista
             $user = get_userdata($target_user_id);
             if (!$user) {
                 echo '<div class="notice notice-error"><p>Fornitore non valido</p></div>';
@@ -1648,7 +1648,7 @@ function boq_renderAssignmentsTab() {
         <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 30px;">
             <h2>📤 Invia Questionario: <?php echo esc_html($questionnaire['title']); ?></h2>
             <p style="background: #e3f2fd; padding: 12px; border-left: 4px solid #03679e; margin-bottom: 20px;">
-                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato dell'fornitore selezionato.
+                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato del fornitore selezionato.
             </p>
             
             <form method="POST">
@@ -1683,7 +1683,7 @@ function boq_renderAssignmentsTab() {
                         <strong>Selezionato:</strong> <span id="boq-selected-user-name"></span>
                         <button type="button" onclick="boqClearUserSelection()" style="float: right; background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕ Cambia</button>
                     </div>
-                    <small style="color: #666; display: block; margin-top: 5px;">Cerca e seleziona l'fornitore il cui operato verrà valutato tramite questo questionario</small>
+                    <small style="color: #666; display: block; margin-top: 5px;">Cerca e seleziona il fornitore il cui operato verrà valutato tramite questo questionario</small>
                     
                     <script>
                     (function() {
@@ -2065,16 +2065,17 @@ function boq_renderStarRating($stars) {
     for ($i = 0; $i < $full_stars; $i++) {
         $html .= '★';
     }
+    $html .= '</span>';
     
-    // Half star (using a lighter star)
+    // Half star using Unicode character
     if ($half_star) {
-        $html .= '<span style="position: relative; display: inline-block;">★<span style="position: absolute; left: 0; width: 50%; overflow: hidden; color: #DDD;">★</span></span>';
+        $html .= '<span style="color: #FFD700; font-size: 20px; letter-spacing: 2px;">☆</span>';
     }
     
     // Empty stars
-    $html .= '</span><span style="color: #DDD; font-size: 20px; letter-spacing: 2px;">';
+    $html .= '<span style="color: #DDD; font-size: 20px; letter-spacing: 2px;">';
     for ($i = 0; $i < $empty_stars; $i++) {
-        $html .= '★';
+        $html .= '☆';
     }
     $html .= '</span>';
     

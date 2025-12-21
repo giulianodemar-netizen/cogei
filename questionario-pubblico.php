@@ -506,7 +506,7 @@ $hse_name = $hse_user ? $hse_user->display_name : 'Fornitore';
         <div class="hse-info">
             <p><strong>Fornitore Valutato:</strong> <?php echo esc_html($hse_name); ?></p>
             <p style="margin-top: 5px; font-size: 14px; color: #666;">
-                Questo questionario valuta l'operato dell'fornitore selezionato.
+                Questo questionario valuta l'operato del fornitore selezionato.
             </p>
         </div>
         
