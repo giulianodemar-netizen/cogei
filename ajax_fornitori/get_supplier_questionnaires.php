@@ -73,12 +73,18 @@ $assignments = $wpdb->get_results($wpdb->prepare("
         a.completed_at,
         q.title as questionnaire_title,
         q.description as questionnaire_description,
-        AVG(r.computed_score) as avg_score
+        (SELECT AVG(r2.computed_score) 
+         FROM {$wpdb->prefix}cogei_responses r2 
+         WHERE r2.assignment_id = a.id) as avg_score
     FROM {$wpdb->prefix}cogei_assignments a
     INNER JOIN {$wpdb->prefix}cogei_questionnaires q ON a.questionnaire_id = q.id
-    LEFT JOIN {$wpdb->prefix}cogei_responses r ON r.assignment_id = a.id
-    WHERE a.target_user_id = %d AND a.status = 'completed'
-    GROUP BY a.id
+    WHERE a.target_user_id = %d 
+      AND a.status = 'completed'
+      AND EXISTS (
+          SELECT 1 
+          FROM {$wpdb->prefix}cogei_responses r3 
+          WHERE r3.assignment_id = a.id
+      )
     ORDER BY a.completed_at DESC
 ", $user_id));
 
