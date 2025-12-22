@@ -1897,7 +1897,11 @@ function boq_renderResultsTab() {
                         <strong>Data Invio:</strong> <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
                     </div>
                     <div style="background: #f0f0f0; padding: 20px; border-radius: 5px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #03679e; margin-bottom: 10px;">
+                        <?php 
+                        $stars = boq_convertScoreToStars($score);
+                        echo boq_renderStarRating($stars); 
+                        ?>
+                        <div style="font-size: 2em; font-weight: bold; color: #03679e; margin: 15px 0 10px 0;">
                             <?php echo round($score, 4); ?> / 1.00
                         </div>
                         <div style="font-size: 1.5em; font-weight: bold; color: #4caf50;">
@@ -2008,7 +2012,13 @@ function boq_renderResultsTab() {
                     <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
                     <td style="padding: 12px;"><?php echo esc_html($hse_name); ?></td>
                     <td style="padding: 12px; text-align: center; font-weight: bold;">
-                        <?php echo round($score, 4); ?>
+                        <?php 
+                        $stars = boq_convertScoreToStars($score);
+                        echo boq_renderStarRating($stars); 
+                        ?>
+                        <div style="margin-top: 5px; color: #666; font-size: 13px;">
+                            <?php echo round($score, 4); ?> / 1.00
+                        </div>
                     </td>
                     <td style="padding: 12px; text-align: center;">
                         <span style="padding: 6px 16px; border-radius: 5px; background: <?php echo $eval_color; ?>; color: white; font-weight: bold;">

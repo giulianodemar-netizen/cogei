@@ -43,6 +43,59 @@ if (file_exists($wp_load_path)) {
 
 global $wpdb;
 
+/**
+ * Convert normalized score (0-1) to star rating (0-5)
+ * Uses half-star precision
+ */
+function boq_convertScoreToStars($score) {
+    // Convert 0-1 score to 0-5 scale
+    $stars = $score * 5;
+    
+    // Round to nearest 0.5
+    $stars = round($stars * 2) / 2;
+    
+    // Clamp between 0 and 5
+    $stars = max(0, min(5, $stars));
+    
+    return $stars;
+}
+
+/**
+ * Render star rating HTML
+ * @param float $stars - Number of stars (0-5, can have 0.5 increments)
+ * @return string HTML with star visualization
+ */
+function boq_renderStarRating($stars) {
+    $full_stars = floor($stars);
+    $half_star = ($stars - $full_stars) >= 0.5;
+    $empty_stars = 5 - $full_stars - ($half_star ? 1 : 0);
+    
+    $html = '<span style="color: #FFD700; font-size: 24px; letter-spacing: 2px;">';
+    
+    // Full stars
+    for ($i = 0; $i < $full_stars; $i++) {
+        $html .= '★';
+    }
+    $html .= '</span>';
+    
+    // Half star using Unicode character
+    if ($half_star) {
+        $html .= '<span style="color: #FFD700; font-size: 24px; letter-spacing: 2px;">☆</span>';
+    }
+    
+    // Empty stars
+    $html .= '<span style="color: #DDD; font-size: 24px; letter-spacing: 2px;">';
+    for ($i = 0; $i < $empty_stars; $i++) {
+        $html .= '☆';
+    }
+    $html .= '</span>';
+    
+    // Add numeric value
+    $html .= ' <span style="color: #666; font-size: 16px;">(' . number_format($stars, 1) . ')</span>';
+    
+    return $html;
+}
+
 // Verifica che ci sia un token
 if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
     ?>
@@ -158,6 +211,12 @@ if ($assignment['status'] === 'completed') {
         <div class="success">
             <h1>✅ Questionario Già Completato</h1>
             <p>Hai già completato questo questionario in data: <strong><?php echo esc_html(date('d/m/Y H:i', strtotime($responses[0]['answered_at']))); ?></strong></p>
+            <div style="margin: 20px 0;">
+                <?php 
+                $stars = boq_convertScoreToStars($final_score);
+                echo boq_renderStarRating($stars); 
+                ?>
+            </div>
             <div class="score <?php echo $eval_class; ?>">
                 <?php echo number_format($final_score * 100, 1); ?>%
             </div>
@@ -291,6 +350,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             <div class="success">
                 <h1>✅ Questionario Completato con Successo!</h1>
                 <p>Grazie per aver completato il questionario.</p>
+                <div style="margin: 20px 0;">
+                    <?php 
+                    $stars = boq_convertScoreToStars($final_score);
+                    echo boq_renderStarRating($stars); 
+                    ?>
+                </div>
                 <div class="score <?php echo $eval_class; ?>">
                     <?php echo number_format($final_score * 100, 1); ?>%
                 </div>
