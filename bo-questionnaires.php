@@ -725,45 +725,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
     if ($action === 'send_questionnaire') {
         $questionnaire_id = intval($_POST['questionnaire_id']);
         $target_user_id = intval($_POST['target_user_id']);
-        $inspector_email = sanitize_email($_POST['inspector_email']);
+        $inspector_emails_raw = isset($_POST['inspector_emails']) ? $_POST['inspector_emails'] : '';
+        
+        // Parse multiple emails - support both comma-separated and newline-separated
+        $inspector_emails_raw = str_replace([',', ';'], "\n", $inspector_emails_raw);
+        $inspector_emails_array = array_filter(array_map('trim', explode("\n", $inspector_emails_raw)));
+        
+        // Validate and sanitize emails
+        $valid_emails = [];
+        $invalid_emails = [];
+        foreach ($inspector_emails_array as $email) {
+            $sanitized = sanitize_email($email);
+            if (is_email($sanitized)) {
+                $valid_emails[] = $sanitized;
+            } else {
+                $invalid_emails[] = $email;
+            }
+        }
         
         // Validazione: target_user_id è obbligatorio
         if (empty($target_user_id) || $target_user_id <= 0) {
             echo '<div class="notice notice-error"><p>Devi selezionare un fornitore</p></div>';
-        } elseif (empty($inspector_email)) {
-            echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
+        } elseif (empty($valid_emails)) {
+            if (!empty($invalid_emails)) {
+                echo '<div class="notice notice-error"><p>Le email inserite non sono valide: ' . esc_html(implode(', ', $invalid_emails)) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
+            }
         } else {
             // Verifica che il fornitore esista
             $user = get_userdata($target_user_id);
             if (!$user) {
                 echo '<div class="notice notice-error"><p>Fornitore non valido</p></div>';
             } else {
-                $token = boq_generateToken();
+                $sent_count = 0;
+                $failed_emails = [];
                 
-                $assignment_data = [
-                    'questionnaire_id' => $questionnaire_id,
-                    'target_user_id' => $target_user_id,
-                    'inspector_email' => $inspector_email,
-                    'sent_by' => get_current_user_id(),
-                    'token' => $token,
-                    'status' => 'pending'
-                ];
+                // Crea un assignment separato per ogni email ispettore
+                foreach ($valid_emails as $inspector_email) {
+                    $token = boq_generateToken();
+                    
+                    $assignment_data = [
+                        'questionnaire_id' => $questionnaire_id,
+                        'target_user_id' => $target_user_id,
+                        'inspector_email' => $inspector_email,
+                        'sent_by' => get_current_user_id(),
+                        'token' => $token,
+                        'status' => 'pending'
+                    ];
+                    
+                    $wpdb->insert(
+                        $wpdb->prefix . 'cogei_assignments',
+                        $assignment_data,
+                        ['%d', '%d', '%s', '%d', '%s', '%s']
+                    );
+                    
+                    $assignment_id = $wpdb->insert_id;
+                    
+                    // Invia email
+                    $email_sent = boq_sendQuestionnaireEmail($assignment_id);
+                    
+                    if ($email_sent) {
+                        $sent_count++;
+                    } else {
+                        $failed_emails[] = $inspector_email;
+                    }
+                }
                 
-                $wpdb->insert(
-                    $wpdb->prefix . 'cogei_assignments',
-                    $assignment_data,
-                    ['%d', '%d', '%s', '%d', '%s', '%s']
-                );
-                
-                $assignment_id = $wpdb->insert_id;
-                
-                // Invia email
-                $email_sent = boq_sendQuestionnaireEmail($assignment_id);
-                
-                if ($email_sent) {
-                    echo '<div class="notice notice-success"><p>Questionario inviato con successo a ' . esc_html($inspector_email) . ' per valutare l\'fornitore: ' . esc_html($user->display_name) . '</p></div>';
+                // Mostra messaggio di successo/warning
+                if ($sent_count > 0) {
+                    $msg = "Questionario inviato con successo a <strong>" . $sent_count . " ispettore/i</strong> per valutare il fornitore: <strong>" . esc_html($user->display_name) . "</strong>";
+                    if ($sent_count > 1) {
+                        $msg .= "<br><small>Sono state create " . $sent_count . " valutazioni distinte (una per ispettore)</small>";
+                    }
+                    if (!empty($failed_emails)) {
+                        $msg .= "<br><span style='color: #856404;'>⚠️ Email non inviate a: " . esc_html(implode(', ', $failed_emails)) . "</span>";
+                    }
+                    echo '<div class="notice notice-success"><p>' . $msg . '</p></div>';
                 } else {
-                    echo '<div class="notice notice-warning"><p>Questionario creato ma email non inviata. Token: ' . esc_html($token) . '</p></div>';
+                    echo '<div class="notice notice-error"><p>Errore: nessuna email inviata</p></div>';
+                }
+                
+                // Mostra avviso se ci sono email invalide
+                if (!empty($invalid_emails)) {
+                    echo '<div class="notice notice-warning"><p>⚠️ Le seguenti email non sono valide e sono state ignorate: ' . esc_html(implode(', ', $invalid_emails)) . '</p></div>';
                 }
             }
         }
@@ -1648,7 +1693,8 @@ function boq_renderAssignmentsTab() {
         <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 30px;">
             <h2>📤 Invia Questionario: <?php echo esc_html($questionnaire['title']); ?></h2>
             <p style="background: #e3f2fd; padding: 12px; border-left: 4px solid #03679e; margin-bottom: 20px;">
-                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato del fornitore selezionato.
+                <strong>Nota:</strong> Il questionario verrà inviato agli ispettori per valutare l'operato del fornitore selezionato.<br>
+                <small>💡 Puoi inserire più email ispettore: ogni ispettore riceverà un questionario separato e verrà creata una valutazione distinta nella tabella "Storico Invii".</small>
             </p>
             
             <form method="POST">
@@ -1759,12 +1805,15 @@ function boq_renderAssignmentsTab() {
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
-                        Email Ispettore * <span style="color: red;">(Obbligatorio)</span>
+                        Email Ispettore/i * <span style="color: red;">(Obbligatorio)</span>
                     </label>
-                    <input type="email" name="inspector_email" required
-                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
-                           placeholder="ispettore@example.com">
-                    <small style="color: #666;">Inserisci l'email dell'ispettore che compilerà il questionario di valutazione</small>
+                    <textarea name="inspector_emails" required rows="3"
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-family: inherit;"
+                           placeholder="ispettore1@example.com&#10;ispettore2@example.com&#10;ispettore3@example.com"></textarea>
+                    <small style="color: #666;">
+                        💡 <strong>Più ispettori:</strong> Inserisci una email per riga o separale con virgola. 
+                        Ogni ispettore riceverà un questionario separato e verrà creata una valutazione distinta per ciascuno.
+                    </small>
                 </div>
                 
                 <button type="submit" style="background: #4caf50; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em;">
