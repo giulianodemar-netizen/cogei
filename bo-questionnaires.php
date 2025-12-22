@@ -508,11 +508,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                 ['%s', '%s', '%s', '%d']
             );
             $questionnaire_id = $wpdb->insert_id;
-            $message = "Questionario creato con successo (ID: $questionnaire_id)";
             
             // Redirect to edit mode to add areas and questions
-            echo '<div class="notice notice-success"><p>' . esc_html($message) . '</p></div>';
-            echo '<script>window.location.href = "?boq_tab=questionnaires&edit=' . $questionnaire_id . '";</script>';
+            wp_redirect(add_query_arg([
+                'boq_tab' => 'questionnaires',
+                'edit' => $questionnaire_id
+            ]));
             exit;
         }
         
