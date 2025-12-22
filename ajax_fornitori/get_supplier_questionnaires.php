@@ -70,7 +70,7 @@ global $wpdb;
 $assignments = $wpdb->get_results($wpdb->prepare("
     SELECT 
         a.id as assignment_id,
-        a.completed_at,
+        a.sent_at,
         q.title as questionnaire_title,
         q.description as questionnaire_description,
         (SELECT AVG(r2.computed_score) 
@@ -85,7 +85,7 @@ $assignments = $wpdb->get_results($wpdb->prepare("
           FROM {$wpdb->prefix}cogei_responses r3 
           WHERE r3.assignment_id = a.id
       )
-    ORDER BY a.completed_at DESC
+    ORDER BY a.sent_at DESC
 ", $user_id));
 
 if (empty($assignments)) {
@@ -145,7 +145,7 @@ foreach ($assignments as $assignment) {
     $stars = convertScoreToStars($assignment->avg_score);
     $evaluation = getEvaluationText($stars);
     $color = getEvaluationColor($stars);
-    $date = date('d/m/Y', strtotime($assignment->completed_at));
+    $date = date('d/m/Y', strtotime($assignment->sent_at));
     
     $html .= '<div style="border-bottom: 1px solid #e0e0e0; padding: 20px; margin-bottom: 10px; background: #fff;">';
     $html .= '<div style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 10px;">● ' . esc_html($assignment->questionnaire_title) . '</div>';
