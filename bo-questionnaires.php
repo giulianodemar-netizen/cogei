@@ -1446,7 +1446,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                                 <div style="color: #999; font-size: 1.2em; cursor: move; padding: 5px;">☰</div>
                                 <div style="flex: 1;">
                                     <textarea onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'text', this.value)" 
-                                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2">${boqEsc(question.text)}</textarea>
+                                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2" placeholder="Inserisci il testo della domanda">${boqEsc(question.text)}</textarea>
                                     <div style="margin-top: 5px;">
                                         <label>
                                             <input type="checkbox" ${question.is_required ? 'checked' : ''} onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'is_required', this.checked ? 1 : 0)"> 
@@ -1571,7 +1571,7 @@ function boq_renderAreasEditor($questionnaire_id) {
     function boqAddArea() {
         boqEditorState.push({
             id: boqNextTempId--,
-            title: 'Nuova Area',
+            title: '',
             weight: 1.00,
             sort_order: boqEditorState.length,
             questions: []
@@ -1594,7 +1594,7 @@ function boq_renderAreasEditor($questionnaire_id) {
         if (!boqEditorState[areaIdx].questions) boqEditorState[areaIdx].questions = [];
         boqEditorState[areaIdx].questions.push({
             id: boqNextTempId--,
-            text: 'Nuova Domanda',
+            text: '',
             is_required: 1,
             sort_order: boqEditorState[areaIdx].questions.length,
             options: []
@@ -1617,7 +1617,7 @@ function boq_renderAreasEditor($questionnaire_id) {
         if (!boqEditorState[areaIdx].questions[qIdx].options) boqEditorState[areaIdx].questions[qIdx].options = [];
         boqEditorState[areaIdx].questions[qIdx].options.push({
             id: boqNextTempId--,
-            text: 'Nuova Opzione',
+            text: '',
             weight: 0.00,
             sort_order: boqEditorState[areaIdx].questions[qIdx].options.length
         });
