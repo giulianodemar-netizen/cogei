@@ -2086,6 +2086,205 @@ function boq_renderStarRating($stars) {
 }
 
 /**
+ * AJAX Handler: Get supplier questionnaires
+ */
+add_action('wp_ajax_boq_get_supplier_questionnaires', 'boq_ajax_get_supplier_questionnaires');
+function boq_ajax_get_supplier_questionnaires() {
+    global $wpdb;
+    
+    if (!isset($_POST['user_id'])) {
+        wp_send_json_error('Missing user ID');
+    }
+    
+    $user_id = intval($_POST['user_id']);
+    
+    // Get all completed questionnaires for this supplier
+    $query = "
+        SELECT 
+            a.id as assignment_id,
+            a.sent_at,
+            a.status,
+            q.title as questionnaire_title,
+            AVG(r.computed_score) as avg_score
+        FROM {$wpdb->prefix}cogei_assignments a
+        INNER JOIN {$wpdb->prefix}cogei_questionnaires q ON q.id = a.questionnaire_id
+        LEFT JOIN {$wpdb->prefix}cogei_responses r ON r.assignment_id = a.id
+        WHERE a.target_user_id = %d AND a.status = 'completed'
+        GROUP BY a.id
+        ORDER BY a.sent_at DESC
+    ";
+    
+    $questionnaires = $wpdb->get_results($wpdb->prepare($query, $user_id), ARRAY_A);
+    
+    if (empty($questionnaires)) {
+        $html = '<div style="padding: 20px; text-align: center; color: #999;">Nessun questionario completato trovato.</div>';
+    } else {
+        $html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+        
+        foreach ($questionnaires as $q) {
+            $score = floatval($q['avg_score']);
+            $stars = boq_convertScoreToStars($score);
+            $star_html = boq_renderStarRating($stars);
+            
+            // Determine evaluation
+            if ($stars >= 4.5) {
+                $evaluation = 'Eccellente';
+                $eval_color = '#4caf50';
+            } elseif ($stars >= 3.5) {
+                $evaluation = 'Molto Buono';
+                $eval_color = '#8bc34a';
+            } elseif ($stars >= 2.5) {
+                $evaluation = 'Adeguato';
+                $eval_color = '#ffc107';
+            } elseif ($stars >= 1.5) {
+                $evaluation = 'Critico';
+                $eval_color = '#ff9800';
+            } else {
+                $evaluation = 'Inadeguato';
+                $eval_color = '#f44336';
+            }
+            
+            $date = date('d/m/Y', strtotime($q['sent_at']));
+            
+            $html .= '<div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 20px; background: #f9f9f9; transition: box-shadow 0.3s;" onmouseover="this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.15)\'" onmouseout="this.style.boxShadow=\'none\'">';
+            $html .= '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">';
+            $html .= '<h3 style="margin: 0; color: #333; font-size: 18px;">● ' . esc_html($q['questionnaire_title']) . '</h3>';
+            $html .= '<span style="background: ' . $eval_color . '; color: white; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: bold;">' . $evaluation . '</span>';
+            $html .= '</div>';
+            $html .= '<div style="margin: 12px 0;">' . $star_html . '</div>';
+            $html .= '<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">';
+            $html .= '<span style="color: #666; font-size: 14px;">📅 ' . $date . '</span>';
+            $html .= '<button onclick="boqOpenDetails(' . $q['assignment_id'] . ')" style="background: #03679e; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold; transition: background 0.3s;" onmouseover="this.style.background=\'#025a85\'" onmouseout="this.style.background=\'#03679e\'">👁️ Vedi Dettaglio</button>';
+            $html .= '</div>';
+            $html .= '</div>';
+        }
+        
+        $html .= '</div>';
+    }
+    
+    wp_send_json_success(['html' => $html]);
+}
+
+/**
+ * AJAX Handler: Get questionnaire details
+ */
+add_action('wp_ajax_boq_get_questionnaire_details', 'boq_ajax_get_questionnaire_details');
+function boq_ajax_get_questionnaire_details() {
+    global $wpdb;
+    
+    if (!isset($_POST['assignment_id'])) {
+        wp_send_json_error('Missing assignment ID');
+    }
+    
+    $assignment_id = intval($_POST['assignment_id']);
+    
+    // Get assignment details
+    $assignment = $wpdb->get_row($wpdb->prepare(
+        "SELECT a.*, q.title as questionnaire_title, q.description 
+         FROM {$wpdb->prefix}cogei_assignments a
+         INNER JOIN {$wpdb->prefix}cogei_questionnaires q ON q.id = a.questionnaire_id
+         WHERE a.id = %d",
+        $assignment_id
+    ), ARRAY_A);
+    
+    if (!$assignment) {
+        wp_send_json_error('Assignment not found');
+    }
+    
+    // Get questionnaire structure with responses
+    $areas = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d ORDER BY sort_order",
+        $assignment['questionnaire_id']
+    ), ARRAY_A);
+    
+    $html = '<h2 style="color: #03679e; margin-bottom: 20px;">📋 ' . esc_html($assignment['questionnaire_title']) . '</h2>';
+    
+    if ($assignment['description']) {
+        $html .= '<p style="color: #666; margin-bottom: 20px; padding: 15px; background: #f0f7ff; border-left: 4px solid #03679e; border-radius: 4px;">' . esc_html($assignment['description']) . '</p>';
+    }
+    
+    // Calculate overall score
+    $avg_score = $wpdb->get_var($wpdb->prepare(
+        "SELECT AVG(computed_score) FROM {$wpdb->prefix}cogei_responses WHERE assignment_id = %d",
+        $assignment_id
+    ));
+    
+    if ($avg_score) {
+        $stars = boq_convertScoreToStars(floatval($avg_score));
+        $star_html = boq_renderStarRating($stars);
+        
+        // Determine evaluation
+        if ($stars >= 4.5) {
+            $evaluation = 'Eccellente';
+            $eval_color = '#4caf50';
+        } elseif ($stars >= 3.5) {
+            $evaluation = 'Molto Buono';
+            $eval_color = '#8bc34a';
+        } elseif ($stars >= 2.5) {
+            $evaluation = 'Adeguato';
+            $eval_color = '#ffc107';
+        } elseif ($stars >= 1.5) {
+            $evaluation = 'Critico';
+            $eval_color = '#ff9800';
+        } else {
+            $evaluation = 'Inadeguato';
+            $eval_color = '#f44336';
+        }
+        
+        $html .= '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 25px; text-align: center;">';
+        $html .= '<div style="font-size: 18px; margin-bottom: 10px;">Valutazione Complessiva</div>';
+        $html .= '<div style="font-size: 24px; margin-bottom: 10px;">' . $star_html . '</div>';
+        $html .= '<div style="font-size: 28px; font-weight: bold; margin-bottom: 5px;">' . number_format($avg_score, 3) . ' / 1.000</div>';
+        $html .= '<div style="background: ' . $eval_color . '; display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 18px; font-weight: bold;">' . $evaluation . '</div>';
+        $html .= '</div>';
+    }
+    
+    $html .= '<div style="margin-top: 25px;">';
+    
+    foreach ($areas as $area) {
+        $questions = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}cogei_questions WHERE area_id = %d ORDER BY sort_order",
+            $area['id']
+        ), ARRAY_A);
+        
+        $html .= '<div style="border: 2px solid #03679e; border-radius: 8px; padding: 20px; margin-bottom: 20px; background: white;">';
+        $html .= '<h3 style="color: #03679e; margin: 0 0 15px 0; font-size: 20px; border-bottom: 2px solid #03679e; padding-bottom: 10px;">📍 ' . esc_html($area['title']) . ' <span style="color: #999; font-size: 14px;">(Peso: ' . $area['weight'] . ')</span></h3>';
+        
+        foreach ($questions as $question) {
+            // Get response for this question
+            $response = $wpdb->get_row($wpdb->prepare(
+                "SELECT r.*, o.text as option_text, o.weight as option_weight
+                 FROM {$wpdb->prefix}cogei_responses r
+                 INNER JOIN {$wpdb->prefix}cogei_options o ON o.id = r.selected_option_id
+                 WHERE r.assignment_id = %d AND r.question_id = %d",
+                $assignment_id,
+                $question['id']
+            ), ARRAY_A);
+            
+            $html .= '<div style="padding: 15px; background: #f9f9f9; border-radius: 5px; margin-bottom: 10px;">';
+            $html .= '<div style="font-weight: bold; color: #333; margin-bottom: 8px;">❓ ' . esc_html($question['text']) . '</div>';
+            
+            if ($response) {
+                $html .= '<div style="padding-left: 20px;">';
+                $html .= '<div style="color: #03679e; font-weight: bold;">✓ ' . esc_html($response['option_text']) . ' <span style="color: #999; font-size: 13px;">(Peso opzione: ' . $response['option_weight'] . ')</span></div>';
+                $html .= '<div style="color: #666; font-size: 14px; margin-top: 5px;">Punteggio calcolato: <strong>' . number_format($response['computed_score'], 3) . '</strong></div>';
+                $html .= '</div>';
+            } else {
+                $html .= '<div style="color: #999; padding-left: 20px;">Nessuna risposta</div>';
+            }
+            
+            $html .= '</div>';
+        }
+        
+        $html .= '</div>';
+    }
+    
+    $html .= '</div>';
+    
+    wp_send_json_success(['html' => $html]);
+}
+
+/**
  * Tab: Votazioni Albo Fornitori
  * Shows supplier rankings based on average questionnaire scores
  */
@@ -2173,9 +2372,21 @@ function boq_renderRatingsTab() {
                             ?>
                         </td>
                         <td style="padding: 15px;">
-                            <strong style="font-size: 16px; color: #333;"><?php echo esc_html($user_name); ?></strong>
+                            <?php 
+                            $ragione_sociale = get_user_meta($result['user_id'], 'user_registration_rag_soc', true);
+                            $piva = $user ? $user->display_name : '';
+                            $email = $user ? $user->user_email : '';
+                            $display_name = $ragione_sociale ? $ragione_sociale : $user_name;
+                            ?>
+                            <strong style="font-size: 16px; color: #333;">🏢 <?php echo esc_html($display_name); ?></strong>
                             <br>
-                            <span style="color: #999; font-size: 13px;">ID: <?php echo $result['user_id']; ?></span>
+                            <?php if ($piva): ?>
+                            <span style="color: #666; font-size: 13px;">🔢 P.IVA: <?php echo esc_html($piva); ?></span>
+                            <br>
+                            <?php endif; ?>
+                            <?php if ($email): ?>
+                            <span style="color: #999; font-size: 12px;">📧 <?php echo esc_html($email); ?></span>
+                            <?php endif; ?>
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <?php echo boq_renderStarRating($stars); ?>
@@ -2188,9 +2399,16 @@ function boq_renderRatingsTab() {
                             <span style="color: #999; font-size: 12px;">/ 1.000</span>
                         </td>
                         <td style="padding: 15px; text-align: center;">
-                            <span style="background: #03679e; color: white; padding: 5px 12px; border-radius: 15px; font-weight: bold;">
+                            <a href="#" 
+                               class="boq-questionnaire-count" 
+                               data-user-id="<?php echo $result['user_id']; ?>"
+                               data-user-name="<?php echo esc_attr($display_name); ?>"
+                               style="background: #03679e; color: white; padding: 5px 12px; border-radius: 15px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: background 0.3s;"
+                               onmouseover="this.style.background='#025a85'"
+                               onmouseout="this.style.background='#03679e'"
+                               onclick="boqOpenQuestionnaireModal(event, <?php echo $result['user_id']; ?>, '<?php echo esc_js($display_name); ?>')">
                                 <?php echo $result['completed_questionnaires']; ?>
-                            </span>
+                            </a>
                         </td>
                     </tr>
                     <?php 
@@ -2209,6 +2427,109 @@ function boq_renderRatingsTab() {
                 <span style="color: #FFD700;">★</span>☆☆☆☆ 0.0-1.4 = Inadeguato
             </div>
         <?php endif; ?>
+        
+        <!-- Modal for Questionnaire List -->
+        <div id="boqQuestionnaireModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 10px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; padding: 30px; position: relative;">
+                <button onclick="boqCloseModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold;">×</button>
+                <h2 id="boqModalTitle" style="color: #03679e; margin-bottom: 20px; padding-right: 40px;">📊 Questionari</h2>
+                <div id="boqModalContent" style="min-height: 100px;">
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        Caricamento in corso...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal for Questionnaire Details -->
+        <div id="boqDetailsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 10px; max-width: 900px; width: 95%; max-height: 85vh; overflow-y: auto; padding: 30px; position: relative;">
+                <button onclick="boqCloseDetailsModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold;">×</button>
+                <div id="boqDetailsContent" style="min-height: 200px;">
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        Caricamento dettagli...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        function boqOpenQuestionnaireModal(event, userId, userName) {
+            event.preventDefault();
+            const modal = document.getElementById('boqQuestionnaireModal');
+            const title = document.getElementById('boqModalTitle');
+            const content = document.getElementById('boqModalContent');
+            
+            title.innerHTML = '📊 Questionari di ' + userName;
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #03679e; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Caricamento...</p></div>';
+            modal.style.display = 'flex';
+            
+            // AJAX request to get questionnaires
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'action=boq_get_supplier_questionnaires&user_id=' + userId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    content.innerHTML = data.data.html;
+                } else {
+                    content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + (data.data || 'Impossibile caricare i dati') + '</div>';
+                }
+            })
+            .catch(error => {
+                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore di connessione</div>';
+            });
+        }
+        
+        function boqCloseModal() {
+            document.getElementById('boqQuestionnaireModal').style.display = 'none';
+        }
+        
+        function boqOpenDetails(assignmentId) {
+            const modal = document.getElementById('boqDetailsModal');
+            const content = document.getElementById('boqDetailsContent');
+            
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #03679e; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Caricamento dettagli...</p></div>';
+            modal.style.display = 'flex';
+            
+            // AJAX request to get questionnaire details
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'action=boq_get_questionnaire_details&assignment_id=' + assignmentId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    content.innerHTML = data.data.html;
+                } else {
+                    content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore nel caricamento</div>';
+                }
+            })
+            .catch(error => {
+                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore di connessione</div>';
+            });
+        }
+        
+        function boqCloseDetailsModal() {
+            document.getElementById('boqDetailsModal').style.display = 'none';
+        }
+        
+        // Close modals on click outside
+        document.getElementById('boqQuestionnaireModal')?.addEventListener('click', function(e) {
+            if (e.target === this) boqCloseModal();
+        });
+        document.getElementById('boqDetailsModal')?.addEventListener('click', function(e) {
+            if (e.target === this) boqCloseDetailsModal();
+        });
+        
+        // Add spinner animation
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+        </script>
     </div>
     <?php
 }

@@ -323,6 +323,10 @@ $areas = $wpdb->get_results($wpdb->prepare(
 // Recupera info fornitore
 $hse_user = get_userdata($assignment['target_user_id']);
 $hse_name = $hse_user ? $hse_user->display_name : 'Fornitore';
+$ragione_sociale = get_user_meta($assignment['target_user_id'], 'user_registration_rag_soc', true);
+$fornitore_piva = $hse_user ? $hse_user->display_name : '';
+$fornitore_email = $hse_user ? $hse_user->user_email : '';
+$fornitore_display_name = $ragione_sociale ? $ragione_sociale : ($hse_user ? $hse_user->display_name : 'Fornitore');
 
 ?>
 <!DOCTYPE html>
@@ -504,8 +508,21 @@ $hse_name = $hse_user ? $hse_user->display_name : 'Fornitore';
         </div>
         
         <div class="hse-info">
-            <p><strong>Fornitore Valutato:</strong> <?php echo esc_html($hse_name); ?></p>
-            <p style="margin-top: 5px; font-size: 14px; color: #666;">
+            <p style="font-size: 18px; margin-bottom: 10px;">
+                <strong>🏢 Fornitore Valutato:</strong> 
+                <span style="color: #03679e; font-size: 20px;"><?php echo esc_html($fornitore_display_name); ?></span>
+            </p>
+            <?php if ($fornitore_piva): ?>
+            <p style="margin-top: 8px; font-size: 15px;">
+                <strong>🔢 P.IVA:</strong> <?php echo esc_html($fornitore_piva); ?>
+            </p>
+            <?php endif; ?>
+            <?php if ($fornitore_email): ?>
+            <p style="margin-top: 8px; font-size: 15px;">
+                <strong>📧 Email:</strong> <?php echo esc_html($fornitore_email); ?>
+            </p>
+            <?php endif; ?>
+            <p style="margin-top: 10px; font-size: 14px; color: #666;">
                 Questo questionario valuta l'operato del fornitore selezionato.
             </p>
         </div>
