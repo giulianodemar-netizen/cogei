@@ -509,6 +509,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
             );
             $questionnaire_id = $wpdb->insert_id;
             $message = "Questionario creato con successo (ID: $questionnaire_id)";
+            
+            // Redirect to edit mode to add areas and questions
+            echo '<div class="notice notice-success"><p>' . esc_html($message) . '</p></div>';
+            echo '<script>window.location.href = "?boq_tab=questionnaires&edit=' . $questionnaire_id . '";</script>';
+            exit;
         }
         
         echo '<div class="notice notice-success"><p>' . esc_html($message) . '</p></div>';
@@ -1378,7 +1383,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                         <div style="margin-top: 8px;">
                             <label>
                                 Peso: <input type="number" step="0.01" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
-                                       style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
+                                       style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;" placeholder="1.00">
                             </label>
                         </div>
                     </div>
@@ -1527,7 +1532,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                                        style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
                                 <label style="display: flex; align-items: center; gap: 5px;">
                                     Peso: <input type="number" step="0.01" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
-                                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
+                                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="0.00">
                                 </label>
                                 <button onclick="boqDeleteOption(${areaIdx}, ${qIdx}, ${oIdx})" style="background: #f44336; color: white; padding: 4px 10px; border: none; border-radius: 3px; cursor: pointer;">✕</button>
                             `;
