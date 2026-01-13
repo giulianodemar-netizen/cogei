@@ -75,7 +75,10 @@ $assignments = $wpdb->get_results($wpdb->prepare("
         q.description as questionnaire_description,
         (SELECT AVG(r2.computed_score) 
          FROM {$wpdb->prefix}cogei_responses r2 
-         WHERE r2.assignment_id = a.id) as avg_score
+         WHERE r2.assignment_id = a.id) as avg_score,
+        (SELECT MAX(r2.answered_at)
+         FROM {$wpdb->prefix}cogei_responses r2
+         WHERE r2.assignment_id = a.id) as completion_date
     FROM {$wpdb->prefix}cogei_assignments a
     INNER JOIN {$wpdb->prefix}cogei_questionnaires q ON a.questionnaire_id = q.id
     WHERE a.target_user_id = %d 
@@ -145,7 +148,7 @@ foreach ($assignments as $assignment) {
     $stars = convertScoreToStars($assignment->avg_score);
     $evaluation = getEvaluationText($stars);
     $color = getEvaluationColor($stars);
-    $date = date('d/m/Y', strtotime($assignment->sent_at));
+    $completion_date = $assignment->completion_date ? date('d/m/Y H:i', strtotime($assignment->completion_date)) : '-';
     
     $html .= '<div style="border-bottom: 1px solid #e0e0e0; padding: 20px; margin-bottom: 10px; background: #fff;">';
     $html .= '<div style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 10px;">● ' . esc_html($assignment->questionnaire_title) . '</div>';
@@ -158,7 +161,7 @@ foreach ($assignments as $assignment) {
     
     // Data e pulsante
     $html .= '<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">';
-    $html .= '<div style="color: #666; font-size: 14px;">📅 ' . $date . '</div>';
+    $html .= '<div style="color: #666; font-size: 14px;">📅 Completato: ' . $completion_date . '</div>';
     $html .= '<button onclick="boqOpenDetails(' . $assignment->assignment_id . ')" style="background: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">';
     $html .= '👁️ Vedi Dettaglio</button>';
     $html .= '</div>';

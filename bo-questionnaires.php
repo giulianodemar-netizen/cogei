@@ -161,12 +161,19 @@ function boq_createQuestionnaireTablesIfNotExists() {
         selected_option_id int(11) NOT NULL,
         computed_score decimal(10,4) DEFAULT 0.0000,
         answered_at datetime DEFAULT CURRENT_TIMESTAMP,
+        is_na tinyint(1) DEFAULT 0,
         PRIMARY KEY (id),
         KEY assignment_id (assignment_id),
         KEY question_id (question_id),
         KEY selected_option_id (selected_option_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_responses);
+    
+    // Add is_na column if it doesn't exist (migration for existing tables)
+    $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_responses LIKE 'is_na'");
+    if (empty($column_exists)) {
+        $wpdb->query("ALTER TABLE $table_responses ADD COLUMN is_na tinyint(1) DEFAULT 0 AFTER answered_at");
+    }
     
     error_log("Tabelle questionari create/verificate: $table_questionnaires, $table_areas, $table_questions, $table_options, $table_assignments, $table_responses");
 }
@@ -272,6 +279,12 @@ function boq_calculateScore($assignment_id) {
         $question_id = $response['question_id'];
         $option_id = $response['selected_option_id'];
         
+        // Check if response is marked as N.A. (to be excluded from calculation)
+        $is_na = isset($response['is_na']) && $response['is_na'] == 1;
+        if ($is_na) {
+            continue; // Skip N.A. marked responses
+        }
+        
         // Ottieni peso opzione
         $option = $wpdb->get_row($wpdb->prepare(
             "SELECT weight FROM {$wpdb->prefix}cogei_options WHERE id = %d",
@@ -279,11 +292,6 @@ function boq_calculateScore($assignment_id) {
         ), ARRAY_A);
         
         if (!$option) continue;
-        
-        // Skip N.A. answers (weight = 0) - they should not affect the score
-        if (floatval($option['weight']) == 0) {
-            continue;
-        }
         
         // Ottieni area della domanda
         $question = $wpdb->get_row($wpdb->prepare(
@@ -1853,6 +1861,7 @@ function boq_renderAssignmentsTab() {
                 <th style="padding: 12px; text-align: left;">Fornitore</th>
                 <th style="padding: 12px; text-align: left;">Email Valutatore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
+                <th style="padding: 12px; text-align: left;">Data Compilazione</th>
                 <th style="padding: 12px; text-align: center;">Stato</th>
                 <th style="padding: 12px; text-align: left;">Link Questionario</th>
                 <th style="padding: 12px; text-align: center;">Azioni</th>
@@ -1861,7 +1870,8 @@ function boq_renderAssignmentsTab() {
         <tbody>
             <?php
             $assignments = $wpdb->get_results("
-                SELECT a.*, q.title as questionnaire_title 
+                SELECT a.*, q.title as questionnaire_title,
+                       (SELECT MAX(r.answered_at) FROM {$wpdb->prefix}cogei_responses r WHERE r.assignment_id = a.id) as completion_date
                 FROM {$wpdb->prefix}cogei_assignments a
                 LEFT JOIN {$wpdb->prefix}cogei_questionnaires q ON a.questionnaire_id = q.id
                 ORDER BY a.sent_at DESC
@@ -1870,12 +1880,15 @@ function boq_renderAssignmentsTab() {
             
             foreach ($assignments as $assignment):
                 $hse_user_name = 'N/A';
+                $ragione_sociale = '';
                 if ($assignment['target_user_id']) {
                     $user = get_userdata($assignment['target_user_id']);
                     if ($user) {
                         $hse_user_name = $user->display_name;
+                        $ragione_sociale = get_user_meta($user->ID, 'user_registration_rag_soc', true);
                     }
                 }
+                $display_fornitore = $ragione_sociale ? $ragione_sociale . " (P.IVA: " . $hse_user_name . ")" : $hse_user_name;
                 
                 // Genera link questionario - punta al file standalone /questionario/ (usa site_url perché la cartella è dentro l'installazione WP)
                 $questionnaire_link = add_query_arg('boq_token', $assignment['token'], site_url('/questionario/'));
@@ -1883,9 +1896,18 @@ function boq_renderAssignmentsTab() {
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                 <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
-                <td style="padding: 12px;"><?php echo esc_html($hse_user_name); ?></td>
+                <td style="padding: 12px;"><?php echo esc_html($display_fornitore); ?></td>
                 <td style="padding: 12px;"><?php echo esc_html($assignment['inspector_email']); ?></td>
                 <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?></td>
+                <td style="padding: 12px;">
+                    <?php 
+                    if ($assignment['completion_date']) {
+                        echo date('d/m/Y H:i', strtotime($assignment['completion_date']));
+                    } else {
+                        echo '<span style="color: #999;">-</span>';
+                    }
+                    ?>
+                </td>
                 <td style="padding: 12px; text-align: center;">
                     <?php
                     $status_colors = [
@@ -2039,7 +2061,8 @@ function boq_renderResultsTab() {
                     <th style="padding: 12px; text-align: left;">Fornitore</th>
                     <th style="padding: 12px; text-align: center;">Punteggio</th>
                     <th style="padding: 12px; text-align: center;">Valutazione</th>
-                    <th style="padding: 12px; text-align: center;">Data</th>
+                    <th style="padding: 12px; text-align: center;">Data Invio</th>
+                    <th style="padding: 12px; text-align: center;">Data Compilazione</th>
                     <th style="padding: 12px; text-align: center;">Azioni</th>
                 </tr>
             </thead>
@@ -2061,6 +2084,8 @@ function boq_renderResultsTab() {
                     
                     $hse_user = get_userdata($assignment['target_user_id']);
                     $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+                    $ragione_sociale = $hse_user ? get_user_meta($hse_user->ID, 'user_registration_rag_soc', true) : '';
+                    $display_fornitore = $ragione_sociale ? $ragione_sociale . " (P.IVA: " . $hse_name . ")" : $hse_name;
                     
                     // Colore valutazione
                     $eval_colors = [
@@ -2075,7 +2100,7 @@ function boq_renderResultsTab() {
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                     <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
-                    <td style="padding: 12px;"><?php echo esc_html($hse_name); ?></td>
+                    <td style="padding: 12px;"><?php echo esc_html($display_fornitore); ?></td>
                     <td style="padding: 12px; text-align: center; font-weight: bold;">
                         <?php 
                         $stars = boq_convertScoreToStars($score);
@@ -2091,9 +2116,15 @@ function boq_renderResultsTab() {
                         </span>
                     </td>
                     <td style="padding: 12px; text-align: center;">
+                        <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
                         <?php 
-                        $date_to_show = $assignment['completion_date'] ? $assignment['completion_date'] : $assignment['sent_at'];
-                        echo date('d/m/Y H:i', strtotime($date_to_show)); 
+                        if ($assignment['completion_date']) {
+                            echo date('d/m/Y H:i', strtotime($assignment['completion_date']));
+                        } else {
+                            echo '<span style="color: #999;">-</span>';
+                        }
                         ?>
                     </td>
                     <td style="padding: 12px; text-align: center;">
