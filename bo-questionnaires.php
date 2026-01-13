@@ -280,6 +280,11 @@ function boq_calculateScore($assignment_id) {
         
         if (!$option) continue;
         
+        // Skip N.A. answers (weight = 0) - they should not affect the score
+        if (floatval($option['weight']) == 0) {
+            continue;
+        }
+        
         // Ottieni area della domanda
         $question = $wpdb->get_row($wpdb->prepare(
             "SELECT area_id FROM {$wpdb->prefix}cogei_questions WHERE id = %d",
@@ -358,6 +363,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     // Get supplier (fornitore) user info
     $hse_user = get_userdata($assignment['target_user_id']);
     $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+    $ragione_sociale = $hse_user ? get_user_meta($hse_user->ID, 'user_registration_rag_soc', true) : '';
+    $supplier_display = $ragione_sociale ? $ragione_sociale . " (P.IVA: " . $hse_name . ")" : $hse_name;
     
     $token = $assignment['token'];
     $inspector_email = $assignment['inspector_email'];
@@ -376,8 +383,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
 <div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'>
     <img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' />
 </div>
-<p>Gentile Ispettore,</p>
-<p>Le è stato assegnato il seguente questionario per valutare il fornitore: <strong>" . esc_html($hse_name) . "</strong></p>
+<p>Gentile Valutatore,</p>
+<p>Le è stato assegnato il seguente questionario per valutare il fornitore: <strong>" . esc_html($supplier_display) . "</strong></p>
 <h3>" . esc_html($questionnaire['title']) . "</h3>
 <p>" . esc_html($questionnaire['description']) . "</p>
 <p>Per compilare il questionario, clicchi sul link seguente:</p>
@@ -422,7 +429,7 @@ if (isset($_GET['boq_csv_export']) && $_GET['boq_csv_export'] === '1') {
     header('Expires: 0');
     
     echo "\xEF\xBB\xBF"; // BOM UTF-8
-    echo "ID,Questionario,Fornitore,Email Ispettore,Data Invio,Stato,Punteggio,Valutazione\n";
+    echo "ID,Questionario,Fornitore,Email Valutatore,Data Invio,Stato,Punteggio,Valutazione\n";
     
     $assignments = $wpdb->get_results("
         SELECT a.*, q.title as questionnaire_title 
@@ -756,7 +763,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
             if (!empty($invalid_emails)) {
                 echo '<div class="notice notice-error"><p>Le email inserite non sono valide: ' . esc_html(implode(', ', $invalid_emails)) . '</p></div>';
             } else {
-                echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
+                echo '<div class="notice notice-error"><p>Email valutatore è obbligatoria</p></div>';
             }
         } else {
             // Verifica che il fornitore esista
@@ -767,7 +774,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                 $sent_count = 0;
                 $failed_emails = [];
                 
-                // Crea un assignment separato per ogni email ispettore
+                // Crea un assignment separato per ogni email valutatore
                 foreach ($valid_emails as $inspector_email) {
                     $token = boq_generateToken();
                     
@@ -800,9 +807,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                 
                 // Mostra messaggio di successo/warning
                 if ($sent_count > 0) {
-                    $msg = "Questionario inviato con successo a <strong>" . $sent_count . " ispettore/i</strong> per valutare il fornitore: <strong>" . esc_html($user->display_name) . "</strong>";
+                    $msg = "Questionario inviato con successo a <strong>" . $sent_count . " valutatore/i</strong> per valutare il fornitore: <strong>" . esc_html($user->display_name) . "</strong>";
                     if ($sent_count > 1) {
-                        $msg .= "<br><small>Sono state create " . $sent_count . " valutazioni distinte (una per ispettore)</small>";
+                        $msg .= "<br><small>Sono state create " . $sent_count . " valutazioni distinte (una per valutatore)</small>";
                     }
                     if (!empty($failed_emails)) {
                         $msg .= "<br><span style='color: #856404;'>⚠️ Email non inviate a: " . esc_html(implode(', ', $failed_emails)) . "</span>";
@@ -1383,7 +1390,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                                style="font-size: 1.2em; font-weight: bold; color: #03679e; padding: 5px; border: 1px solid #ddd; border-radius: 3px; width: 60%;" placeholder="Titolo Area">
                         <div style="margin-top: 8px;">
                             <label>
-                                Peso: <input type="number" step="0.01" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
+                                Peso: <input type="number" step="0.001" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
                                        style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;" placeholder="1.00">
                             </label>
                         </div>
@@ -1532,7 +1539,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                                 <input type="text" value="${boqEsc(option.text)}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'text', this.value)" 
                                        style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
                                 <label style="display: flex; align-items: center; gap: 5px;">
-                                    Peso: <input type="number" step="0.01" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
+                                    Peso: <input type="number" step="0.001" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
                                            style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="0.00">
                                 </label>
                                 <button onclick="boqDeleteOption(${areaIdx}, ${qIdx}, ${oIdx})" style="background: #f44336; color: white; padding: 4px 10px; border: none; border-radius: 3px; cursor: pointer;">✕</button>
@@ -1700,7 +1707,7 @@ function boq_renderAssignmentsTab() {
             <h2>📤 Invia Questionario: <?php echo esc_html($questionnaire['title']); ?></h2>
             <p style="background: #e3f2fd; padding: 12px; border-left: 4px solid #03679e; margin-bottom: 20px;">
                 <strong>Nota:</strong> Il questionario verrà inviato agli ispettori per valutare l'operato del fornitore selezionato.<br>
-                <small>💡 Puoi inserire più email ispettore: ogni ispettore riceverà un questionario separato e verrà creata una valutazione distinta nella tabella "Storico Invii".</small>
+                <small>💡 Puoi inserire più email valutatore: ogni valutatore riceverà un questionario separato e verrà creata una valutazione distinta nella tabella "Storico Invii".</small>
             </p>
             
             <form method="POST">
@@ -1719,13 +1726,15 @@ function boq_renderAssignmentsTab() {
                         // Cerca fornitori da valutare o subscriber
                         $users = get_users(['role__in' => ['hse', 'subscriber']]);
                         foreach ($users as $user):
+                            $ragione_sociale = get_user_meta($user->ID, 'user_registration_rag_soc', true);
+                            $display_text = $ragione_sociale ? $ragione_sociale : $user->display_name;
                         ?>
-                            <div class="boq-user-option" data-id="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($user->display_name)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>" 
+                            <div class="boq-user-option" data-id="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($display_text)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>" 
                                  style="padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
-                                    <strong style="color: #333;"><?php echo esc_html($user->display_name); ?></strong>
+                                    <strong style="color: #333;"><?php echo esc_html($display_text); ?></strong>
                                     <br>
-                                    <small style="color: #666;"><?php echo esc_html($user->user_email); ?></small>
+                                    <small style="color: #666;">P.IVA: <?php echo esc_html($user->display_name); ?> | <?php echo esc_html($user->user_email); ?></small>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -1811,14 +1820,14 @@ function boq_renderAssignmentsTab() {
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
-                        Email Ispettore/i * <span style="color: red;">(Obbligatorio)</span>
+                        Email Valutatore/i * <span style="color: red;">(Obbligatorio)</span>
                     </label>
                     <textarea name="inspector_emails" required rows="3"
                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-family: inherit;"
-                           placeholder="ispettore1@example.com&#10;ispettore2@example.com&#10;ispettore3@example.com"></textarea>
+                           placeholder="valutatore1@example.com&#10;valutatore2@example.com&#10;valutatore3@example.com"></textarea>
                     <small style="color: #666;">
                         💡 <strong>Più ispettori:</strong> Inserisci una email per riga o separale con virgola. 
-                        Ogni ispettore riceverà un questionario separato e verrà creata una valutazione distinta per ciascuno.
+                        Ogni valutatore riceverà un questionario separato e verrà creata una valutazione distinta per ciascuno.
                     </small>
                 </div>
                 
@@ -1842,7 +1851,7 @@ function boq_renderAssignmentsTab() {
                 <th style="padding: 12px; text-align: left;">ID</th>
                 <th style="padding: 12px; text-align: left;">Questionario</th>
                 <th style="padding: 12px; text-align: left;">Fornitore</th>
-                <th style="padding: 12px; text-align: left;">Email Ispettore</th>
+                <th style="padding: 12px; text-align: left;">Email Valutatore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
                 <th style="padding: 12px; text-align: center;">Stato</th>
                 <th style="padding: 12px; text-align: left;">Link Questionario</th>
@@ -1948,7 +1957,7 @@ function boq_renderResultsTab() {
                         $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
                         ?>
                         <strong>Fornitore Valutato:</strong> <?php echo esc_html($hse_name); ?><br>
-                        <strong>Email Ispettore:</strong> <?php echo esc_html($assignment['inspector_email']); ?><br>
+                        <strong>Email Valutatore:</strong> <?php echo esc_html($assignment['inspector_email']); ?><br>
                         <strong>Data Invio:</strong> <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
                     </div>
                     <div style="background: #f0f0f0; padding: 20px; border-radius: 5px; text-align: center;">
@@ -2037,7 +2046,8 @@ function boq_renderResultsTab() {
             <tbody>
                 <?php
                 $completed_assignments = $wpdb->get_results("
-                    SELECT a.*, q.title as questionnaire_title 
+                    SELECT a.*, q.title as questionnaire_title,
+                           (SELECT MAX(r.answered_at) FROM {$wpdb->prefix}cogei_responses r WHERE r.assignment_id = a.id) as completion_date
                     FROM {$wpdb->prefix}cogei_assignments a
                     LEFT JOIN {$wpdb->prefix}cogei_questionnaires q ON a.questionnaire_id = q.id
                     WHERE a.status = 'completed'
@@ -2081,7 +2091,10 @@ function boq_renderResultsTab() {
                         </span>
                     </td>
                     <td style="padding: 12px; text-align: center;">
-                        <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
+                        <?php 
+                        $date_to_show = $assignment['completion_date'] ? $assignment['completion_date'] : $assignment['sent_at'];
+                        echo date('d/m/Y H:i', strtotime($date_to_show)); 
+                        ?>
                     </td>
                     <td style="padding: 12px; text-align: center;">
                         <a href="?boq_tab=results&assignment=<?php echo $assignment['id']; ?>" 
