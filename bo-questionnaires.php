@@ -113,11 +113,18 @@ function boq_createQuestionnaireTablesIfNotExists() {
         text varchar(255) NOT NULL,
         weight decimal(5,2) DEFAULT 0.00,
         sort_order int(11) DEFAULT 0,
+        is_na tinyint(1) DEFAULT 0,
         PRIMARY KEY (id),
         KEY question_id (question_id),
         KEY sort_order (sort_order)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_options);
+    
+    // Add is_na column to options if it doesn't exist (migration for existing tables)
+    $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_options LIKE 'is_na'");
+    if (empty($column_exists)) {
+        $wpdb->query("ALTER TABLE $table_options ADD COLUMN is_na tinyint(1) DEFAULT 0 AFTER sort_order");
+    }
     
     // 📤 TABELLA ASSEGNAZIONI
     $table_assignments = $wpdb->prefix . 'cogei_assignments';
@@ -161,19 +168,12 @@ function boq_createQuestionnaireTablesIfNotExists() {
         selected_option_id int(11) NOT NULL,
         computed_score decimal(10,4) DEFAULT 0.0000,
         answered_at datetime DEFAULT CURRENT_TIMESTAMP,
-        is_na tinyint(1) DEFAULT 0,
         PRIMARY KEY (id),
         KEY assignment_id (assignment_id),
         KEY question_id (question_id),
         KEY selected_option_id (selected_option_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_responses);
-    
-    // Add is_na column if it doesn't exist (migration for existing tables)
-    $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_responses LIKE 'is_na'");
-    if (empty($column_exists)) {
-        $wpdb->query("ALTER TABLE $table_responses ADD COLUMN is_na tinyint(1) DEFAULT 0 AFTER answered_at");
-    }
     
     error_log("Tabelle questionari create/verificate: $table_questionnaires, $table_areas, $table_questions, $table_options, $table_assignments, $table_responses");
 }
@@ -279,19 +279,18 @@ function boq_calculateScore($assignment_id) {
         $question_id = $response['question_id'];
         $option_id = $response['selected_option_id'];
         
-        // Check if response is marked as N.A. (to be excluded from calculation)
-        $is_na = isset($response['is_na']) && $response['is_na'] == 1;
-        if ($is_na) {
-            continue; // Skip N.A. marked responses
-        }
-        
-        // Ottieni peso opzione
+        // Ottieni peso e flag is_na dell'opzione
         $option = $wpdb->get_row($wpdb->prepare(
-            "SELECT weight FROM {$wpdb->prefix}cogei_options WHERE id = %d",
+            "SELECT weight, is_na FROM {$wpdb->prefix}cogei_options WHERE id = %d",
             $option_id
         ), ARRAY_A);
         
         if (!$option) continue;
+        
+        // Skip options marked as N.A. at design time
+        if (isset($option['is_na']) && $option['is_na'] == 1) {
+            continue;
+        }
         
         // Ottieni area della domanda
         $question = $wpdb->get_row($wpdb->prepare(
@@ -728,9 +727,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                                 'question_id' => $question_id,
                                 'text' => sanitize_text_field($option_data['text']),
                                 'weight' => floatval($option_data['weight']),
+                                'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
                                 'sort_order' => intval($option_data['sort_order'])
                             ];
-                            $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d']);
+                            $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d', '%d']);
                         }
                     }
                 }
@@ -1550,6 +1550,11 @@ function boq_renderAreasEditor($questionnaire_id) {
                                     Peso: <input type="number" step="0.001" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
                                            style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="0.00">
                                 </label>
+                                <label style="display: flex; align-items: center; gap: 5px; background: #fff3cd; padding: 4px 8px; border-radius: 3px; border: 1px solid #ffc107;">
+                                    <input type="checkbox" ${option.is_na ? 'checked' : ''} onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'is_na', this.checked ? 1 : 0)" 
+                                           style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px; font-weight: 500;">N.A.</span>
+                                </label>
                                 <button onclick="boqDeleteOption(${areaIdx}, ${qIdx}, ${oIdx})" style="background: #f44336; color: white; padding: 4px 10px; border: none; border-radius: 3px; cursor: pointer;">✕</button>
                             `;
                             optionsList.appendChild(optionLi);
@@ -1640,6 +1645,7 @@ function boq_renderAreasEditor($questionnaire_id) {
             id: boqNextTempId--,
             text: '',
             weight: 0.00,
+            is_na: 0,
             sort_order: boqEditorState[areaIdx].questions[qIdx].options.length
         });
         boqRenderEditor();

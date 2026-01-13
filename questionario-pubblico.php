@@ -257,22 +257,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
         
         foreach ($questions as $question) {
             $answer_key = 'question_' . $question['id'];
-            $na_key = 'na_question_' . $question['id'];
-            $is_na = isset($_POST[$na_key]) && $_POST[$na_key] == '1';
-            
-            // Se è marcato come N.A., salta la validazione required
-            if ($is_na) {
-                // Salva risposta N.A. con opzione null e peso 0
-                $wpdb->insert($table_responses, [
-                    'assignment_id' => $assignment['id'],
-                    'question_id' => $question['id'],
-                    'selected_option_id' => 0, // Placeholder per N.A.
-                    'computed_score' => 0,
-                    'is_na' => 1,
-                    'answered_at' => current_time('mysql')
-                ]);
-                continue;
-            }
             
             if ($question['is_required'] && (!isset($_POST[$answer_key]) || empty($_POST[$answer_key]))) {
                 $all_answered = false;
@@ -298,7 +282,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
                     'question_id' => $question['id'],
                     'selected_option_id' => $option_id,
                     'computed_score' => $computed_score,
-                    'is_na' => 0,
                     'answered_at' => current_time('mysql')
                 ]);
             }
@@ -570,44 +553,12 @@ $fornitore_display_name = $ragione_sociale ? $ragione_sociale : ($hse_user ? $hs
                     // Aggiungi selected all'opzione cliccata
                     radio.checked = true;
                     option.classList.add('selected');
-                    
-                    // Deseleziona il checkbox N.A. quando si seleziona un'opzione
-                    const questionId = radio.getAttribute('data-question-id');
-                    const naCheckbox = document.querySelector('.na-checkbox[data-question-id="' + questionId + '"]');
-                    if (naCheckbox) {
-                        naCheckbox.checked = false;
-                    }
                 });
                 
                 // Imposta selected se già selezionato
                 if (radio.checked) {
                     option.classList.add('selected');
                 }
-            });
-            
-            // Gestisci checkbox N.A.
-            document.querySelectorAll('.na-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    const questionId = this.getAttribute('data-question-id');
-                    const radios = document.querySelectorAll('.question-radio[data-question-id="' + questionId + '"]');
-                    
-                    if (this.checked) {
-                        // Deseleziona tutte le opzioni e rimuovi il required
-                        radios.forEach(radio => {
-                            radio.checked = false;
-                            radio.removeAttribute('required');
-                            radio.closest('.option').classList.remove('selected');
-                        });
-                    } else {
-                        // Ripristina il required se la domanda era obbligatoria
-                        radios.forEach(radio => {
-                            const wasRequired = radio.closest('.question').querySelector('.required');
-                            if (wasRequired) {
-                                radio.setAttribute('required', 'required');
-                            }
-                        });
-                    }
-                });
             });
         });
     </script>
@@ -684,8 +635,6 @@ $fornitore_display_name = $ragione_sociale ? $ragione_sociale : ($hse_user ? $hs
                                                 name="question_<?php echo $question['id']; ?>" 
                                                 value="<?php echo $option['id']; ?>" 
                                                 id="option_<?php echo $option['id']; ?>"
-                                                class="question-radio"
-                                                data-question-id="<?php echo $question['id']; ?>"
                                                 <?php echo $question['is_required'] ? 'required' : ''; ?>
                                             >
                                             <label for="option_<?php echo $option['id']; ?>">
@@ -693,20 +642,6 @@ $fornitore_display_name = $ragione_sociale ? $ragione_sociale : ($hse_user ? $hs
                                             </label>
                                         </div>
                                     <?php endforeach; ?>
-                                </div>
-                                <div style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;">
-                                    <label style="display: flex; align-items: center; cursor: pointer;">
-                                        <input 
-                                            type="checkbox" 
-                                            name="na_question_<?php echo $question['id']; ?>" 
-                                            value="1"
-                                            class="na-checkbox"
-                                            data-question-id="<?php echo $question['id']; ?>"
-                                            style="margin-right: 8px; width: 18px; height: 18px;"
-                                        >
-                                        <span style="font-weight: 500;">N.A. - Non Applicabile</span>
-                                        <span style="margin-left: 8px; font-size: 13px; color: #666;">(escludi questa domanda dal calcolo)</span>
-                                    </label>
                                 </div>
                             </div>
                         <?php endforeach; ?>
