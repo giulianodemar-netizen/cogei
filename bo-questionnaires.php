@@ -1858,7 +1858,8 @@ function boq_renderAssignmentsTab() {
             <tr style="background: #03679e; color: white;">
                 <th style="padding: 12px; text-align: left;">ID</th>
                 <th style="padding: 12px; text-align: left;">Questionario</th>
-                <th style="padding: 12px; text-align: left;">Fornitore</th>
+                <th style="padding: 12px; text-align: left;">Ragione Sociale</th>
+                <th style="padding: 12px; text-align: left;">P.IVA</th>
                 <th style="padding: 12px; text-align: left;">Email Valutatore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
                 <th style="padding: 12px; text-align: left;">Data Compilazione</th>
@@ -1888,7 +1889,9 @@ function boq_renderAssignmentsTab() {
                         $ragione_sociale = get_user_meta($user->ID, 'user_registration_rag_soc', true);
                     }
                 }
-                $display_fornitore = $ragione_sociale ? $ragione_sociale . " (P.IVA: " . $hse_user_name . ")" : $hse_user_name;
+                if (!$ragione_sociale) {
+                    $ragione_sociale = '-';
+                }
                 
                 // Genera link questionario - punta al file standalone /questionario/ (usa site_url perché la cartella è dentro l'installazione WP)
                 $questionnaire_link = add_query_arg('boq_token', $assignment['token'], site_url('/questionario/'));
@@ -1896,7 +1899,8 @@ function boq_renderAssignmentsTab() {
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                 <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
-                <td style="padding: 12px;"><?php echo esc_html($display_fornitore); ?></td>
+                <td style="padding: 12px;"><?php echo esc_html($ragione_sociale); ?></td>
+                <td style="padding: 12px;"><?php echo esc_html($hse_user_name); ?></td>
                 <td style="padding: 12px;"><?php echo esc_html($assignment['inspector_email']); ?></td>
                 <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?></td>
                 <td style="padding: 12px;">
@@ -2058,7 +2062,8 @@ function boq_renderResultsTab() {
                 <tr style="background: #03679e; color: white;">
                     <th style="padding: 12px; text-align: left;">ID</th>
                     <th style="padding: 12px; text-align: left;">Questionario</th>
-                    <th style="padding: 12px; text-align: left;">Fornitore</th>
+                    <th style="padding: 12px; text-align: left;">Ragione Sociale</th>
+                    <th style="padding: 12px; text-align: left;">P.IVA</th>
                     <th style="padding: 12px; text-align: center;">Punteggio</th>
                     <th style="padding: 12px; text-align: center;">Valutazione</th>
                     <th style="padding: 12px; text-align: center;">Data Invio</th>
@@ -2085,7 +2090,9 @@ function boq_renderResultsTab() {
                     $hse_user = get_userdata($assignment['target_user_id']);
                     $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
                     $ragione_sociale = $hse_user ? get_user_meta($hse_user->ID, 'user_registration_rag_soc', true) : '';
-                    $display_fornitore = $ragione_sociale ? $ragione_sociale . " (P.IVA: " . $hse_name . ")" : $hse_name;
+                    if (!$ragione_sociale) {
+                        $ragione_sociale = '-';
+                    }
                     
                     // Colore valutazione
                     $eval_colors = [
@@ -2100,7 +2107,8 @@ function boq_renderResultsTab() {
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                     <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
-                    <td style="padding: 12px;"><?php echo esc_html($display_fornitore); ?></td>
+                    <td style="padding: 12px;"><?php echo esc_html($ragione_sociale); ?></td>
+                    <td style="padding: 12px;"><?php echo esc_html($hse_name); ?></td>
                     <td style="padding: 12px; text-align: center; font-weight: bold;">
                         <?php 
                         $stars = boq_convertScoreToStars($score);
