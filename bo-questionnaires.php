@@ -2380,21 +2380,23 @@ function boq_renderRatingsTab() {
     global $wpdb;
     
     // Get all suppliers with their average scores
+    // Calculate average of questionnaire scores (not average of all response scores)
     $query = "
         SELECT 
             a.target_user_id as user_id,
             COUNT(DISTINCT a.id) as total_questionnaires,
-            COUNT(DISTINCT r.assignment_id) as completed_questionnaires,
-            AVG(CASE 
-                WHEN a.status = 'completed' THEN (
-                    SELECT AVG(r2.computed_score) * 100
-                    FROM {$wpdb->prefix}cogei_responses r2 
-                    WHERE r2.assignment_id = a.id
-                )
-                ELSE NULL 
-            END) as avg_score
+            COUNT(DISTINCT CASE WHEN a.status = 'completed' THEN a.id END) as completed_questionnaires,
+            AVG(questionnaire_scores.score) as avg_score
         FROM {$wpdb->prefix}cogei_assignments a
-        LEFT JOIN {$wpdb->prefix}cogei_responses r ON r.assignment_id = a.id
+        LEFT JOIN (
+            SELECT 
+                r2.assignment_id,
+                AVG(r2.computed_score) * 100 as score
+            FROM {$wpdb->prefix}cogei_responses r2
+            INNER JOIN {$wpdb->prefix}cogei_options o ON r2.selected_option_id = o.id
+            WHERE o.is_na = 0
+            GROUP BY r2.assignment_id
+        ) questionnaire_scores ON questionnaire_scores.assignment_id = a.id
         WHERE a.status = 'completed'
         GROUP BY a.target_user_id
         HAVING avg_score IS NOT NULL
