@@ -2373,7 +2373,7 @@ function boq_renderRatingsTab() {
             COUNT(DISTINCT r.assignment_id) as completed_questionnaires,
             AVG(CASE 
                 WHEN a.status = 'completed' THEN (
-                    SELECT AVG(r2.computed_score) 
+                    SELECT AVG(r2.computed_score) * 100
                     FROM {$wpdb->prefix}cogei_responses r2 
                     WHERE r2.assignment_id = a.id
                 )
