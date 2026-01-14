@@ -682,55 +682,169 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
             exit;
         }
         
-        // Prima elimina tutti i dati esistenti per questo questionario
-        $existing_areas = boq_getAreas($questionnaire_id);
-        foreach ($existing_areas as $area) {
-            $questions = boq_getQuestions($area['id']);
-            foreach ($questions as $question) {
-                // Elimina opzioni
-                $wpdb->delete($wpdb->prefix . 'cogei_options', ['question_id' => $question['id']], ['%d']);
-            }
-            // Elimina domande
-            $wpdb->delete($wpdb->prefix . 'cogei_questions', ['area_id' => $area['id']], ['%d']);
-        }
-        // Elimina aree
-        $wpdb->delete($wpdb->prefix . 'cogei_areas', ['questionnaire_id' => $questionnaire_id], ['%d']);
+        // CRITICAL: Check if this questionnaire has any responses
+        // If yes, we update existing records instead of deleting/recreating to preserve response links
+        $has_responses = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}cogei_responses r
+             INNER JOIN {$wpdb->prefix}cogei_assignments a ON r.assignment_id = a.id
+             WHERE a.questionnaire_id = %d",
+            $questionnaire_id
+        ));
         
-        // Ora inserisci la nuova struttura
-        foreach ($structure as $area_data) {
-            // Inserisci area
-            $area_insert = [
-                'questionnaire_id' => $questionnaire_id,
-                'title' => sanitize_text_field($area_data['title']),
-                'weight' => floatval($area_data['weight']),
-                'sort_order' => intval($area_data['sort_order'])
-            ];
-            $wpdb->insert($wpdb->prefix . 'cogei_areas', $area_insert, ['%d', '%s', '%f', '%d']);
-            $area_id = $wpdb->insert_id;
+        if ($has_responses > 0) {
+            // UPDATE mode: preserve IDs and update data only
+            $existing_areas = boq_getAreas($questionnaire_id);
             
-            // Inserisci domande
-            if (!empty($area_data['questions'])) {
-                foreach ($area_data['questions'] as $question_data) {
-                    $question_insert = [
-                        'area_id' => $area_id,
-                        'text' => sanitize_textarea_field($question_data['text']),
-                        'is_required' => intval($question_data['is_required']),
-                        'sort_order' => intval($question_data['sort_order'])
-                    ];
-                    $wpdb->insert($wpdb->prefix . 'cogei_questions', $question_insert, ['%d', '%s', '%d', '%d']);
-                    $question_id = $wpdb->insert_id;
-                    
-                    // Inserisci opzioni
-                    if (!empty($question_data['options'])) {
-                        foreach ($question_data['options'] as $option_data) {
-                            $option_insert = [
-                                'question_id' => $question_id,
-                                'text' => sanitize_text_field($option_data['text']),
-                                'weight' => floatval($option_data['weight']),
-                                'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
-                                'sort_order' => intval($option_data['sort_order'])
-                            ];
-                            $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d', '%d']);
+            foreach ($structure as $area_index => $area_data) {
+                if (isset($area_data['id']) && $area_data['id'] > 0) {
+                    // Update existing area
+                    $wpdb->update(
+                        $wpdb->prefix . 'cogei_areas',
+                        [
+                            'title' => sanitize_text_field($area_data['title']),
+                            'weight' => floatval($area_data['weight']),
+                            'sort_order' => intval($area_data['sort_order'])
+                        ],
+                        ['id' => intval($area_data['id'])],
+                        ['%s', '%f', '%d'],
+                        ['%d']
+                    );
+                    $area_id = intval($area_data['id']);
+                } else {
+                    // Insert new area
+                    $wpdb->insert(
+                        $wpdb->prefix . 'cogei_areas',
+                        [
+                            'questionnaire_id' => $questionnaire_id,
+                            'title' => sanitize_text_field($area_data['title']),
+                            'weight' => floatval($area_data['weight']),
+                            'sort_order' => intval($area_data['sort_order'])
+                        ],
+                        ['%d', '%s', '%f', '%d']
+                    );
+                    $area_id = $wpdb->insert_id;
+                }
+                
+                // Process questions
+                if (!empty($area_data['questions'])) {
+                    foreach ($area_data['questions'] as $question_data) {
+                        if (isset($question_data['id']) && $question_data['id'] > 0) {
+                            // Update existing question
+                            $wpdb->update(
+                                $wpdb->prefix . 'cogei_questions',
+                                [
+                                    'text' => sanitize_textarea_field($question_data['text']),
+                                    'is_required' => intval($question_data['is_required']),
+                                    'sort_order' => intval($question_data['sort_order'])
+                                ],
+                                ['id' => intval($question_data['id'])],
+                                ['%s', '%d', '%d'],
+                                ['%d']
+                            );
+                            $question_id = intval($question_data['id']);
+                        } else {
+                            // Insert new question
+                            $wpdb->insert(
+                                $wpdb->prefix . 'cogei_questions',
+                                [
+                                    'area_id' => $area_id,
+                                    'text' => sanitize_textarea_field($question_data['text']),
+                                    'is_required' => intval($question_data['is_required']),
+                                    'sort_order' => intval($question_data['sort_order'])
+                                ],
+                                ['%d', '%s', '%d', '%d']
+                            );
+                            $question_id = $wpdb->insert_id;
+                        }
+                        
+                        // Process options
+                        if (!empty($question_data['options'])) {
+                            foreach ($question_data['options'] as $option_data) {
+                                if (isset($option_data['id']) && $option_data['id'] > 0) {
+                                    // Update existing option
+                                    $wpdb->update(
+                                        $wpdb->prefix . 'cogei_options',
+                                        [
+                                            'text' => sanitize_text_field($option_data['text']),
+                                            'weight' => floatval($option_data['weight']),
+                                            'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
+                                            'sort_order' => intval($option_data['sort_order'])
+                                        ],
+                                        ['id' => intval($option_data['id'])],
+                                        ['%s', '%f', '%d', '%d'],
+                                        ['%d']
+                                    );
+                                } else {
+                                    // Insert new option
+                                    $wpdb->insert(
+                                        $wpdb->prefix . 'cogei_options',
+                                        [
+                                            'question_id' => $question_id,
+                                            'text' => sanitize_text_field($option_data['text']),
+                                            'weight' => floatval($option_data['weight']),
+                                            'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
+                                            'sort_order' => intval($option_data['sort_order'])
+                                        ],
+                                        ['%d', '%s', '%f', '%d', '%d']
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // INSERT mode: No responses yet, safe to delete and recreate
+            // Prima elimina tutti i dati esistenti per questo questionario
+            $existing_areas = boq_getAreas($questionnaire_id);
+            foreach ($existing_areas as $area) {
+                $questions = boq_getQuestions($area['id']);
+                foreach ($questions as $question) {
+                    // Elimina opzioni
+                    $wpdb->delete($wpdb->prefix . 'cogei_options', ['question_id' => $question['id']], ['%d']);
+                }
+                // Elimina domande
+                $wpdb->delete($wpdb->prefix . 'cogei_questions', ['area_id' => $area['id']], ['%d']);
+            }
+            // Elimina aree
+            $wpdb->delete($wpdb->prefix . 'cogei_areas', ['questionnaire_id' => $questionnaire_id], ['%d']);
+            
+            // Ora inserisci la nuova struttura
+            foreach ($structure as $area_data) {
+                // Inserisci area
+                $area_insert = [
+                    'questionnaire_id' => $questionnaire_id,
+                    'title' => sanitize_text_field($area_data['title']),
+                    'weight' => floatval($area_data['weight']),
+                    'sort_order' => intval($area_data['sort_order'])
+                ];
+                $wpdb->insert($wpdb->prefix . 'cogei_areas', $area_insert, ['%d', '%s', '%f', '%d']);
+                $area_id = $wpdb->insert_id;
+                
+                // Inserisci domande
+                if (!empty($area_data['questions'])) {
+                    foreach ($area_data['questions'] as $question_data) {
+                        $question_insert = [
+                            'area_id' => $area_id,
+                            'text' => sanitize_textarea_field($question_data['text']),
+                            'is_required' => intval($question_data['is_required']),
+                            'sort_order' => intval($question_data['sort_order'])
+                        ];
+                        $wpdb->insert($wpdb->prefix . 'cogei_questions', $question_insert, ['%d', '%s', '%d', '%d']);
+                        $question_id = $wpdb->insert_id;
+                        
+                        // Inserisci opzioni
+                        if (!empty($question_data['options'])) {
+                            foreach ($question_data['options'] as $option_data) {
+                                $option_insert = [
+                                    'question_id' => $question_id,
+                                    'text' => sanitize_text_field($option_data['text']),
+                                    'weight' => floatval($option_data['weight']),
+                                    'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
+                                    'sort_order' => intval($option_data['sort_order'])
+                                ];
+                                $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d', '%d']);
+                            }
                         }
                     }
                 }
