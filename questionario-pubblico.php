@@ -157,8 +157,14 @@ if (!$assignment) {
 // Verifica se il questionario è già stato completato
 if ($assignment['status'] === 'completed') {
     $table_responses = $wpdb->prefix . 'cogei_responses';
+    $table_options = $wpdb->prefix . 'cogei_options';
+    
+    // Get responses excluding N.A. options
     $responses = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $table_responses WHERE assignment_id = %d",
+        "SELECT r.computed_score
+        FROM $table_responses r
+        INNER JOIN $table_options o ON r.selected_option_id = o.id
+        WHERE r.assignment_id = %d AND o.is_na = 0",
         $assignment['id']
     ), ARRAY_A);
     
@@ -267,13 +273,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             if (isset($_POST[$answer_key]) && !empty($_POST[$answer_key])) {
                 $option_id = intval($_POST[$answer_key]);
                 
-                // Recupera peso opzione
+                // Recupera peso opzione e flag is_na
                 $option = $wpdb->get_row($wpdb->prepare(
-                    "SELECT weight FROM $table_options WHERE id = %d",
+                    "SELECT weight, is_na FROM $table_options WHERE id = %d",
                     $option_id
                 ), ARRAY_A);
                 
-                // Calcola punteggio
+                // Calcola punteggio (se l'opzione è N.A., il punteggio sarà ignorato nel calcolo finale)
                 $computed_score = floatval($option['weight']) * floatval($area['weight']);
                 
                 // Salva risposta
@@ -296,9 +302,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale
+        // Calcola punteggio finale (escludendo risposte N.A.)
         $responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT computed_score FROM $table_responses WHERE assignment_id = %d",
+            "SELECT r.computed_score
+            FROM $table_responses r
+            INNER JOIN $table_options o ON r.selected_option_id = o.id
+            WHERE r.assignment_id = %d AND o.is_na = 0",
             $assignment['id']
         ), ARRAY_A);
         
