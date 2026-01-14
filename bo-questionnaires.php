@@ -332,13 +332,13 @@ function boq_calculateScore($assignment_id) {
  * < 0.40 = Inadeguato
  */
 function boq_evaluateScore($score) {
-    if ($score >= 0.85) {
+    if ($score >= 85) {
         return 'Eccellente';
-    } elseif ($score >= 0.70) {
+    } elseif ($score >= 70) {
         return 'Molto Buono';
-    } elseif ($score >= 0.55) {
+    } elseif ($score >= 55) {
         return 'Adeguato';
-    } elseif ($score >= 0.40) {
+    } elseif ($score >= 40) {
         return 'Critico';
     } else {
         return 'Inadeguato';
@@ -1400,6 +1400,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                             <label>
                                 Peso: <input type="text" 
                                        pattern="[0-9]*\.?[0-9]{0,3}" 
+                                       maxlength="10"
                                        value="${area.weight}" 
                                        onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value) || 0)" 
                                        oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')"
@@ -1554,6 +1555,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                                 <label style="display: flex; align-items: center; gap: 5px;">
                                     Peso: <input type="text" 
                                            pattern="[0-9]*\.?[0-9]{0,3}" 
+                                           maxlength="10"
                                            value="${option.weight}" 
                                            onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value) || 0)" 
                                            oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')"
@@ -2008,7 +2010,7 @@ function boq_renderResultsTab() {
                         echo boq_renderStarRating($stars); 
                         ?>
                         <div style="font-size: 2em; font-weight: bold; color: #03679e; margin: 15px 0 10px 0;">
-                            <?php echo round($score, 4); ?> / 1.00
+                            <?php echo number_format($score, 2); ?> / 100
                         </div>
                         <div style="font-size: 1.5em; font-weight: bold; color: #4caf50;">
                             <?php echo esc_html($evaluation); ?>
@@ -2131,7 +2133,7 @@ function boq_renderResultsTab() {
                         echo boq_renderStarRating($stars); 
                         ?>
                         <div style="margin-top: 5px; color: #666; font-size: 13px;">
-                            <?php echo round($score, 4); ?> / 1.00
+                            <?php echo number_format($score, 2); ?> / 100
                         </div>
                     </td>
                     <td style="padding: 12px; text-align: center;">

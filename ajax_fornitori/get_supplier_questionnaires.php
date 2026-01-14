@@ -100,7 +100,7 @@ if (empty($assignments)) {
 
 // Funzione per convertire score in stelle
 function convertScoreToStars($score) {
-    $stars = $score * 5;
+    $stars = ($score / 100) * 5;
     return round($stars * 2) / 2; // Arrotonda a 0.5
 }
 
@@ -125,19 +125,21 @@ function renderStars($stars) {
 
 // Funzione per ottenere valutazione testuale
 function getEvaluationText($stars) {
-    if ($stars >= 4.5) return 'Eccellente';
-    if ($stars >= 3.5) return 'Molto Buono';
-    if ($stars >= 2.5) return 'Adeguato';
-    if ($stars >= 1.5) return 'Critico';
+    $score = ($stars / 5) * 100; // Convert stars to 0-100 score
+    if ($score >= 85) return 'Eccellente';
+    if ($score >= 70) return 'Molto Buono';
+    if ($score >= 55) return 'Adeguato';
+    if ($score >= 40) return 'Critico';
     return 'Inadeguato';
 }
 
 // Funzione per ottenere colore badge
 function getEvaluationColor($stars) {
-    if ($stars >= 4.5) return '#4caf50';
-    if ($stars >= 3.5) return '#8bc34a';
-    if ($stars >= 2.5) return '#ffc107';
-    if ($stars >= 1.5) return '#ff9800';
+    $score = ($stars / 5) * 100; // Convert stars to 0-100 score
+    if ($score >= 85) return '#4caf50';
+    if ($score >= 70) return '#8bc34a';
+    if ($score >= 55) return '#ffc107';
+    if ($score >= 40) return '#ff9800';
     return '#f44336';
 }
 
