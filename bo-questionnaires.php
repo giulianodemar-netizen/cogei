@@ -2178,13 +2178,21 @@ function boq_renderResultsTab() {
                                         $response['selected_option_id']
                                     ), ARRAY_A);
                                     ?>
-                                    <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
-                                        ✓ <?php echo esc_html($option['text']); ?>
-                                        <span style="color: #666; font-size: 0.9em;">
-                                            (Peso Opzione: <?php echo $option['weight']; ?>, 
-                                            Punteggio: <?php echo round($response['computed_score'], 4); ?>)
-                                        </span>
-                                    </div>
+                                    <?php if ($option && isset($option['is_na']) && $option['is_na'] == 1): ?>
+                                        <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-left: 4px solid #ffc107; border-radius: 3px;">
+                                            <span style="color: #6c757d;">✓ <?php echo esc_html($option['text']); ?></span>
+                                            <span style="display: inline-block; background: #ffc107; color: #000; font-weight: bold; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">N.A.</span>
+                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Esclusa dal calcolo)</span>
+                                        </div>
+                                    <?php else: ?>
+                                        <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
+                                            ✓ <?php echo esc_html($option['text']); ?>
+                                            <span style="color: #666; font-size: 0.9em;">
+                                                (Peso Opzione: <?php echo $option['weight']; ?>, 
+                                                Punteggio: <?php echo round($response['computed_score'], 4); ?>)
+                                            </span>
+                                        </div>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <div style="margin-top: 8px; color: #999;">Nessuna risposta</div>
                                 <?php endif; ?>
