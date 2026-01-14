@@ -314,9 +314,9 @@ function boq_calculateScore($assignment_id) {
         $count++;
     }
     
-    // Normalizza il punteggio (0-1)
+    // Normalizza il punteggio (0-100)
     if ($count > 0) {
-        return $total_score / $count;
+        return ($total_score / $count) * 100;
     }
     
     return 0;
@@ -1398,8 +1398,13 @@ function boq_renderAreasEditor($questionnaire_id) {
                                style="font-size: 1.2em; font-weight: bold; color: #03679e; padding: 5px; border: 1px solid #ddd; border-radius: 3px; width: 60%;" placeholder="Titolo Area">
                         <div style="margin-top: 8px;">
                             <label>
-                                Peso: <input type="number" step="0.001" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
-                                       style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;" placeholder="1.00">
+                                Peso: <input type="text" 
+                                       pattern="[0-9]*\.?[0-9]{0,3}" 
+                                       value="${area.weight}" 
+                                       onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value) || 0)" 
+                                       oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')"
+                                       style="width: 100px; padding: 4px; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-family: monospace;" 
+                                       placeholder="1.000">
                             </label>
                         </div>
                     </div>
@@ -1547,8 +1552,13 @@ function boq_renderAreasEditor($questionnaire_id) {
                                 <input type="text" value="${boqEsc(option.text)}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'text', this.value)" 
                                        style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
                                 <label style="display: flex; align-items: center; gap: 5px;">
-                                    Peso: <input type="number" step="0.001" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
-                                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="0.00">
+                                    Peso: <input type="text" 
+                                           pattern="[0-9]*\.?[0-9]{0,3}" 
+                                           value="${option.weight}" 
+                                           onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value) || 0)" 
+                                           oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')"
+                                           style="width: 100px; padding: 6px; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-family: monospace;" 
+                                           placeholder="0.000">
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 5px; background: #fff3cd; padding: 4px 8px; border-radius: 3px; border: 1px solid #ffc107;">
                                     <input type="checkbox" ${option.is_na ? 'checked' : ''} onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'is_na', this.checked ? 1 : 0)" 
@@ -2160,8 +2170,8 @@ function boq_renderResultsTab() {
  * Uses half-star precision
  */
 function boq_convertScoreToStars($score) {
-    // Convert 0-1 score to 0-5 scale
-    $stars = $score * 5;
+    // Convert 0-100 score to 0-5 scale
+    $stars = ($score / 100) * 5;
     
     // Round to nearest 0.5
     $stars = round($stars * 2) / 2;
@@ -2341,10 +2351,10 @@ function boq_renderRatingsTab() {
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <strong style="font-size: 16px; color: #03679e;">
-                                <?php echo number_format($avg_score, 3); ?>
+                                <?php echo number_format($avg_score, 2); ?>
                             </strong>
                             <br>
-                            <span style="color: #999; font-size: 12px;">/ 1.000</span>
+                            <span style="color: #999; font-size: 12px;">/ 100</span>
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <a href="#" 

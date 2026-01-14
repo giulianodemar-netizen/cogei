@@ -48,8 +48,8 @@ global $wpdb;
  * Uses half-star precision
  */
 function boq_convertScoreToStars($score) {
-    // Convert 0-1 score to 0-5 scale
-    $stars = $score * 5;
+    // Convert 0-100 score to 0-5 scale
+    $stars = ($score / 100) * 5;
     
     // Round to nearest 0.5
     $stars = round($stars * 2) / 2;
@@ -169,19 +169,19 @@ if ($assignment['status'] === 'completed') {
         $count++;
     }
     
-    $final_score = $count > 0 ? $total_score / $count : 0;
+    $final_score = $count > 0 ? ($total_score / $count) * 100 : 0;
     
     // Determina valutazione
-    if ($final_score >= 0.85) {
+    if ($final_score >= 85) {
         $evaluation = "Eccellente";
         $eval_class = "excellent";
-    } elseif ($final_score >= 0.70) {
+    } elseif ($final_score >= 70) {
         $evaluation = "Molto Buono";
         $eval_class = "very-good";
-    } elseif ($final_score >= 0.55) {
+    } elseif ($final_score >= 55) {
         $evaluation = "Adeguato";
         $eval_class = "adequate";
-    } elseif ($final_score >= 0.40) {
+    } elseif ($final_score >= 40) {
         $evaluation = "Critico";
         $eval_class = "critical";
     } else {
@@ -218,7 +218,7 @@ if ($assignment['status'] === 'completed') {
                 ?>
             </div>
             <div class="score <?php echo $eval_class; ?>">
-                <?php echo number_format($final_score * 100, 1); ?>%
+                <?php echo number_format($final_score, 1); ?>
             </div>
             <h2>Valutazione: <span class="<?php echo $eval_class; ?>"><?php echo esc_html($evaluation); ?></span></h2>
             <p style="margin-top: 30px; color: #666;">Grazie per la tua collaborazione!</p>
@@ -308,19 +308,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             $total_score += floatval($resp['computed_score']);
         }
         
-        $final_score = $count > 0 ? $total_score / $count : 0;
+        $final_score = $count > 0 ? ($total_score / $count) * 100 : 0;
         
         // Determina valutazione
-        if ($final_score >= 0.85) {
+        if ($final_score >= 85) {
             $evaluation = "Eccellente";
             $eval_class = "excellent";
-        } elseif ($final_score >= 0.70) {
+        } elseif ($final_score >= 70) {
             $evaluation = "Molto Buono";
             $eval_class = "very-good";
-        } elseif ($final_score >= 0.55) {
+        } elseif ($final_score >= 55) {
             $evaluation = "Adeguato";
             $eval_class = "adequate";
-        } elseif ($final_score >= 0.40) {
+        } elseif ($final_score >= 40) {
             $evaluation = "Critico";
             $eval_class = "critical";
         } else {
@@ -357,7 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
                     ?>
                 </div>
                 <div class="score <?php echo $eval_class; ?>">
-                    <?php echo number_format($final_score * 100, 1); ?>%
+                    <?php echo number_format($final_score, 1); ?>
                 </div>
                 <h2>Valutazione: <span class="<?php echo $eval_class; ?>"><?php echo esc_html($evaluation); ?></span></h2>
                 <p style="margin-top: 30px; color: #666;">Le tue risposte sono state registrate con successo.</p>
