@@ -79,7 +79,7 @@ function boq_createQuestionnaireTablesIfNotExists() {
         id int(11) NOT NULL AUTO_INCREMENT,
         questionnaire_id int(11) NOT NULL,
         title varchar(255) NOT NULL,
-        weight decimal(5,2) DEFAULT 1.00,
+        weight decimal(6,3) DEFAULT 1.000,
         sort_order int(11) DEFAULT 0,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -111,7 +111,7 @@ function boq_createQuestionnaireTablesIfNotExists() {
         id int(11) NOT NULL AUTO_INCREMENT,
         question_id int(11) NOT NULL,
         text varchar(255) NOT NULL,
-        weight decimal(5,2) DEFAULT 0.00,
+        weight decimal(6,3) DEFAULT 0.000,
         sort_order int(11) DEFAULT 0,
         is_na tinyint(1) DEFAULT 0,
         PRIMARY KEY (id),
@@ -124,6 +124,19 @@ function boq_createQuestionnaireTablesIfNotExists() {
     $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_options LIKE 'is_na'");
     if (empty($column_exists)) {
         $wpdb->query("ALTER TABLE $table_options ADD COLUMN is_na tinyint(1) DEFAULT 0 AFTER sort_order");
+    }
+    
+    // Migration: Update weight column precision to support 3 decimal places (0.345)
+    // Check if areas weight column needs updating
+    $area_weight_column = $wpdb->get_row("SHOW COLUMNS FROM $table_areas LIKE 'weight'");
+    if ($area_weight_column && stripos($area_weight_column->Type, 'decimal(5,2)') !== false) {
+        $wpdb->query("ALTER TABLE $table_areas MODIFY COLUMN weight decimal(6,3) DEFAULT 1.000");
+    }
+    
+    // Check if options weight column needs updating
+    $option_weight_column = $wpdb->get_row("SHOW COLUMNS FROM $table_options LIKE 'weight'");
+    if ($option_weight_column && stripos($option_weight_column->Type, 'decimal(5,2)') !== false) {
+        $wpdb->query("ALTER TABLE $table_options MODIFY COLUMN weight decimal(6,3) DEFAULT 0.000");
     }
     
     // 📤 TABELLA ASSEGNAZIONI
