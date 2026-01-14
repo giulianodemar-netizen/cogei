@@ -173,9 +173,9 @@ foreach ($areas as $area) {
     ", $area->id));
     
     foreach ($questions as $question) {
-        // Recupera risposta per questa domanda
+        // Recupera risposta per questa domanda (include is_na flag)
         $response = $wpdb->get_row($wpdb->prepare("
-            SELECT r.*, o.text as option_text, o.weight as option_weight
+            SELECT r.*, o.text as option_text, o.weight as option_weight, o.is_na
             FROM {$wpdb->prefix}cogei_responses r
             INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
             WHERE r.assignment_id = %d AND r.question_id = %d
@@ -184,8 +184,21 @@ foreach ($areas as $area) {
         if ($response) {
             $html .= '<div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef;">';
             $html .= '<div style="color: #212529; font-weight: 500; margin-bottom: 8px; font-size: 15px;">❓ ' . esc_html($question->text) . '</div>';
-            $html .= '<div style="color: #28a745; margin-left: 24px; margin-bottom: 6px; font-size: 14px;">✓ ' . esc_html($response->option_text) . ' <span style="color: #6c757d;">(Peso: ' . number_format($response->option_weight, 2) . ')</span></div>';
-            $html .= '<div style="color: #6c757d; margin-left: 24px; font-size: 13px;">Punteggio calcolato: <strong style="color: #495057;">' . number_format($response->computed_score, 3) . '</strong></div>';
+            
+            // Check if this is an N.A. option
+            if ($response->is_na == 1) {
+                // N.A. response with badge
+                $html .= '<div style="margin-left: 24px; margin-bottom: 6px; font-size: 14px;">';
+                $html .= '<span style="color: #6c757d;">✓ ' . esc_html($response->option_text) . '</span> ';
+                $html .= '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px;">N.A.</span>';
+                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Esclusa dal calcolo)</span>';
+                $html .= '</div>';
+            } else {
+                // Normal response
+                $html .= '<div style="color: #28a745; margin-left: 24px; margin-bottom: 6px; font-size: 14px;">✓ ' . esc_html($response->option_text) . ' <span style="color: #6c757d;">(Peso: ' . number_format($response->option_weight, 2) . ')</span></div>';
+                $html .= '<div style="color: #6c757d; margin-left: 24px; font-size: 13px;">Punteggio calcolato: <strong style="color: #495057;">' . number_format($response->computed_score, 3) . '</strong></div>';
+            }
+            
             $html .= '</div>';
         }
     }
