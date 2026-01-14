@@ -702,11 +702,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                         $wpdb->prefix . 'cogei_areas',
                         [
                             'title' => sanitize_text_field($area_data['title']),
-                            'weight' => floatval($area_data['weight']),
+                            'weight' => sanitize_text_field($area_data['weight']),
                             'sort_order' => intval($area_data['sort_order'])
                         ],
                         ['id' => intval($area_data['id'])],
-                        ['%s', '%f', '%d'],
+                        ['%s', '%s', '%d'],
                         ['%d']
                     );
                     $area_id = intval($area_data['id']);
@@ -717,10 +717,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                         [
                             'questionnaire_id' => $questionnaire_id,
                             'title' => sanitize_text_field($area_data['title']),
-                            'weight' => floatval($area_data['weight']),
+                            'weight' => sanitize_text_field($area_data['weight']),
                             'sort_order' => intval($area_data['sort_order'])
                         ],
-                        ['%d', '%s', '%f', '%d']
+                        ['%d', '%s', '%s', '%d']
                     );
                     $area_id = $wpdb->insert_id;
                 }
@@ -766,12 +766,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                                         $wpdb->prefix . 'cogei_options',
                                         [
                                             'text' => sanitize_text_field($option_data['text']),
-                                            'weight' => floatval($option_data['weight']),
+                                            'weight' => sanitize_text_field($option_data['weight']),
                                             'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
                                             'sort_order' => intval($option_data['sort_order'])
                                         ],
                                         ['id' => intval($option_data['id'])],
-                                        ['%s', '%f', '%d', '%d'],
+                                        ['%s', '%s', '%d', '%d'],
                                         ['%d']
                                     );
                                 } else {
@@ -781,11 +781,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                                         [
                                             'question_id' => $question_id,
                                             'text' => sanitize_text_field($option_data['text']),
-                                            'weight' => floatval($option_data['weight']),
+                                            'weight' => sanitize_text_field($option_data['weight']),
                                             'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
                                             'sort_order' => intval($option_data['sort_order'])
                                         ],
-                                        ['%d', '%s', '%f', '%d', '%d']
+                                        ['%d', '%s', '%s', '%d', '%d']
                                     );
                                 }
                             }
