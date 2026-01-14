@@ -1446,6 +1446,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                     'id' => $option['id'],
                     'text' => $option['text'],
                     'weight' => $option['weight'],
+                    'is_na' => isset($option['is_na']) ? intval($option['is_na']) : 0,
                     'sort_order' => $option['sort_order']
                 ];
             }
@@ -1513,11 +1514,11 @@ function boq_renderAreasEditor($questionnaire_id) {
                         <div style="margin-top: 8px;">
                             <label>
                                 Peso: <input type="text" 
-                                       pattern="[0-9]*\.?[0-9]{0,3}" 
+                                       pattern="[0-9]*[.,]?[0-9]{0,3}" 
                                        maxlength="10"
                                        value="${area.weight}" 
-                                       onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value) || 0)" 
-                                       oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')"
+                                       onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value.replace(',', '.')) || 0)" 
+                                       oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/[,.]/g, (m, o, s) => s.indexOf(m) === o ? '.' : '').substring(0, 5)"
                                        style="width: 100px; padding: 4px; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-family: monospace;" 
                                        placeholder="1.000">
                             </label>
@@ -1668,11 +1669,11 @@ function boq_renderAreasEditor($questionnaire_id) {
                                        style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
                                 <label style="display: flex; align-items: center; gap: 5px;">
                                     Peso: <input type="text" 
-                                           pattern="[0-9]*\.?[0-9]{0,3}" 
+                                           pattern="[0-9]*[.,]?[0-9]{0,3}" 
                                            maxlength="10"
                                            value="${option.weight}" 
-                                           onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value) || 0)" 
-                                           oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')"
+                                           onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value.replace(',', '.')) || 0)" 
+                                           oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/[,.]/g, (m, o, s) => s.indexOf(m) === o ? '.' : '').substring(0, 5)"
                                            style="width: 100px; padding: 6px; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-family: monospace;" 
                                            placeholder="0.000">
                                 </label>
