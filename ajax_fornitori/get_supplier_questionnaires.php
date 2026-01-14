@@ -75,7 +75,8 @@ $assignments = $wpdb->get_results($wpdb->prepare("
         q.description as questionnaire_description,
         (SELECT AVG(r2.computed_score) * 100
          FROM {$wpdb->prefix}cogei_responses r2 
-         WHERE r2.assignment_id = a.id) as avg_score,
+         INNER JOIN {$wpdb->prefix}cogei_options o2 ON r2.selected_option_id = o2.id
+         WHERE r2.assignment_id = a.id AND o2.is_na = 0) as avg_score,
         (SELECT MAX(r2.answered_at)
          FROM {$wpdb->prefix}cogei_responses r2
          WHERE r2.assignment_id = a.id) as completion_date

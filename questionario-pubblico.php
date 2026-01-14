@@ -161,6 +161,16 @@ if ($assignment['status'] === 'completed') {
     
     // Get responses excluding N.A. options
     $responses = $wpdb->get_results($wpdb->prepare(
+        "SELECT r.computed_score, MAX(r.answered_at) as completion_date
+        FROM $table_responses r
+        INNER JOIN $table_options o ON r.selected_option_id = o.id
+        WHERE r.assignment_id = %d AND o.is_na = 0
+        GROUP BY r.assignment_id",
+        $assignment['id']
+    ), ARRAY_A);
+    
+    // Also get all responses for counting (excluding N.A.)
+    $all_responses = $wpdb->get_results($wpdb->prepare(
         "SELECT r.computed_score
         FROM $table_responses r
         INNER JOIN $table_options o ON r.selected_option_id = o.id
@@ -170,12 +180,13 @@ if ($assignment['status'] === 'completed') {
     
     $total_score = 0;
     $count = 0;
-    foreach ($responses as $resp) {
+    foreach ($all_responses as $resp) {
         $total_score += floatval($resp['computed_score']);
         $count++;
     }
     
     $final_score = $count > 0 ? ($total_score / $count) * 100 : 0;
+    $completion_date = !empty($responses) && !empty($responses[0]['completion_date']) ? $responses[0]['completion_date'] : null;
     
     // Determina valutazione
     if ($final_score >= 85) {
@@ -216,7 +227,7 @@ if ($assignment['status'] === 'completed') {
     <body>
         <div class="success">
             <h1>✅ Questionario Già Completato</h1>
-            <p>Hai già completato questo questionario in data: <strong><?php echo esc_html(date('d/m/Y H:i', strtotime($responses[0]['answered_at']))); ?></strong></p>
+            <p>Hai già completato questo questionario in data: <strong><?php echo $completion_date ? esc_html(date('d/m/Y H:i', strtotime($completion_date))) : '-'; ?></strong></p>
             <div style="margin: 20px 0;">
                 <?php 
                 $stars = boq_convertScoreToStars($final_score);
