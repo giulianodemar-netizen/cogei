@@ -80,16 +80,17 @@ $areas = $wpdb->get_results($wpdb->prepare("
     ORDER BY ar.sort_order ASC
 ", $assignment->questionnaire_id));
 
-// Calcola score medio
+// Calcola score medio (convert from 0-1 scale to 0-100 scale)
 $avg_score = $wpdb->get_var($wpdb->prepare("
-    SELECT AVG(computed_score)
+    SELECT AVG(computed_score) * 100
     FROM {$wpdb->prefix}cogei_responses
     WHERE assignment_id = %d
 ", $assignment_id));
 
 // Funzioni helper
 function convertScoreToStars($score) {
-    $stars = $score * 5;
+    // Score is now on 0-100 scale, convert to 0-5 stars
+    $stars = ($score / 100) * 5;
     return round($stars * 2) / 2;
 }
 
@@ -112,18 +113,22 @@ function renderStars($stars) {
 }
 
 function getEvaluationText($stars) {
-    if ($stars >= 4.5) return 'Eccellente';
-    if ($stars >= 3.5) return 'Molto Buono';
-    if ($stars >= 2.5) return 'Adeguato';
-    if ($stars >= 1.5) return 'Critico';
+    // Convert stars to 0-100 score for consistent thresholds
+    $score = ($stars / 5) * 100;
+    if ($score >= 85) return 'Eccellente';
+    if ($score >= 70) return 'Molto Buono';
+    if ($score >= 55) return 'Adeguato';
+    if ($score >= 40) return 'Critico';
     return 'Inadeguato';
 }
 
 function getEvaluationColor($stars) {
-    if ($stars >= 4.5) return '#4caf50';
-    if ($stars >= 3.5) return '#8bc34a';
-    if ($stars >= 2.5) return '#ffc107';
-    if ($stars >= 1.5) return '#ff9800';
+    // Convert stars to 0-100 score for consistent thresholds
+    $score = ($stars / 5) * 100;
+    if ($score >= 85) return '#4caf50';
+    if ($score >= 70) return '#8bc34a';
+    if ($score >= 55) return '#ffc107';
+    if ($score >= 40) return '#ff9800';
     return '#f44336';
 }
 
@@ -146,7 +151,7 @@ $html .= '</div>';
 $html .= '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; text-align: center;">';
 $html .= '<div style="font-size: 16px; margin-bottom: 10px; opacity: 0.9;">Valutazione Complessiva</div>';
 $html .= '<div style="margin: 15px 0;">' . renderStars($stars) . '</div>';
-$html .= '<div style="font-size: 28px; font-weight: 700; margin: 10px 0;">' . number_format($avg_score, 3) . ' / 1.000</div>';
+$html .= '<div style="font-size: 28px; font-weight: 700; margin: 10px 0;">' . number_format($avg_score, 2) . ' / 100</div>';
 $html .= '<div style="background: ' . $color . '; display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: 600; margin-top: 10px;">' . $evaluation . '</div>';
 $html .= '</div>';
 
