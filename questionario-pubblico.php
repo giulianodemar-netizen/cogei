@@ -159,22 +159,20 @@ if ($assignment['status'] === 'completed') {
     $table_responses = $wpdb->prefix . 'cogei_responses';
     $table_options = $wpdb->prefix . 'cogei_options';
     
-    // Get responses excluding N.A. options
+    // Get all responses including N.A. options (N.A. now uses max weight)
     $responses = $wpdb->get_results($wpdb->prepare(
         "SELECT r.computed_score, MAX(r.answered_at) as completion_date
         FROM $table_responses r
-        INNER JOIN $table_options o ON r.selected_option_id = o.id
-        WHERE r.assignment_id = %d AND o.is_na = 0
+        WHERE r.assignment_id = %d
         GROUP BY r.assignment_id",
         $assignment['id']
     ), ARRAY_A);
     
-    // Also get all responses for counting (excluding N.A.)
+    // Also get all responses for counting (including N.A.)
     $all_responses = $wpdb->get_results($wpdb->prepare(
         "SELECT r.computed_score
         FROM $table_responses r
-        INNER JOIN $table_options o ON r.selected_option_id = o.id
-        WHERE r.assignment_id = %d AND o.is_na = 0",
+        WHERE r.assignment_id = %d",
         $assignment['id']
     ), ARRAY_A);
     
@@ -290,8 +288,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
                     $option_id
                 ), ARRAY_A);
                 
-                // Calcola punteggio (se l'opzione è N.A., il punteggio sarà ignorato nel calcolo finale)
-                $computed_score = floatval($option['weight']) * floatval($area['weight']);
+                // Se l'opzione è N.A., usa il peso massimo disponibile per questa domanda
+                $weight_to_use = floatval($option['weight']);
+                if ($option['is_na'] == 1) {
+                    $max_weight = $wpdb->get_var($wpdb->prepare(
+                        "SELECT MAX(weight) FROM $table_options WHERE question_id = %d",
+                        $question['id']
+                    ));
+                    $weight_to_use = floatval($max_weight);
+                }
+                
+                // Calcola punteggio
+                $computed_score = $weight_to_use * floatval($area['weight']);
                 
                 // Salva risposta
                 $wpdb->insert($table_responses, [
@@ -313,12 +321,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale (escludendo risposte N.A.)
+        // Calcola punteggio finale (includendo risposte N.A. che ora usano peso massimo)
         $responses = $wpdb->get_results($wpdb->prepare(
             "SELECT r.computed_score
             FROM $table_responses r
-            INNER JOIN $table_options o ON r.selected_option_id = o.id
-            WHERE r.assignment_id = %d AND o.is_na = 0",
+            WHERE r.assignment_id = %d",
             $assignment['id']
         ), ARRAY_A);
         

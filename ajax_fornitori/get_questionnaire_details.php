@@ -80,12 +80,11 @@ $areas = $wpdb->get_results($wpdb->prepare("
     ORDER BY ar.sort_order ASC
 ", $assignment->questionnaire_id));
 
-// Calcola score medio (convert from 0-1 scale to 0-100 scale, excluding N.A. options)
+// Calcola score medio (convert from 0-1 scale to 0-100 scale, including N.A. options with max weight)
 $avg_score = $wpdb->get_var($wpdb->prepare("
     SELECT AVG(r.computed_score) * 100
     FROM {$wpdb->prefix}cogei_responses r
-    INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
-    WHERE r.assignment_id = %d AND o.is_na = 0
+    WHERE r.assignment_id = %d
 ", $assignment_id));
 
 // Funzioni helper
@@ -191,8 +190,9 @@ foreach ($areas as $area) {
                 $html .= '<div style="margin-left: 24px; margin-bottom: 6px; font-size: 14px;">';
                 $html .= '<span style="color: #6c757d;">✓ ' . esc_html($response->option_text) . '</span> ';
                 $html .= '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px;">N.A.</span>';
-                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Esclusa dal calcolo)</span>';
+                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Peso massimo applicato)</span>';
                 $html .= '</div>';
+                $html .= '<div style="color: #6c757d; margin-left: 24px; font-size: 13px;">Punteggio calcolato: <strong style="color: #495057;">' . number_format($response->computed_score, 3) . '</strong></div>';
             } else {
                 // Normal response
                 $html .= '<div style="color: #28a745; margin-left: 24px; margin-bottom: 6px; font-size: 14px;">✓ ' . esc_html($response->option_text) . ' <span style="color: #6c757d;">(Peso: ' . number_format($response->option_weight, 2) . ')</span></div>';

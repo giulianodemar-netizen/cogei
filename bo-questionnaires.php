@@ -275,7 +275,8 @@ function boq_getResponses($assignment_id) {
 /**
  * Calcola punteggio per un assignment
  * Formula: punteggio_domanda = option.weight * area.weight
- * Punteggio_finale = sum(punteggio_domanda) / numero_domande (normalizzato 0-1)
+ * Per N.A.: usa peso massimo della domanda
+ * Punteggio_finale = sum(punteggio_domanda) / numero_domande (normalizzato 0-100)
  */
 function boq_calculateScore($assignment_id) {
     global $wpdb;
@@ -300,11 +301,6 @@ function boq_calculateScore($assignment_id) {
         
         if (!$option) continue;
         
-        // Skip options marked as N.A. at design time
-        if (isset($option['is_na']) && $option['is_na'] == 1) {
-            continue;
-        }
-        
         // Ottieni area della domanda
         $question = $wpdb->get_row($wpdb->prepare(
             "SELECT area_id FROM {$wpdb->prefix}cogei_questions WHERE id = %d",
@@ -321,8 +317,18 @@ function boq_calculateScore($assignment_id) {
         
         if (!$area) continue;
         
+        // Se l'opzione è N.A., usa il peso massimo disponibile per questa domanda
+        $weight_to_use = floatval($option['weight']);
+        if (isset($option['is_na']) && $option['is_na'] == 1) {
+            $max_weight = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                $question_id
+            ));
+            $weight_to_use = floatval($max_weight);
+        }
+        
         // Calcola punteggio domanda = peso_opzione * peso_area
-        $question_score = floatval($option['weight']) * floatval($area['weight']);
+        $question_score = $weight_to_use * floatval($area['weight']);
         $total_score += $question_score;
         $count++;
     }
@@ -1021,7 +1027,7 @@ function boq_renderPublicQuestionnaireForm() {
             
             // Ottieni informazioni per calcolare il punteggio
             $option = $wpdb->get_row($wpdb->prepare(
-                "SELECT weight FROM {$wpdb->prefix}cogei_options WHERE id = %d",
+                "SELECT weight, is_na FROM {$wpdb->prefix}cogei_options WHERE id = %d",
                 $option_id
             ), ARRAY_A);
             
@@ -1035,7 +1041,17 @@ function boq_renderPublicQuestionnaireForm() {
                 $question['area_id']
             ), ARRAY_A);
             
-            $computed_score = floatval($option['weight']) * floatval($area['weight']);
+            // Se l'opzione è N.A., usa il peso massimo disponibile per questa domanda
+            $weight_to_use = floatval($option['weight']);
+            if (isset($option['is_na']) && $option['is_na'] == 1) {
+                $max_weight = $wpdb->get_var($wpdb->prepare(
+                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                    $question_id
+                ));
+                $weight_to_use = floatval($max_weight);
+            }
+            
+            $computed_score = $weight_to_use * floatval($area['weight']);
             
             $wpdb->insert(
                 $wpdb->prefix . 'cogei_responses',
@@ -2182,7 +2198,12 @@ function boq_renderResultsTab() {
                                         <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-left: 4px solid #ffc107; border-radius: 3px;">
                                             <span style="color: #6c757d;">✓ <?php echo esc_html($option['text']); ?></span>
                                             <span style="display: inline-block; background: #ffc107; color: #000; font-weight: bold; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">N.A.</span>
-                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Esclusa dal calcolo)</span>
+                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Peso massimo applicato)</span>
+                                        </div>
+                                        <div style="margin-top: 4px; padding-left: 8px;">
+                                            <span style="color: #666; font-size: 0.9em;">
+                                                Punteggio: <?php echo round($response['computed_score'], 4); ?>
+                                            </span>
                                         </div>
                                     <?php else: ?>
                                         <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
@@ -2401,8 +2422,6 @@ function boq_renderRatingsTab() {
                 r2.assignment_id,
                 AVG(r2.computed_score) * 100 as score
             FROM {$wpdb->prefix}cogei_responses r2
-            INNER JOIN {$wpdb->prefix}cogei_options o ON r2.selected_option_id = o.id
-            WHERE o.is_na = 0
             GROUP BY r2.assignment_id
         ) questionnaire_scores ON questionnaire_scores.assignment_id = a.id
         WHERE a.status = 'completed'
