@@ -288,8 +288,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
                     $option_id
                 ), ARRAY_A);
                 
-                // Se l'opzione è N.A., trattala come risposta corretta (peso 1.000)
-                $option_weight = (isset($option['is_na']) && $option['is_na'] == 1) ? 1.000 : floatval($option['weight']);
+                // Se l'opzione è N.A., usa il peso massimo disponibile per quella domanda
+                if (isset($option['is_na']) && $option['is_na'] == 1) {
+                    $max_weight = $wpdb->get_var($wpdb->prepare(
+                        "SELECT MAX(weight) FROM $table_options WHERE question_id = %d",
+                        $question['id']
+                    ));
+                    $option_weight = floatval($max_weight);
+                } else {
+                    $option_weight = floatval($option['weight']);
+                }
                 $computed_score = $option_weight * floatval($area['weight']);
                 
                 // Salva risposta

@@ -316,8 +316,16 @@ function boq_calculateScore($assignment_id) {
         
         if (!$area) continue;
         
-        // Se l'opzione è marcata come N.A., trattala come risposta corretta (peso 1.000)
-        $option_weight = (isset($option['is_na']) && $option['is_na'] == 1) ? 1.000 : floatval($option['weight']);
+        // Se l'opzione è marcata come N.A., usa il peso massimo disponibile per quella domanda
+        if (isset($option['is_na']) && $option['is_na'] == 1) {
+            $max_weight = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                $question_id
+            ));
+            $option_weight = floatval($max_weight);
+        } else {
+            $option_weight = floatval($option['weight']);
+        }
         
         // Calcola punteggio domanda = peso_opzione * peso_area
         $question_score = $option_weight * floatval($area['weight']);
