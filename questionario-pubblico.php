@@ -43,6 +43,59 @@ if (file_exists($wp_load_path)) {
 
 global $wpdb;
 
+/**
+ * Convert normalized score (0-1) to star rating (0-5)
+ * Uses half-star precision
+ */
+function boq_convertScoreToStars($score) {
+    // Convert 0-100 score to 0-5 scale
+    $stars = ($score / 100) * 5;
+    
+    // Round to nearest 0.5
+    $stars = round($stars * 2) / 2;
+    
+    // Clamp between 0 and 5
+    $stars = max(0, min(5, $stars));
+    
+    return $stars;
+}
+
+/**
+ * Render star rating HTML
+ * @param float $stars - Number of stars (0-5, can have 0.5 increments)
+ * @return string HTML with star visualization
+ */
+function boq_renderStarRating($stars) {
+    $full_stars = floor($stars);
+    $half_star = ($stars - $full_stars) >= 0.5;
+    $empty_stars = 5 - $full_stars - ($half_star ? 1 : 0);
+    
+    $html = '<span style="color: #FFD700; font-size: 24px; letter-spacing: 2px;">';
+    
+    // Full stars
+    for ($i = 0; $i < $full_stars; $i++) {
+        $html .= '★';
+    }
+    $html .= '</span>';
+    
+    // Half star using Unicode character
+    if ($half_star) {
+        $html .= '<span style="color: #FFD700; font-size: 24px; letter-spacing: 2px;">☆</span>';
+    }
+    
+    // Empty stars
+    $html .= '<span style="color: #DDD; font-size: 24px; letter-spacing: 2px;">';
+    for ($i = 0; $i < $empty_stars; $i++) {
+        $html .= '☆';
+    }
+    $html .= '</span>';
+    
+    // Add numeric value
+    $html .= ' <span style="color: #666; font-size: 16px;">(' . number_format($stars, 1) . ')</span>';
+    
+    return $html;
+}
+
 // Verifica che ci sia un token
 if (!isset($_GET['boq_token']) || empty($_GET['boq_token'])) {
     ?>
@@ -104,31 +157,44 @@ if (!$assignment) {
 // Verifica se il questionario è già stato completato
 if ($assignment['status'] === 'completed') {
     $table_responses = $wpdb->prefix . 'cogei_responses';
+    $table_options = $wpdb->prefix . 'cogei_options';
+    
+    // Get responses (N.A. already treated as correct in computed_score)
     $responses = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $table_responses WHERE assignment_id = %d",
+        "SELECT r.computed_score, MAX(r.answered_at) as completion_date
+        FROM $table_responses r
+        WHERE r.assignment_id = %d
+        GROUP BY r.assignment_id",
+        $assignment['id']
+    ), ARRAY_A);
+    
+    // Also get all responses for counting
+    $all_responses = $wpdb->get_results($wpdb->prepare(
+        "SELECT r.computed_score
+        FROM $table_responses r
+        WHERE r.assignment_id = %d",
         $assignment['id']
     ), ARRAY_A);
     
     $total_score = 0;
-    $count = 0;
-    foreach ($responses as $resp) {
+    foreach ($all_responses as $resp) {
         $total_score += floatval($resp['computed_score']);
-        $count++;
     }
     
-    $final_score = $count > 0 ? $total_score / $count : 0;
+    $final_score = $total_score * 100;
+    $completion_date = !empty($responses) && !empty($responses[0]['completion_date']) ? $responses[0]['completion_date'] : null;
     
     // Determina valutazione
-    if ($final_score >= 0.85) {
+    if ($final_score >= 85) {
         $evaluation = "Eccellente";
         $eval_class = "excellent";
-    } elseif ($final_score >= 0.70) {
+    } elseif ($final_score >= 70) {
         $evaluation = "Molto Buono";
         $eval_class = "very-good";
-    } elseif ($final_score >= 0.55) {
+    } elseif ($final_score >= 55) {
         $evaluation = "Adeguato";
         $eval_class = "adequate";
-    } elseif ($final_score >= 0.40) {
+    } elseif ($final_score >= 40) {
         $evaluation = "Critico";
         $eval_class = "critical";
     } else {
@@ -157,9 +223,15 @@ if ($assignment['status'] === 'completed') {
     <body>
         <div class="success">
             <h1>✅ Questionario Già Completato</h1>
-            <p>Hai già completato questo questionario in data: <strong><?php echo esc_html(date('d/m/Y H:i', strtotime($responses[0]['answered_at']))); ?></strong></p>
+            <p>Hai già completato questo questionario in data: <strong><?php echo $completion_date ? esc_html(date('d/m/Y H:i', strtotime($completion_date))) : '-'; ?></strong></p>
+            <div style="margin: 20px 0;">
+                <?php 
+                $stars = boq_convertScoreToStars($final_score);
+                echo boq_renderStarRating($stars); 
+                ?>
+            </div>
             <div class="score <?php echo $eval_class; ?>">
-                <?php echo number_format($final_score * 100, 1); ?>%
+                <?php echo number_format($final_score, 1); ?>
             </div>
             <h2>Valutazione: <span class="<?php echo $eval_class; ?>"><?php echo esc_html($evaluation); ?></span></h2>
             <p style="margin-top: 30px; color: #666;">Grazie per la tua collaborazione!</p>
@@ -208,14 +280,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             if (isset($_POST[$answer_key]) && !empty($_POST[$answer_key])) {
                 $option_id = intval($_POST[$answer_key]);
                 
-                // Recupera peso opzione
+                // Recupera peso opzione e flag is_na
                 $option = $wpdb->get_row($wpdb->prepare(
-                    "SELECT weight FROM $table_options WHERE id = %d",
+                    "SELECT weight, is_na FROM $table_options WHERE id = %d",
                     $option_id
                 ), ARRAY_A);
                 
-                // Calcola punteggio
-                $computed_score = floatval($option['weight']) * floatval($area['weight']);
+                // Se l'opzione è N.A., usa il peso massimo disponibile per quella domanda
+                if (isset($option['is_na']) && $option['is_na'] == 1) {
+                    $max_weight = $wpdb->get_var($wpdb->prepare(
+                        "SELECT MAX(weight) FROM $table_options WHERE question_id = %d",
+                        $question['id']
+                    ));
+                    $option_weight = floatval($max_weight);
+                } else {
+                    $option_weight = floatval($option['weight']);
+                }
+                $computed_score = $option_weight * floatval($area['weight']);
                 
                 // Salva risposta
                 $wpdb->insert($table_responses, [
@@ -237,31 +318,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale
+        // Calcola punteggio finale (include tutte le risposte, N.A. trattate come corrette con peso massimo)
         $responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT computed_score FROM $table_responses WHERE assignment_id = %d",
+            "SELECT r.computed_score
+            FROM $table_responses r
+            WHERE r.assignment_id = %d",
             $assignment['id']
         ), ARRAY_A);
         
         $total_score = 0;
-        $count = count($responses);
         foreach ($responses as $resp) {
             $total_score += floatval($resp['computed_score']);
         }
         
-        $final_score = $count > 0 ? $total_score / $count : 0;
+        $final_score = $total_score * 100;
         
         // Determina valutazione
-        if ($final_score >= 0.85) {
+        if ($final_score >= 85) {
             $evaluation = "Eccellente";
             $eval_class = "excellent";
-        } elseif ($final_score >= 0.70) {
+        } elseif ($final_score >= 70) {
             $evaluation = "Molto Buono";
             $eval_class = "very-good";
-        } elseif ($final_score >= 0.55) {
+        } elseif ($final_score >= 55) {
             $evaluation = "Adeguato";
             $eval_class = "adequate";
-        } elseif ($final_score >= 0.40) {
+        } elseif ($final_score >= 40) {
             $evaluation = "Critico";
             $eval_class = "critical";
         } else {
@@ -291,8 +373,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             <div class="success">
                 <h1>✅ Questionario Completato con Successo!</h1>
                 <p>Grazie per aver completato il questionario.</p>
+                <div style="margin: 20px 0;">
+                    <?php 
+                    $stars = boq_convertScoreToStars($final_score);
+                    echo boq_renderStarRating($stars); 
+                    ?>
+                </div>
                 <div class="score <?php echo $eval_class; ?>">
-                    <?php echo number_format($final_score * 100, 1); ?>%
+                    <?php echo number_format($final_score, 1); ?>
                 </div>
                 <h2>Valutazione: <span class="<?php echo $eval_class; ?>"><?php echo esc_html($evaluation); ?></span></h2>
                 <p style="margin-top: 30px; color: #666;">Le tue risposte sono state registrate con successo.</p>

@@ -79,7 +79,7 @@ function boq_createQuestionnaireTablesIfNotExists() {
         id int(11) NOT NULL AUTO_INCREMENT,
         questionnaire_id int(11) NOT NULL,
         title varchar(255) NOT NULL,
-        weight decimal(5,2) DEFAULT 1.00,
+        weight decimal(6,3) DEFAULT 1.000,
         sort_order int(11) DEFAULT 0,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -111,13 +111,33 @@ function boq_createQuestionnaireTablesIfNotExists() {
         id int(11) NOT NULL AUTO_INCREMENT,
         question_id int(11) NOT NULL,
         text varchar(255) NOT NULL,
-        weight decimal(5,2) DEFAULT 0.00,
+        weight decimal(6,3) DEFAULT 0.000,
         sort_order int(11) DEFAULT 0,
+        is_na tinyint(1) DEFAULT 0,
         PRIMARY KEY (id),
         KEY question_id (question_id),
         KEY sort_order (sort_order)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_options);
+    
+    // Add is_na column to options if it doesn't exist (migration for existing tables)
+    $column_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_options LIKE 'is_na'");
+    if (empty($column_exists)) {
+        $wpdb->query("ALTER TABLE $table_options ADD COLUMN is_na tinyint(1) DEFAULT 0 AFTER sort_order");
+    }
+    
+    // Migration: Update weight column precision to support 3 decimal places (0.345)
+    // Check if areas weight column needs updating
+    $area_weight_column = $wpdb->get_row("SHOW COLUMNS FROM $table_areas LIKE 'weight'");
+    if ($area_weight_column && stripos($area_weight_column->Type, 'decimal(5,2)') !== false) {
+        $wpdb->query("ALTER TABLE $table_areas MODIFY COLUMN weight decimal(6,3) DEFAULT 1.000");
+    }
+    
+    // Check if options weight column needs updating
+    $option_weight_column = $wpdb->get_row("SHOW COLUMNS FROM $table_options LIKE 'weight'");
+    if ($option_weight_column && stripos($option_weight_column->Type, 'decimal(5,2)') !== false) {
+        $wpdb->query("ALTER TABLE $table_options MODIFY COLUMN weight decimal(6,3) DEFAULT 0.000");
+    }
     
     // 📤 TABELLA ASSEGNAZIONI
     $table_assignments = $wpdb->prefix . 'cogei_assignments';
@@ -272,9 +292,9 @@ function boq_calculateScore($assignment_id) {
         $question_id = $response['question_id'];
         $option_id = $response['selected_option_id'];
         
-        // Ottieni peso opzione
+        // Ottieni peso e flag is_na dell'opzione
         $option = $wpdb->get_row($wpdb->prepare(
-            "SELECT weight FROM {$wpdb->prefix}cogei_options WHERE id = %d",
+            "SELECT weight, is_na FROM {$wpdb->prefix}cogei_options WHERE id = %d",
             $option_id
         ), ARRAY_A);
         
@@ -296,15 +316,26 @@ function boq_calculateScore($assignment_id) {
         
         if (!$area) continue;
         
+        // Se l'opzione è marcata come N.A., usa il peso massimo disponibile per quella domanda
+        if (isset($option['is_na']) && $option['is_na'] == 1) {
+            $max_weight = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                $question_id
+            ));
+            $option_weight = floatval($max_weight);
+        } else {
+            $option_weight = floatval($option['weight']);
+        }
+        
         // Calcola punteggio domanda = peso_opzione * peso_area
-        $question_score = floatval($option['weight']) * floatval($area['weight']);
+        $question_score = $option_weight * floatval($area['weight']);
         $total_score += $question_score;
         $count++;
     }
     
-    // Normalizza il punteggio (0-1)
+    // Normalizza il punteggio (0-100)
     if ($count > 0) {
-        return $total_score / $count;
+        return ($total_score / $count) * 100;
     }
     
     return 0;
@@ -320,13 +351,13 @@ function boq_calculateScore($assignment_id) {
  * < 0.40 = Inadeguato
  */
 function boq_evaluateScore($score) {
-    if ($score >= 0.85) {
+    if ($score >= 85) {
         return 'Eccellente';
-    } elseif ($score >= 0.70) {
+    } elseif ($score >= 70) {
         return 'Molto Buono';
-    } elseif ($score >= 0.55) {
+    } elseif ($score >= 55) {
         return 'Adeguato';
-    } elseif ($score >= 0.40) {
+    } elseif ($score >= 40) {
         return 'Critico';
     } else {
         return 'Inadeguato';
@@ -358,6 +389,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
     // Get supplier (fornitore) user info
     $hse_user = get_userdata($assignment['target_user_id']);
     $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+    $ragione_sociale = $hse_user ? get_user_meta($hse_user->ID, 'user_registration_rag_soc', true) : '';
+    $supplier_display = $ragione_sociale ? $ragione_sociale . " (P.IVA: " . $hse_name . ")" : $hse_name;
     
     $token = $assignment['token'];
     $inspector_email = $assignment['inspector_email'];
@@ -376,8 +409,8 @@ function boq_sendQuestionnaireEmail($assignment_id) {
 <div style='background: #03679e; text-align: center; padding: 10px; margin-bottom: 30px;'>
     <img style='max-width: 150px;' src='https://cogei.provasiti.it/cogei/wp-content/uploads/2023/02/logo_bianco-1.png' />
 </div>
-<p>Gentile Ispettore,</p>
-<p>Le è stato assegnato il seguente questionario per valutare il fornitore: <strong>" . esc_html($hse_name) . "</strong></p>
+<p>Gentile Valutatore,</p>
+<p>Le è stato assegnato il seguente questionario per valutare il fornitore: <strong>" . esc_html($supplier_display) . "</strong></p>
 <h3>" . esc_html($questionnaire['title']) . "</h3>
 <p>" . esc_html($questionnaire['description']) . "</p>
 <p>Per compilare il questionario, clicchi sul link seguente:</p>
@@ -422,7 +455,7 @@ if (isset($_GET['boq_csv_export']) && $_GET['boq_csv_export'] === '1') {
     header('Expires: 0');
     
     echo "\xEF\xBB\xBF"; // BOM UTF-8
-    echo "ID,Questionario,Fornitore,Email Ispettore,Data Invio,Stato,Punteggio,Valutazione\n";
+    echo "ID,Questionario,Fornitore,Email Valutatore,Data Invio,Stato,Punteggio,Valutazione\n";
     
     $assignments = $wpdb->get_results("
         SELECT a.*, q.title as questionnaire_title 
@@ -508,7 +541,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                 ['%s', '%s', '%s', '%d']
             );
             $questionnaire_id = $wpdb->insert_id;
-            $message = "Questionario creato con successo (ID: $questionnaire_id)";
+            
+            // Redirect to edit mode to add areas and questions
+            wp_redirect(add_query_arg([
+                'boq_tab' => 'questionnaires',
+                'edit' => $questionnaire_id
+            ]));
+            exit;
         }
         
         echo '<div class="notice notice-success"><p>' . esc_html($message) . '</p></div>';
@@ -662,54 +701,169 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
             exit;
         }
         
-        // Prima elimina tutti i dati esistenti per questo questionario
-        $existing_areas = boq_getAreas($questionnaire_id);
-        foreach ($existing_areas as $area) {
-            $questions = boq_getQuestions($area['id']);
-            foreach ($questions as $question) {
-                // Elimina opzioni
-                $wpdb->delete($wpdb->prefix . 'cogei_options', ['question_id' => $question['id']], ['%d']);
-            }
-            // Elimina domande
-            $wpdb->delete($wpdb->prefix . 'cogei_questions', ['area_id' => $area['id']], ['%d']);
-        }
-        // Elimina aree
-        $wpdb->delete($wpdb->prefix . 'cogei_areas', ['questionnaire_id' => $questionnaire_id], ['%d']);
+        // CRITICAL: Check if this questionnaire has any responses
+        // If yes, we update existing records instead of deleting/recreating to preserve response links
+        $has_responses = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}cogei_responses r
+             INNER JOIN {$wpdb->prefix}cogei_assignments a ON r.assignment_id = a.id
+             WHERE a.questionnaire_id = %d",
+            $questionnaire_id
+        ));
         
-        // Ora inserisci la nuova struttura
-        foreach ($structure as $area_data) {
-            // Inserisci area
-            $area_insert = [
-                'questionnaire_id' => $questionnaire_id,
-                'title' => sanitize_text_field($area_data['title']),
-                'weight' => floatval($area_data['weight']),
-                'sort_order' => intval($area_data['sort_order'])
-            ];
-            $wpdb->insert($wpdb->prefix . 'cogei_areas', $area_insert, ['%d', '%s', '%f', '%d']);
-            $area_id = $wpdb->insert_id;
+        if ($has_responses > 0) {
+            // UPDATE mode: preserve IDs and update data only
+            $existing_areas = boq_getAreas($questionnaire_id);
             
-            // Inserisci domande
-            if (!empty($area_data['questions'])) {
-                foreach ($area_data['questions'] as $question_data) {
-                    $question_insert = [
-                        'area_id' => $area_id,
-                        'text' => sanitize_textarea_field($question_data['text']),
-                        'is_required' => intval($question_data['is_required']),
-                        'sort_order' => intval($question_data['sort_order'])
-                    ];
-                    $wpdb->insert($wpdb->prefix . 'cogei_questions', $question_insert, ['%d', '%s', '%d', '%d']);
-                    $question_id = $wpdb->insert_id;
-                    
-                    // Inserisci opzioni
-                    if (!empty($question_data['options'])) {
-                        foreach ($question_data['options'] as $option_data) {
-                            $option_insert = [
-                                'question_id' => $question_id,
-                                'text' => sanitize_text_field($option_data['text']),
-                                'weight' => floatval($option_data['weight']),
-                                'sort_order' => intval($option_data['sort_order'])
-                            ];
-                            $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d']);
+            foreach ($structure as $area_index => $area_data) {
+                if (isset($area_data['id']) && $area_data['id'] > 0) {
+                    // Update existing area
+                    $wpdb->update(
+                        $wpdb->prefix . 'cogei_areas',
+                        [
+                            'title' => sanitize_text_field($area_data['title']),
+                            'weight' => sanitize_text_field($area_data['weight']),
+                            'sort_order' => intval($area_data['sort_order'])
+                        ],
+                        ['id' => intval($area_data['id'])],
+                        ['%s', '%s', '%d'],
+                        ['%d']
+                    );
+                    $area_id = intval($area_data['id']);
+                } else {
+                    // Insert new area
+                    $wpdb->insert(
+                        $wpdb->prefix . 'cogei_areas',
+                        [
+                            'questionnaire_id' => $questionnaire_id,
+                            'title' => sanitize_text_field($area_data['title']),
+                            'weight' => sanitize_text_field($area_data['weight']),
+                            'sort_order' => intval($area_data['sort_order'])
+                        ],
+                        ['%d', '%s', '%s', '%d']
+                    );
+                    $area_id = $wpdb->insert_id;
+                }
+                
+                // Process questions
+                if (!empty($area_data['questions'])) {
+                    foreach ($area_data['questions'] as $question_data) {
+                        if (isset($question_data['id']) && $question_data['id'] > 0) {
+                            // Update existing question
+                            $wpdb->update(
+                                $wpdb->prefix . 'cogei_questions',
+                                [
+                                    'text' => sanitize_textarea_field($question_data['text']),
+                                    'is_required' => intval($question_data['is_required']),
+                                    'sort_order' => intval($question_data['sort_order'])
+                                ],
+                                ['id' => intval($question_data['id'])],
+                                ['%s', '%d', '%d'],
+                                ['%d']
+                            );
+                            $question_id = intval($question_data['id']);
+                        } else {
+                            // Insert new question
+                            $wpdb->insert(
+                                $wpdb->prefix . 'cogei_questions',
+                                [
+                                    'area_id' => $area_id,
+                                    'text' => sanitize_textarea_field($question_data['text']),
+                                    'is_required' => intval($question_data['is_required']),
+                                    'sort_order' => intval($question_data['sort_order'])
+                                ],
+                                ['%d', '%s', '%d', '%d']
+                            );
+                            $question_id = $wpdb->insert_id;
+                        }
+                        
+                        // Process options
+                        if (!empty($question_data['options'])) {
+                            foreach ($question_data['options'] as $option_data) {
+                                if (isset($option_data['id']) && $option_data['id'] > 0) {
+                                    // Update existing option
+                                    $wpdb->update(
+                                        $wpdb->prefix . 'cogei_options',
+                                        [
+                                            'text' => sanitize_text_field($option_data['text']),
+                                            'weight' => sanitize_text_field($option_data['weight']),
+                                            'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
+                                            'sort_order' => intval($option_data['sort_order'])
+                                        ],
+                                        ['id' => intval($option_data['id'])],
+                                        ['%s', '%s', '%d', '%d'],
+                                        ['%d']
+                                    );
+                                } else {
+                                    // Insert new option
+                                    $wpdb->insert(
+                                        $wpdb->prefix . 'cogei_options',
+                                        [
+                                            'question_id' => $question_id,
+                                            'text' => sanitize_text_field($option_data['text']),
+                                            'weight' => sanitize_text_field($option_data['weight']),
+                                            'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
+                                            'sort_order' => intval($option_data['sort_order'])
+                                        ],
+                                        ['%d', '%s', '%s', '%d', '%d']
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // INSERT mode: No responses yet, safe to delete and recreate
+            // Prima elimina tutti i dati esistenti per questo questionario
+            $existing_areas = boq_getAreas($questionnaire_id);
+            foreach ($existing_areas as $area) {
+                $questions = boq_getQuestions($area['id']);
+                foreach ($questions as $question) {
+                    // Elimina opzioni
+                    $wpdb->delete($wpdb->prefix . 'cogei_options', ['question_id' => $question['id']], ['%d']);
+                }
+                // Elimina domande
+                $wpdb->delete($wpdb->prefix . 'cogei_questions', ['area_id' => $area['id']], ['%d']);
+            }
+            // Elimina aree
+            $wpdb->delete($wpdb->prefix . 'cogei_areas', ['questionnaire_id' => $questionnaire_id], ['%d']);
+            
+            // Ora inserisci la nuova struttura
+            foreach ($structure as $area_data) {
+                // Inserisci area
+                $area_insert = [
+                    'questionnaire_id' => $questionnaire_id,
+                    'title' => sanitize_text_field($area_data['title']),
+                    'weight' => floatval($area_data['weight']),
+                    'sort_order' => intval($area_data['sort_order'])
+                ];
+                $wpdb->insert($wpdb->prefix . 'cogei_areas', $area_insert, ['%d', '%s', '%f', '%d']);
+                $area_id = $wpdb->insert_id;
+                
+                // Inserisci domande
+                if (!empty($area_data['questions'])) {
+                    foreach ($area_data['questions'] as $question_data) {
+                        $question_insert = [
+                            'area_id' => $area_id,
+                            'text' => sanitize_textarea_field($question_data['text']),
+                            'is_required' => intval($question_data['is_required']),
+                            'sort_order' => intval($question_data['sort_order'])
+                        ];
+                        $wpdb->insert($wpdb->prefix . 'cogei_questions', $question_insert, ['%d', '%s', '%d', '%d']);
+                        $question_id = $wpdb->insert_id;
+                        
+                        // Inserisci opzioni
+                        if (!empty($question_data['options'])) {
+                            foreach ($question_data['options'] as $option_data) {
+                                $option_insert = [
+                                    'question_id' => $question_id,
+                                    'text' => sanitize_text_field($option_data['text']),
+                                    'weight' => floatval($option_data['weight']),
+                                    'is_na' => isset($option_data['is_na']) ? intval($option_data['is_na']) : 0,
+                                    'sort_order' => intval($option_data['sort_order'])
+                                ];
+                                $wpdb->insert($wpdb->prefix . 'cogei_options', $option_insert, ['%d', '%s', '%f', '%d', '%d']);
+                            }
                         }
                     }
                 }
@@ -725,45 +879,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
     if ($action === 'send_questionnaire') {
         $questionnaire_id = intval($_POST['questionnaire_id']);
         $target_user_id = intval($_POST['target_user_id']);
-        $inspector_email = sanitize_email($_POST['inspector_email']);
+        $inspector_emails_raw = isset($_POST['inspector_emails']) ? $_POST['inspector_emails'] : '';
+        
+        // Parse multiple emails - support both comma-separated and newline-separated
+        $inspector_emails_raw = str_replace([',', ';'], "\n", $inspector_emails_raw);
+        $inspector_emails_array = array_filter(array_map('trim', explode("\n", $inspector_emails_raw)));
+        
+        // Validate and sanitize emails
+        $valid_emails = [];
+        $invalid_emails = [];
+        foreach ($inspector_emails_array as $email) {
+            $sanitized = sanitize_email($email);
+            if (is_email($sanitized)) {
+                $valid_emails[] = $sanitized;
+            } else {
+                $invalid_emails[] = $email;
+            }
+        }
         
         // Validazione: target_user_id è obbligatorio
         if (empty($target_user_id) || $target_user_id <= 0) {
             echo '<div class="notice notice-error"><p>Devi selezionare un fornitore</p></div>';
-        } elseif (empty($inspector_email)) {
-            echo '<div class="notice notice-error"><p>Email ispettore è obbligatoria</p></div>';
+        } elseif (empty($valid_emails)) {
+            if (!empty($invalid_emails)) {
+                echo '<div class="notice notice-error"><p>Le email inserite non sono valide: ' . esc_html(implode(', ', $invalid_emails)) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Email valutatore è obbligatoria</p></div>';
+            }
         } else {
             // Verifica che il fornitore esista
             $user = get_userdata($target_user_id);
             if (!$user) {
                 echo '<div class="notice notice-error"><p>Fornitore non valido</p></div>';
             } else {
-                $token = boq_generateToken();
+                $sent_count = 0;
+                $failed_emails = [];
                 
-                $assignment_data = [
-                    'questionnaire_id' => $questionnaire_id,
-                    'target_user_id' => $target_user_id,
-                    'inspector_email' => $inspector_email,
-                    'sent_by' => get_current_user_id(),
-                    'token' => $token,
-                    'status' => 'pending'
-                ];
+                // Crea un assignment separato per ogni email valutatore
+                foreach ($valid_emails as $inspector_email) {
+                    $token = boq_generateToken();
+                    
+                    $assignment_data = [
+                        'questionnaire_id' => $questionnaire_id,
+                        'target_user_id' => $target_user_id,
+                        'inspector_email' => $inspector_email,
+                        'sent_by' => get_current_user_id(),
+                        'token' => $token,
+                        'status' => 'pending'
+                    ];
+                    
+                    $wpdb->insert(
+                        $wpdb->prefix . 'cogei_assignments',
+                        $assignment_data,
+                        ['%d', '%d', '%s', '%d', '%s', '%s']
+                    );
+                    
+                    $assignment_id = $wpdb->insert_id;
+                    
+                    // Invia email
+                    $email_sent = boq_sendQuestionnaireEmail($assignment_id);
+                    
+                    if ($email_sent) {
+                        $sent_count++;
+                    } else {
+                        $failed_emails[] = $inspector_email;
+                    }
+                }
                 
-                $wpdb->insert(
-                    $wpdb->prefix . 'cogei_assignments',
-                    $assignment_data,
-                    ['%d', '%d', '%s', '%d', '%s', '%s']
-                );
-                
-                $assignment_id = $wpdb->insert_id;
-                
-                // Invia email
-                $email_sent = boq_sendQuestionnaireEmail($assignment_id);
-                
-                if ($email_sent) {
-                    echo '<div class="notice notice-success"><p>Questionario inviato con successo a ' . esc_html($inspector_email) . ' per valutare l\'fornitore: ' . esc_html($user->display_name) . '</p></div>';
+                // Mostra messaggio di successo/warning
+                if ($sent_count > 0) {
+                    $msg = "Questionario inviato con successo a <strong>" . $sent_count . " valutatore/i</strong> per valutare il fornitore: <strong>" . esc_html($user->display_name) . "</strong>";
+                    if ($sent_count > 1) {
+                        $msg .= "<br><small>Sono state create " . $sent_count . " valutazioni distinte (una per valutatore)</small>";
+                    }
+                    if (!empty($failed_emails)) {
+                        $msg .= "<br><span style='color: #856404;'>⚠️ Email non inviate a: " . esc_html(implode(', ', $failed_emails)) . "</span>";
+                    }
+                    echo '<div class="notice notice-success"><p>' . $msg . '</p></div>';
                 } else {
-                    echo '<div class="notice notice-warning"><p>Questionario creato ma email non inviata. Token: ' . esc_html($token) . '</p></div>';
+                    echo '<div class="notice notice-error"><p>Errore: nessuna email inviata</p></div>';
+                }
+                
+                // Mostra avviso se ci sono email invalide
+                if (!empty($invalid_emails)) {
+                    echo '<div class="notice notice-warning"><p>⚠️ Le seguenti email non sono valide e sono state ignorate: ' . esc_html(implode(', ', $invalid_emails)) . '</p></div>';
                 }
             }
         }
@@ -1266,6 +1465,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                     'id' => $option['id'],
                     'text' => $option['text'],
                     'weight' => $option['weight'],
+                    'is_na' => isset($option['is_na']) ? intval($option['is_na']) : 0,
                     'sort_order' => $option['sort_order']
                 ];
             }
@@ -1332,8 +1532,14 @@ function boq_renderAreasEditor($questionnaire_id) {
                                style="font-size: 1.2em; font-weight: bold; color: #03679e; padding: 5px; border: 1px solid #ddd; border-radius: 3px; width: 60%;" placeholder="Titolo Area">
                         <div style="margin-top: 8px;">
                             <label>
-                                Peso: <input type="number" step="0.01" value="${area.weight}" onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value))" 
-                                       style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 3px;">
+                                Peso: <input type="text" 
+                                       pattern="[0-9]*[.,]?[0-9]{0,3}" 
+                                       maxlength="10"
+                                       value="${area.weight}" 
+                                       onchange="boqUpdateArea(${areaIdx}, 'weight', parseFloat(this.value.replace(',', '.')) || 0)" 
+                                       oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/[,.]/g, (m, o, s) => s.indexOf(m) === o ? '.' : '').substring(0, 5)"
+                                       style="width: 100px; padding: 4px; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-family: monospace;" 
+                                       placeholder="1.000">
                             </label>
                         </div>
                     </div>
@@ -1401,7 +1607,7 @@ function boq_renderAreasEditor($questionnaire_id) {
                                 <div style="color: #999; font-size: 1.2em; cursor: move; padding: 5px;">☰</div>
                                 <div style="flex: 1;">
                                     <textarea onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'text', this.value)" 
-                                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2">${boqEsc(question.text)}</textarea>
+                                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-weight: bold;" rows="2" placeholder="Inserisci il testo della domanda">${boqEsc(question.text)}</textarea>
                                     <div style="margin-top: 5px;">
                                         <label>
                                             <input type="checkbox" ${question.is_required ? 'checked' : ''} onchange="boqUpdateQuestion(${areaIdx}, ${qIdx}, 'is_required', this.checked ? 1 : 0)"> 
@@ -1481,8 +1687,19 @@ function boq_renderAreasEditor($questionnaire_id) {
                                 <input type="text" value="${boqEsc(option.text)}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'text', this.value)" 
                                        style="flex: 2; padding: 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Testo opzione">
                                 <label style="display: flex; align-items: center; gap: 5px;">
-                                    Peso: <input type="number" step="0.01" value="${option.weight}" onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value))" 
-                                           style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 3px;">
+                                    Peso: <input type="text" 
+                                           pattern="[0-9]*[.,]?[0-9]{0,3}" 
+                                           maxlength="10"
+                                           value="${option.weight}" 
+                                           onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'weight', parseFloat(this.value.replace(',', '.')) || 0)" 
+                                           oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/[,.]/g, (m, o, s) => s.indexOf(m) === o ? '.' : '').substring(0, 5)"
+                                           style="width: 100px; padding: 6px; border: 1px solid #ddd; border-radius: 3px; text-align: right; font-family: monospace;" 
+                                           placeholder="0.000">
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 5px; background: #fff3cd; padding: 4px 8px; border-radius: 3px; border: 1px solid #ffc107;">
+                                    <input type="checkbox" ${option.is_na ? 'checked' : ''} onchange="boqUpdateOption(${areaIdx}, ${qIdx}, ${oIdx}, 'is_na', this.checked ? 1 : 0)" 
+                                           style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px; font-weight: 500;">N.A.</span>
                                 </label>
                                 <button onclick="boqDeleteOption(${areaIdx}, ${qIdx}, ${oIdx})" style="background: #f44336; color: white; padding: 4px 10px; border: none; border-radius: 3px; cursor: pointer;">✕</button>
                             `;
@@ -1526,7 +1743,7 @@ function boq_renderAreasEditor($questionnaire_id) {
     function boqAddArea() {
         boqEditorState.push({
             id: boqNextTempId--,
-            title: 'Nuova Area',
+            title: '',
             weight: 1.00,
             sort_order: boqEditorState.length,
             questions: []
@@ -1549,7 +1766,7 @@ function boq_renderAreasEditor($questionnaire_id) {
         if (!boqEditorState[areaIdx].questions) boqEditorState[areaIdx].questions = [];
         boqEditorState[areaIdx].questions.push({
             id: boqNextTempId--,
-            text: 'Nuova Domanda',
+            text: '',
             is_required: 1,
             sort_order: boqEditorState[areaIdx].questions.length,
             options: []
@@ -1572,8 +1789,9 @@ function boq_renderAreasEditor($questionnaire_id) {
         if (!boqEditorState[areaIdx].questions[qIdx].options) boqEditorState[areaIdx].questions[qIdx].options = [];
         boqEditorState[areaIdx].questions[qIdx].options.push({
             id: boqNextTempId--,
-            text: 'Nuova Opzione',
+            text: '',
             weight: 0.00,
+            is_na: 0,
             sort_order: boqEditorState[areaIdx].questions[qIdx].options.length
         });
         boqRenderEditor();
@@ -1648,7 +1866,8 @@ function boq_renderAssignmentsTab() {
         <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 30px;">
             <h2>📤 Invia Questionario: <?php echo esc_html($questionnaire['title']); ?></h2>
             <p style="background: #e3f2fd; padding: 12px; border-left: 4px solid #03679e; margin-bottom: 20px;">
-                <strong>Nota:</strong> Il questionario verrà inviato all'ispettore per valutare l'operato del fornitore selezionato.
+                <strong>Nota:</strong> Il questionario verrà inviato agli ispettori per valutare l'operato del fornitore selezionato.<br>
+                <small>💡 Puoi inserire più email valutatore: ogni valutatore riceverà un questionario separato e verrà creata una valutazione distinta nella tabella "Storico Invii".</small>
             </p>
             
             <form method="POST">
@@ -1667,13 +1886,15 @@ function boq_renderAssignmentsTab() {
                         // Cerca fornitori da valutare o subscriber
                         $users = get_users(['role__in' => ['hse', 'subscriber']]);
                         foreach ($users as $user):
+                            $ragione_sociale = get_user_meta($user->ID, 'user_registration_rag_soc', true);
+                            $display_text = $ragione_sociale ? $ragione_sociale : $user->display_name;
                         ?>
-                            <div class="boq-user-option" data-id="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($user->display_name)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>" 
+                            <div class="boq-user-option" data-id="<?php echo $user->ID; ?>" data-name="<?php echo esc_attr(strtolower($display_text)); ?>" data-email="<?php echo esc_attr(strtolower($user->user_email)); ?>" 
                                  style="padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
-                                    <strong style="color: #333;"><?php echo esc_html($user->display_name); ?></strong>
+                                    <strong style="color: #333;"><?php echo esc_html($display_text); ?></strong>
                                     <br>
-                                    <small style="color: #666;"><?php echo esc_html($user->user_email); ?></small>
+                                    <small style="color: #666;">P.IVA: <?php echo esc_html($user->display_name); ?> | <?php echo esc_html($user->user_email); ?></small>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -1759,12 +1980,15 @@ function boq_renderAssignmentsTab() {
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">
-                        Email Ispettore * <span style="color: red;">(Obbligatorio)</span>
+                        Email Valutatore/i * <span style="color: red;">(Obbligatorio)</span>
                     </label>
-                    <input type="email" name="inspector_email" required
-                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
-                           placeholder="ispettore@example.com">
-                    <small style="color: #666;">Inserisci l'email dell'ispettore che compilerà il questionario di valutazione</small>
+                    <textarea name="inspector_emails" required rows="3"
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-family: inherit;"
+                           placeholder="valutatore1@example.com&#10;valutatore2@example.com&#10;valutatore3@example.com"></textarea>
+                    <small style="color: #666;">
+                        💡 <strong>Più ispettori:</strong> Inserisci una email per riga o separale con virgola. 
+                        Ogni valutatore riceverà un questionario separato e verrà creata una valutazione distinta per ciascuno.
+                    </small>
                 </div>
                 
                 <button type="submit" style="background: #4caf50; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em;">
@@ -1786,9 +2010,11 @@ function boq_renderAssignmentsTab() {
             <tr style="background: #03679e; color: white;">
                 <th style="padding: 12px; text-align: left;">ID</th>
                 <th style="padding: 12px; text-align: left;">Questionario</th>
-                <th style="padding: 12px; text-align: left;">Fornitore</th>
-                <th style="padding: 12px; text-align: left;">Email Ispettore</th>
+                <th style="padding: 12px; text-align: left;">Ragione Sociale</th>
+                <th style="padding: 12px; text-align: left;">P.IVA</th>
+                <th style="padding: 12px; text-align: left;">Email Valutatore</th>
                 <th style="padding: 12px; text-align: left;">Data Invio</th>
+                <th style="padding: 12px; text-align: left;">Data Compilazione</th>
                 <th style="padding: 12px; text-align: center;">Stato</th>
                 <th style="padding: 12px; text-align: left;">Link Questionario</th>
                 <th style="padding: 12px; text-align: center;">Azioni</th>
@@ -1797,7 +2023,8 @@ function boq_renderAssignmentsTab() {
         <tbody>
             <?php
             $assignments = $wpdb->get_results("
-                SELECT a.*, q.title as questionnaire_title 
+                SELECT a.*, q.title as questionnaire_title,
+                       (SELECT MAX(r.answered_at) FROM {$wpdb->prefix}cogei_responses r WHERE r.assignment_id = a.id) as completion_date
                 FROM {$wpdb->prefix}cogei_assignments a
                 LEFT JOIN {$wpdb->prefix}cogei_questionnaires q ON a.questionnaire_id = q.id
                 ORDER BY a.sent_at DESC
@@ -1806,11 +2033,16 @@ function boq_renderAssignmentsTab() {
             
             foreach ($assignments as $assignment):
                 $hse_user_name = 'N/A';
+                $ragione_sociale = '';
                 if ($assignment['target_user_id']) {
                     $user = get_userdata($assignment['target_user_id']);
                     if ($user) {
                         $hse_user_name = $user->display_name;
+                        $ragione_sociale = get_user_meta($user->ID, 'user_registration_rag_soc', true);
                     }
+                }
+                if (!$ragione_sociale) {
+                    $ragione_sociale = '-';
                 }
                 
                 // Genera link questionario - punta al file standalone /questionario/ (usa site_url perché la cartella è dentro l'installazione WP)
@@ -1819,9 +2051,19 @@ function boq_renderAssignmentsTab() {
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                 <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
+                <td style="padding: 12px;"><?php echo esc_html($ragione_sociale); ?></td>
                 <td style="padding: 12px;"><?php echo esc_html($hse_user_name); ?></td>
                 <td style="padding: 12px;"><?php echo esc_html($assignment['inspector_email']); ?></td>
                 <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?></td>
+                <td style="padding: 12px;">
+                    <?php 
+                    if ($assignment['completion_date']) {
+                        echo date('d/m/Y H:i', strtotime($assignment['completion_date']));
+                    } else {
+                        echo '<span style="color: #999;">-</span>';
+                    }
+                    ?>
+                </td>
                 <td style="padding: 12px; text-align: center;">
                     <?php
                     $status_colors = [
@@ -1893,12 +2135,16 @@ function boq_renderResultsTab() {
                         $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
                         ?>
                         <strong>Fornitore Valutato:</strong> <?php echo esc_html($hse_name); ?><br>
-                        <strong>Email Ispettore:</strong> <?php echo esc_html($assignment['inspector_email']); ?><br>
+                        <strong>Email Valutatore:</strong> <?php echo esc_html($assignment['inspector_email']); ?><br>
                         <strong>Data Invio:</strong> <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
                     </div>
                     <div style="background: #f0f0f0; padding: 20px; border-radius: 5px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #03679e; margin-bottom: 10px;">
-                            <?php echo round($score, 4); ?> / 1.00
+                        <?php 
+                        $stars = boq_convertScoreToStars($score);
+                        echo boq_renderStarRating($stars); 
+                        ?>
+                        <div style="font-size: 2em; font-weight: bold; color: #03679e; margin: 15px 0 10px 0;">
+                            <?php echo number_format($score, 2); ?> / 100
                         </div>
                         <div style="font-size: 1.5em; font-weight: bold; color: #4caf50;">
                             <?php echo esc_html($evaluation); ?>
@@ -1938,13 +2184,21 @@ function boq_renderResultsTab() {
                                         $response['selected_option_id']
                                     ), ARRAY_A);
                                     ?>
-                                    <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
-                                        ✓ <?php echo esc_html($option['text']); ?>
-                                        <span style="color: #666; font-size: 0.9em;">
-                                            (Peso Opzione: <?php echo $option['weight']; ?>, 
-                                            Punteggio: <?php echo round($response['computed_score'], 4); ?>)
-                                        </span>
-                                    </div>
+                                    <?php if ($option && isset($option['is_na']) && $option['is_na'] == 1): ?>
+                                        <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-left: 4px solid #ffc107; border-radius: 3px;">
+                                            <span style="color: #6c757d;">✓ <?php echo esc_html($option['text']); ?></span>
+                                            <span style="display: inline-block; background: #ffc107; color: #000; font-weight: bold; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">N.A.</span>
+                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Esclusa dal calcolo)</span>
+                                        </div>
+                                    <?php else: ?>
+                                        <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
+                                            ✓ <?php echo esc_html($option['text']); ?>
+                                            <span style="color: #666; font-size: 0.9em;">
+                                                (Peso Opzione: <?php echo $option['weight']; ?>, 
+                                                Punteggio: <?php echo round($response['computed_score'], 4); ?>)
+                                            </span>
+                                        </div>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <div style="margin-top: 8px; color: #999;">Nessuna risposta</div>
                                 <?php endif; ?>
@@ -1968,17 +2222,20 @@ function boq_renderResultsTab() {
                 <tr style="background: #03679e; color: white;">
                     <th style="padding: 12px; text-align: left;">ID</th>
                     <th style="padding: 12px; text-align: left;">Questionario</th>
-                    <th style="padding: 12px; text-align: left;">Fornitore</th>
+                    <th style="padding: 12px; text-align: left;">Ragione Sociale</th>
+                    <th style="padding: 12px; text-align: left;">P.IVA</th>
                     <th style="padding: 12px; text-align: center;">Punteggio</th>
                     <th style="padding: 12px; text-align: center;">Valutazione</th>
-                    <th style="padding: 12px; text-align: center;">Data</th>
+                    <th style="padding: 12px; text-align: center;">Data Invio</th>
+                    <th style="padding: 12px; text-align: center;">Data Compilazione</th>
                     <th style="padding: 12px; text-align: center;">Azioni</th>
                 </tr>
             </thead>
             <tbody>
                 <?php
                 $completed_assignments = $wpdb->get_results("
-                    SELECT a.*, q.title as questionnaire_title 
+                    SELECT a.*, q.title as questionnaire_title,
+                           (SELECT MAX(r.answered_at) FROM {$wpdb->prefix}cogei_responses r WHERE r.assignment_id = a.id) as completion_date
                     FROM {$wpdb->prefix}cogei_assignments a
                     LEFT JOIN {$wpdb->prefix}cogei_questionnaires q ON a.questionnaire_id = q.id
                     WHERE a.status = 'completed'
@@ -1992,6 +2249,10 @@ function boq_renderResultsTab() {
                     
                     $hse_user = get_userdata($assignment['target_user_id']);
                     $hse_name = $hse_user ? $hse_user->display_name : 'N/A';
+                    $ragione_sociale = $hse_user ? get_user_meta($hse_user->ID, 'user_registration_rag_soc', true) : '';
+                    if (!$ragione_sociale) {
+                        $ragione_sociale = '-';
+                    }
                     
                     // Colore valutazione
                     $eval_colors = [
@@ -2006,9 +2267,16 @@ function boq_renderResultsTab() {
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px;"><?php echo $assignment['id']; ?></td>
                     <td style="padding: 12px;"><strong><?php echo esc_html($assignment['questionnaire_title']); ?></strong></td>
+                    <td style="padding: 12px;"><?php echo esc_html($ragione_sociale); ?></td>
                     <td style="padding: 12px;"><?php echo esc_html($hse_name); ?></td>
                     <td style="padding: 12px; text-align: center; font-weight: bold;">
-                        <?php echo round($score, 4); ?>
+                        <?php 
+                        $stars = boq_convertScoreToStars($score);
+                        echo boq_renderStarRating($stars); 
+                        ?>
+                        <div style="margin-top: 5px; color: #666; font-size: 13px;">
+                            <?php echo number_format($score, 2); ?> / 100
+                        </div>
                     </td>
                     <td style="padding: 12px; text-align: center;">
                         <span style="padding: 6px 16px; border-radius: 5px; background: <?php echo $eval_color; ?>; color: white; font-weight: bold;">
@@ -2017,6 +2285,15 @@ function boq_renderResultsTab() {
                     </td>
                     <td style="padding: 12px; text-align: center;">
                         <?php echo date('d/m/Y H:i', strtotime($assignment['sent_at'])); ?>
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        <?php 
+                        if ($assignment['completion_date']) {
+                            echo date('d/m/Y H:i', strtotime($assignment['completion_date']));
+                        } else {
+                            echo '<span style="color: #999;">-</span>';
+                        }
+                        ?>
                     </td>
                     <td style="padding: 12px; text-align: center;">
                         <a href="?boq_tab=results&assignment=<?php echo $assignment['id']; ?>" 
@@ -2037,8 +2314,8 @@ function boq_renderResultsTab() {
  * Uses half-star precision
  */
 function boq_convertScoreToStars($score) {
-    // Convert 0-1 score to 0-5 scale
-    $stars = $score * 5;
+    // Convert 0-100 score to 0-5 scale
+    $stars = ($score / 100) * 5;
     
     // Round to nearest 0.5
     $stars = round($stars * 2) / 2;
@@ -2117,21 +2394,21 @@ function boq_renderRatingsTab() {
     global $wpdb;
     
     // Get all suppliers with their average scores
+    // Calculate average of questionnaire scores (N.A. treated as correct in computed_score)
     $query = "
         SELECT 
             a.target_user_id as user_id,
             COUNT(DISTINCT a.id) as total_questionnaires,
-            COUNT(DISTINCT r.assignment_id) as completed_questionnaires,
-            AVG(CASE 
-                WHEN a.status = 'completed' THEN (
-                    SELECT AVG(r2.computed_score) 
-                    FROM {$wpdb->prefix}cogei_responses r2 
-                    WHERE r2.assignment_id = a.id
-                )
-                ELSE NULL 
-            END) as avg_score
+            COUNT(DISTINCT CASE WHEN a.status = 'completed' THEN a.id END) as completed_questionnaires,
+            AVG(questionnaire_scores.score) as avg_score
         FROM {$wpdb->prefix}cogei_assignments a
-        LEFT JOIN {$wpdb->prefix}cogei_responses r ON r.assignment_id = a.id
+        LEFT JOIN (
+            SELECT 
+                r2.assignment_id,
+                SUM(r2.computed_score) * 100 as score
+            FROM {$wpdb->prefix}cogei_responses r2
+            GROUP BY r2.assignment_id
+        ) questionnaire_scores ON questionnaire_scores.assignment_id = a.id
         WHERE a.status = 'completed'
         GROUP BY a.target_user_id
         HAVING avg_score IS NOT NULL
@@ -2218,10 +2495,10 @@ function boq_renderRatingsTab() {
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <strong style="font-size: 16px; color: #03679e;">
-                                <?php echo number_format($avg_score, 3); ?>
+                                <?php echo number_format($avg_score, 2); ?>
                             </strong>
                             <br>
-                            <span style="color: #999; font-size: 12px;">/ 1.000</span>
+                            <span style="color: #999; font-size: 12px;">/ 100</span>
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <a href="#" 

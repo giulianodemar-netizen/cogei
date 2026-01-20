@@ -80,16 +80,17 @@ $areas = $wpdb->get_results($wpdb->prepare("
     ORDER BY ar.sort_order ASC
 ", $assignment->questionnaire_id));
 
-// Calcola score medio
+// Calcola score medio (sum of computed scores, N.A. treated as correct with max weight, multiplied by 100)
 $avg_score = $wpdb->get_var($wpdb->prepare("
-    SELECT AVG(computed_score)
-    FROM {$wpdb->prefix}cogei_responses
-    WHERE assignment_id = %d
+    SELECT SUM(r.computed_score) * 100
+    FROM {$wpdb->prefix}cogei_responses r
+    WHERE r.assignment_id = %d
 ", $assignment_id));
 
 // Funzioni helper
 function convertScoreToStars($score) {
-    $stars = $score * 5;
+    // Score is now on 0-100 scale, convert to 0-5 stars
+    $stars = ($score / 100) * 5;
     return round($stars * 2) / 2;
 }
 
@@ -112,18 +113,22 @@ function renderStars($stars) {
 }
 
 function getEvaluationText($stars) {
-    if ($stars >= 4.5) return 'Eccellente';
-    if ($stars >= 3.5) return 'Molto Buono';
-    if ($stars >= 2.5) return 'Adeguato';
-    if ($stars >= 1.5) return 'Critico';
+    // Convert stars to 0-100 score for consistent thresholds
+    $score = ($stars / 5) * 100;
+    if ($score >= 85) return 'Eccellente';
+    if ($score >= 70) return 'Molto Buono';
+    if ($score >= 55) return 'Adeguato';
+    if ($score >= 40) return 'Critico';
     return 'Inadeguato';
 }
 
 function getEvaluationColor($stars) {
-    if ($stars >= 4.5) return '#4caf50';
-    if ($stars >= 3.5) return '#8bc34a';
-    if ($stars >= 2.5) return '#ffc107';
-    if ($stars >= 1.5) return '#ff9800';
+    // Convert stars to 0-100 score for consistent thresholds
+    $score = ($stars / 5) * 100;
+    if ($score >= 85) return '#4caf50';
+    if ($score >= 70) return '#8bc34a';
+    if ($score >= 55) return '#ffc107';
+    if ($score >= 40) return '#ff9800';
     return '#f44336';
 }
 
@@ -146,7 +151,7 @@ $html .= '</div>';
 $html .= '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; text-align: center;">';
 $html .= '<div style="font-size: 16px; margin-bottom: 10px; opacity: 0.9;">Valutazione Complessiva</div>';
 $html .= '<div style="margin: 15px 0;">' . renderStars($stars) . '</div>';
-$html .= '<div style="font-size: 28px; font-weight: 700; margin: 10px 0;">' . number_format($avg_score, 3) . ' / 1.000</div>';
+$html .= '<div style="font-size: 28px; font-weight: 700; margin: 10px 0;">' . number_format($avg_score, 2) . ' / 100</div>';
 $html .= '<div style="background: ' . $color . '; display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: 600; margin-top: 10px;">' . $evaluation . '</div>';
 $html .= '</div>';
 
@@ -167,9 +172,9 @@ foreach ($areas as $area) {
     ", $area->id));
     
     foreach ($questions as $question) {
-        // Recupera risposta per questa domanda
+        // Recupera risposta per questa domanda (include is_na flag)
         $response = $wpdb->get_row($wpdb->prepare("
-            SELECT r.*, o.text as option_text, o.weight as option_weight
+            SELECT r.*, o.text as option_text, o.weight as option_weight, o.is_na
             FROM {$wpdb->prefix}cogei_responses r
             INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
             WHERE r.assignment_id = %d AND r.question_id = %d
@@ -178,8 +183,21 @@ foreach ($areas as $area) {
         if ($response) {
             $html .= '<div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef;">';
             $html .= '<div style="color: #212529; font-weight: 500; margin-bottom: 8px; font-size: 15px;">❓ ' . esc_html($question->text) . '</div>';
-            $html .= '<div style="color: #28a745; margin-left: 24px; margin-bottom: 6px; font-size: 14px;">✓ ' . esc_html($response->option_text) . ' <span style="color: #6c757d;">(Peso: ' . number_format($response->option_weight, 2) . ')</span></div>';
-            $html .= '<div style="color: #6c757d; margin-left: 24px; font-size: 13px;">Punteggio calcolato: <strong style="color: #495057;">' . number_format($response->computed_score, 3) . '</strong></div>';
+            
+            // Check if this is an N.A. option
+            if ($response->is_na == 1) {
+                // N.A. response with badge
+                $html .= '<div style="margin-left: 24px; margin-bottom: 6px; font-size: 14px;">';
+                $html .= '<span style="color: #6c757d;">✓ ' . esc_html($response->option_text) . '</span> ';
+                $html .= '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px;">N.A.</span>';
+                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Esclusa dal calcolo)</span>';
+                $html .= '</div>';
+            } else {
+                // Normal response
+                $html .= '<div style="color: #28a745; margin-left: 24px; margin-bottom: 6px; font-size: 14px;">✓ ' . esc_html($response->option_text) . ' <span style="color: #6c757d;">(Peso: ' . number_format($response->option_weight, 2) . ')</span></div>';
+                $html .= '<div style="color: #6c757d; margin-left: 24px; font-size: 13px;">Punteggio calcolato: <strong style="color: #495057;">' . number_format($response->computed_score, 3) . '</strong></div>';
+            }
+            
             $html .= '</div>';
         }
     }
