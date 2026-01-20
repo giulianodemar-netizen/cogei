@@ -295,7 +295,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
                         "SELECT MAX(weight) FROM $table_options WHERE question_id = %d",
                         $question['id']
                     ));
-                    $weight_to_use = floatval($max_weight);
+                    // Se non ci sono opzioni con peso, usa il peso dell'opzione N.A. stessa
+                    $weight_to_use = $max_weight !== null ? floatval($max_weight) : floatval($option['weight']);
                 }
                 
                 // Calcola punteggio

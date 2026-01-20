@@ -276,7 +276,7 @@ function boq_getResponses($assignment_id) {
  * Calcola punteggio per un assignment
  * Formula: punteggio_domanda = option.weight * area.weight
  * Per N.A.: usa peso massimo della domanda
- * Punteggio_finale = sum(punteggio_domanda) / numero_domande (normalizzato 0-100)
+ * Punteggio_finale = (sum(punteggio_domanda) / numero_domande) * 100 (scala 0-100)
  */
 function boq_calculateScore($assignment_id) {
     global $wpdb;
@@ -324,7 +324,8 @@ function boq_calculateScore($assignment_id) {
                 "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
                 $question_id
             ));
-            $weight_to_use = floatval($max_weight);
+            // Se non ci sono opzioni con peso, usa il peso dell'opzione N.A. stessa
+            $weight_to_use = $max_weight !== null ? floatval($max_weight) : floatval($option['weight']);
         }
         
         // Calcola punteggio domanda = peso_opzione * peso_area
@@ -1048,7 +1049,8 @@ function boq_renderPublicQuestionnaireForm() {
                     "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
                     $question_id
                 ));
-                $weight_to_use = floatval($max_weight);
+                // Se non ci sono opzioni con peso, usa il peso dell'opzione N.A. stessa
+                $weight_to_use = $max_weight !== null ? floatval($max_weight) : floatval($option['weight']);
             }
             
             $computed_score = $weight_to_use * floatval($area['weight']);
