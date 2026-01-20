@@ -80,9 +80,9 @@ $areas = $wpdb->get_results($wpdb->prepare("
     ORDER BY ar.sort_order ASC
 ", $assignment->questionnaire_id));
 
-// Calcola score medio (convert from 0-1 scale to 0-100 scale, N.A. treated as correct)
+// Calcola score medio (sum of computed scores, N.A. treated as correct with max weight, multiplied by 100)
 $avg_score = $wpdb->get_var($wpdb->prepare("
-    SELECT AVG(r.computed_score) * 100
+    SELECT SUM(r.computed_score) * 100
     FROM {$wpdb->prefix}cogei_responses r
     WHERE r.assignment_id = %d
 ", $assignment_id));

@@ -73,7 +73,7 @@ $assignments = $wpdb->get_results($wpdb->prepare("
         a.sent_at,
         q.title as questionnaire_title,
         q.description as questionnaire_description,
-        (SELECT AVG(r2.computed_score) * 100
+        (SELECT SUM(r2.computed_score) * 100
          FROM {$wpdb->prefix}cogei_responses r2 
          WHERE r2.assignment_id = a.id) as avg_score,
         (SELECT MAX(r2.answered_at)

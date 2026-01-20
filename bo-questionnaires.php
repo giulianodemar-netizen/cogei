@@ -2405,7 +2405,7 @@ function boq_renderRatingsTab() {
         LEFT JOIN (
             SELECT 
                 r2.assignment_id,
-                AVG(r2.computed_score) * 100 as score
+                SUM(r2.computed_score) * 100 as score
             FROM {$wpdb->prefix}cogei_responses r2
             GROUP BY r2.assignment_id
         ) questionnaire_scores ON questionnaire_scores.assignment_id = a.id

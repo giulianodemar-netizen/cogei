@@ -177,13 +177,11 @@ if ($assignment['status'] === 'completed') {
     ), ARRAY_A);
     
     $total_score = 0;
-    $count = 0;
     foreach ($all_responses as $resp) {
         $total_score += floatval($resp['computed_score']);
-        $count++;
     }
     
-    $final_score = $count > 0 ? ($total_score / $count) * 100 : 0;
+    $final_score = $total_score * 100;
     $completion_date = !empty($responses) && !empty($responses[0]['completion_date']) ? $responses[0]['completion_date'] : null;
     
     // Determina valutazione
@@ -320,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale (include tutte le risposte, N.A. trattate come corrette)
+        // Calcola punteggio finale (include tutte le risposte, N.A. trattate come corrette con peso massimo)
         $responses = $wpdb->get_results($wpdb->prepare(
             "SELECT r.computed_score
             FROM $table_responses r
@@ -329,12 +327,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
         ), ARRAY_A);
         
         $total_score = 0;
-        $count = count($responses);
         foreach ($responses as $resp) {
             $total_score += floatval($resp['computed_score']);
         }
         
-        $final_score = $count > 0 ? ($total_score / $count) * 100 : 0;
+        $final_score = $total_score * 100;
         
         // Determina valutazione
         if ($final_score >= 85) {
