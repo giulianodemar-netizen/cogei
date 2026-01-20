@@ -300,6 +300,11 @@ function boq_calculateScore($assignment_id) {
         
         if (!$option) continue;
         
+        // Skip options marked as N.A. at design time
+        if (isset($option['is_na']) && $option['is_na'] == 1) {
+            continue;
+        }
+        
         // Ottieni area della domanda
         $question = $wpdb->get_row($wpdb->prepare(
             "SELECT area_id FROM {$wpdb->prefix}cogei_questions WHERE id = %d",
@@ -316,19 +321,8 @@ function boq_calculateScore($assignment_id) {
         
         if (!$area) continue;
         
-        // Se l'opzione è marcata come N.A., usa il peso massimo disponibile per quella domanda
-        if (isset($option['is_na']) && $option['is_na'] == 1) {
-            $max_weight = $wpdb->get_var($wpdb->prepare(
-                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
-                $question_id
-            ));
-            $option_weight = floatval($max_weight);
-        } else {
-            $option_weight = floatval($option['weight']);
-        }
-        
         // Calcola punteggio domanda = peso_opzione * peso_area
-        $question_score = $option_weight * floatval($area['weight']);
+        $question_score = floatval($option['weight']) * floatval($area['weight']);
         $total_score += $question_score;
         $count++;
     }
@@ -2394,7 +2388,7 @@ function boq_renderRatingsTab() {
     global $wpdb;
     
     // Get all suppliers with their average scores
-    // Calculate average of questionnaire scores (N.A. treated as correct in computed_score)
+    // Calculate average of questionnaire scores (not average of all response scores)
     $query = "
         SELECT 
             a.target_user_id as user_id,
@@ -2405,8 +2399,10 @@ function boq_renderRatingsTab() {
         LEFT JOIN (
             SELECT 
                 r2.assignment_id,
-                SUM(r2.computed_score) * 100 as score
+                AVG(r2.computed_score) * 100 as score
             FROM {$wpdb->prefix}cogei_responses r2
+            INNER JOIN {$wpdb->prefix}cogei_options o ON r2.selected_option_id = o.id
+            WHERE o.is_na = 0
             GROUP BY r2.assignment_id
         ) questionnaire_scores ON questionnaire_scores.assignment_id = a.id
         WHERE a.status = 'completed'
