@@ -80,12 +80,11 @@ $areas = $wpdb->get_results($wpdb->prepare("
     ORDER BY ar.sort_order ASC
 ", $assignment->questionnaire_id));
 
-// Calcola score medio (convert from 0-1 scale to 0-100 scale, excluding N.A. options)
+// Calcola score medio (convert from 0-1 scale to 0-100 scale, N.A. treated as correct)
 $avg_score = $wpdb->get_var($wpdb->prepare("
     SELECT AVG(r.computed_score) * 100
     FROM {$wpdb->prefix}cogei_responses r
-    INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
-    WHERE r.assignment_id = %d AND o.is_na = 0
+    WHERE r.assignment_id = %d
 ", $assignment_id));
 
 // Funzioni helper

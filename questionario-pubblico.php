@@ -159,22 +159,20 @@ if ($assignment['status'] === 'completed') {
     $table_responses = $wpdb->prefix . 'cogei_responses';
     $table_options = $wpdb->prefix . 'cogei_options';
     
-    // Get responses excluding N.A. options
+    // Get responses (N.A. already treated as correct in computed_score)
     $responses = $wpdb->get_results($wpdb->prepare(
         "SELECT r.computed_score, MAX(r.answered_at) as completion_date
         FROM $table_responses r
-        INNER JOIN $table_options o ON r.selected_option_id = o.id
-        WHERE r.assignment_id = %d AND o.is_na = 0
+        WHERE r.assignment_id = %d
         GROUP BY r.assignment_id",
         $assignment['id']
     ), ARRAY_A);
     
-    // Also get all responses for counting (excluding N.A.)
+    // Also get all responses for counting
     $all_responses = $wpdb->get_results($wpdb->prepare(
         "SELECT r.computed_score
         FROM $table_responses r
-        INNER JOIN $table_options o ON r.selected_option_id = o.id
-        WHERE r.assignment_id = %d AND o.is_na = 0",
+        WHERE r.assignment_id = %d",
         $assignment['id']
     ), ARRAY_A);
     
@@ -290,8 +288,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
                     $option_id
                 ), ARRAY_A);
                 
-                // Calcola punteggio (se l'opzione è N.A., il punteggio sarà ignorato nel calcolo finale)
-                $computed_score = floatval($option['weight']) * floatval($area['weight']);
+                // Se l'opzione è N.A., trattala come risposta corretta (peso 1.000)
+                $option_weight = (isset($option['is_na']) && $option['is_na'] == 1) ? 1.000 : floatval($option['weight']);
+                $computed_score = $option_weight * floatval($area['weight']);
                 
                 // Salva risposta
                 $wpdb->insert($table_responses, [
@@ -313,12 +312,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale (escludendo risposte N.A.)
+        // Calcola punteggio finale (include tutte le risposte, N.A. trattate come corrette)
         $responses = $wpdb->get_results($wpdb->prepare(
             "SELECT r.computed_score
             FROM $table_responses r
-            INNER JOIN $table_options o ON r.selected_option_id = o.id
-            WHERE r.assignment_id = %d AND o.is_na = 0",
+            WHERE r.assignment_id = %d",
             $assignment['id']
         ), ARRAY_A);
         
