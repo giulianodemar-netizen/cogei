@@ -274,9 +274,10 @@ function boq_getResponses($assignment_id) {
 
 /**
  * Calcola punteggio per un assignment
- * Formula: punteggio_domanda = option.weight * area.weight
- * Per N.A.: usa peso massimo della domanda
- * Punteggio_finale = (sum(punteggio_domanda) / numero_domande) * 100 (scala 0-100)
+ * Formula corretta:
+ * - Per ogni area: area_score = (somma pesi domande area) × peso_area
+ * - Punteggio totale = somma di tutti gli area_score × 100 (scala 0-100)
+ * - Per N.A.: usa peso massimo della domanda
  */
 function boq_calculateScore($assignment_id) {
     global $wpdb;
@@ -286,60 +287,48 @@ function boq_calculateScore($assignment_id) {
         return 0;
     }
     
-    $total_score = 0;
-    $count = 0;
+    // Ottieni assignment per trovare il questionario
+    $assignment = $wpdb->get_row($wpdb->prepare(
+        "SELECT questionnaire_id FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
+        $assignment_id
+    ), ARRAY_A);
     
-    foreach ($responses as $response) {
-        $question_id = $response['question_id'];
-        $option_id = $response['selected_option_id'];
-        
-        // Ottieni peso e flag is_na dell'opzione
-        $option = $wpdb->get_row($wpdb->prepare(
-            "SELECT weight, is_na FROM {$wpdb->prefix}cogei_options WHERE id = %d",
-            $option_id
+    if (!$assignment) {
+        return 0;
+    }
+    
+    // Ottieni tutte le aree del questionario
+    $areas = $wpdb->get_results($wpdb->prepare(
+        "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
+        $assignment['questionnaire_id']
+    ), ARRAY_A);
+    
+    $total_score = 0;
+    
+    foreach ($areas as $area) {
+        // Ottieni tutte le risposte per quest'area
+        $area_responses = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.computed_score
+            FROM {$wpdb->prefix}cogei_responses r
+            INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
+            WHERE r.assignment_id = %d AND q.area_id = %d",
+            $assignment_id,
+            $area['id']
         ), ARRAY_A);
         
-        if (!$option) continue;
-        
-        // Ottieni area della domanda
-        $question = $wpdb->get_row($wpdb->prepare(
-            "SELECT area_id FROM {$wpdb->prefix}cogei_questions WHERE id = %d",
-            $question_id
-        ), ARRAY_A);
-        
-        if (!$question) continue;
-        
-        // Ottieni peso area
-        $area = $wpdb->get_row($wpdb->prepare(
-            "SELECT weight FROM {$wpdb->prefix}cogei_areas WHERE id = %d",
-            $question['area_id']
-        ), ARRAY_A);
-        
-        if (!$area) continue;
-        
-        // Se l'opzione è N.A., usa il peso massimo disponibile per questa domanda
-        $weight_to_use = floatval($option['weight']);
-        if (isset($option['is_na']) && $option['is_na'] == 1) {
-            $max_weight = $wpdb->get_var($wpdb->prepare(
-                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
-                $question_id
-            ));
-            // Se non ci sono opzioni con peso, usa il peso dell'opzione N.A. stessa
-            $weight_to_use = $max_weight !== null ? floatval($max_weight) : floatval($option['weight']);
+        // Somma i pesi delle domande in quest'area
+        $area_sum = 0;
+        foreach ($area_responses as $resp) {
+            $area_sum += floatval($resp['computed_score']);
         }
         
-        // Calcola punteggio domanda = peso_opzione * peso_area
-        $question_score = $weight_to_use * floatval($area['weight']);
-        $total_score += $question_score;
-        $count++;
+        // Moltiplica la somma per il peso dell'area
+        $area_score = $area_sum * floatval($area['weight']);
+        $total_score += $area_score;
     }
     
-    // Normalizza il punteggio (0-100)
-    if ($count > 0) {
-        return ($total_score / $count) * 100;
-    }
-    
-    return 0;
+    // Scala a 0-100
+    return $total_score * 100;
 }
 
 /**
@@ -1032,16 +1021,6 @@ function boq_renderPublicQuestionnaireForm() {
                 $option_id
             ), ARRAY_A);
             
-            $question = $wpdb->get_row($wpdb->prepare(
-                "SELECT area_id FROM {$wpdb->prefix}cogei_questions WHERE id = %d",
-                $question_id
-            ), ARRAY_A);
-            
-            $area = $wpdb->get_row($wpdb->prepare(
-                "SELECT weight FROM {$wpdb->prefix}cogei_areas WHERE id = %d",
-                $question['area_id']
-            ), ARRAY_A);
-            
             // Se l'opzione è N.A., usa il peso massimo disponibile per questa domanda
             $weight_to_use = floatval($option['weight']);
             if (isset($option['is_na']) && $option['is_na'] == 1) {
@@ -1049,11 +1028,12 @@ function boq_renderPublicQuestionnaireForm() {
                     "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
                     $question_id
                 ));
-                // Se non ci sono opzioni con peso, usa il peso dell'opzione N.A. stessa
                 $weight_to_use = $max_weight !== null ? floatval($max_weight) : floatval($option['weight']);
             }
             
-            $computed_score = $weight_to_use * floatval($area['weight']);
+            // Salva solo il peso della domanda (NON moltiplicato per area_weight)
+            // L'area_weight verrà applicato durante il calcolo finale per area
+            $computed_score = $weight_to_use;
             
             $wpdb->insert(
                 $wpdb->prefix . 'cogei_responses',
@@ -2200,12 +2180,7 @@ function boq_renderResultsTab() {
                                         <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-left: 4px solid #ffc107; border-radius: 3px;">
                                             <span style="color: #6c757d;">✓ <?php echo esc_html($option['text']); ?></span>
                                             <span style="display: inline-block; background: #ffc107; color: #000; font-weight: bold; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">N.A.</span>
-                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Peso massimo applicato)</span>
-                                        </div>
-                                        <div style="margin-top: 4px; padding-left: 8px;">
-                                            <span style="color: #666; font-size: 0.9em;">
-                                                Punteggio: <?php echo round($response['computed_score'], 4); ?>
-                                            </span>
+                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Esclusa dal calcolo)</span>
                                         </div>
                                     <?php else: ?>
                                         <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
@@ -2410,29 +2385,40 @@ function boq_ajax_get_questionnaire_details() {
 function boq_renderRatingsTab() {
     global $wpdb;
     
-    // Get all suppliers with their average scores
-    // Calculate average of questionnaire scores (not average of all response scores)
+    // Get all completed assignments grouped by supplier
     $query = "
         SELECT 
             a.target_user_id as user_id,
             COUNT(DISTINCT a.id) as total_questionnaires,
             COUNT(DISTINCT CASE WHEN a.status = 'completed' THEN a.id END) as completed_questionnaires,
-            AVG(questionnaire_scores.score) as avg_score
+            GROUP_CONCAT(DISTINCT a.id) as assignment_ids
         FROM {$wpdb->prefix}cogei_assignments a
-        LEFT JOIN (
-            SELECT 
-                r2.assignment_id,
-                AVG(r2.computed_score) * 100 as score
-            FROM {$wpdb->prefix}cogei_responses r2
-            GROUP BY r2.assignment_id
-        ) questionnaire_scores ON questionnaire_scores.assignment_id = a.id
         WHERE a.status = 'completed'
         GROUP BY a.target_user_id
-        HAVING avg_score IS NOT NULL
-        ORDER BY avg_score DESC
     ";
     
     $results = $wpdb->get_results($query, ARRAY_A);
+    
+    // Calculate average score for each supplier using correct formula
+    foreach ($results as &$result) {
+        $assignment_ids = explode(',', $result['assignment_ids']);
+        $total_score = 0;
+        $score_count = 0;
+        
+        foreach ($assignment_ids as $assignment_id) {
+            $score = boq_calculateScore(intval($assignment_id));
+            if ($score > 0) {
+                $total_score += $score;
+                $score_count++;
+            }
+        }
+        
+        $result['avg_score'] = $score_count > 0 ? ($total_score / $score_count) : null;
+    }
+    
+    // Filter out suppliers with no scores and sort by score
+    $results = array_filter($results, function($r) { return $r['avg_score'] !== null; });
+    usort($results, function($a, $b) { return $b['avg_score'] <=> $a['avg_score']; });
     
     ?>
     <div style="background: white; padding: 20px; border-radius: 5px;">

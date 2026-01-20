@@ -80,12 +80,35 @@ $areas = $wpdb->get_results($wpdb->prepare("
     ORDER BY ar.sort_order ASC
 ", $assignment->questionnaire_id));
 
-// Calcola score medio (convert from 0-1 scale to 0-100 scale, including N.A. options with max weight)
-$avg_score = $wpdb->get_var($wpdb->prepare("
-    SELECT AVG(r.computed_score) * 100
-    FROM {$wpdb->prefix}cogei_responses r
-    WHERE r.assignment_id = %d
-", $assignment_id));
+// Calcola score usando la formula corretta:
+// Per ogni area: area_score = (somma pesi domande area) × peso_area
+// Punteggio totale = somma di tutti gli area_score × 100
+
+$total_score = 0;
+
+foreach ($areas as $area) {
+    // Ottieni tutte le risposte per quest'area
+    $area_responses = $wpdb->get_results($wpdb->prepare(
+        "SELECT r.computed_score
+        FROM {$wpdb->prefix}cogei_responses r
+        INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
+        WHERE r.assignment_id = %d AND q.area_id = %d",
+        $assignment_id,
+        $area->id
+    ), ARRAY_A);
+    
+    // Somma i pesi delle domande in quest'area
+    $area_sum = 0;
+    foreach ($area_responses as $resp) {
+        $area_sum += floatval($resp['computed_score']);
+    }
+    
+    // Moltiplica la somma per il peso dell'area
+    $area_score = $area_sum * floatval($area->weight);
+    $total_score += $area_score;
+}
+
+$avg_score = $total_score * 100; // Scala a 0-100
 
 // Funzioni helper
 function convertScoreToStars($score) {
@@ -190,9 +213,8 @@ foreach ($areas as $area) {
                 $html .= '<div style="margin-left: 24px; margin-bottom: 6px; font-size: 14px;">';
                 $html .= '<span style="color: #6c757d;">✓ ' . esc_html($response->option_text) . '</span> ';
                 $html .= '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px;">N.A.</span>';
-                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Peso massimo applicato)</span>';
+                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Esclusa dal calcolo)</span>';
                 $html .= '</div>';
-                $html .= '<div style="color: #6c757d; margin-left: 24px; font-size: 13px;">Punteggio calcolato: <strong style="color: #495057;">' . number_format($response->computed_score, 3) . '</strong></div>';
             } else {
                 // Normal response
                 $html .= '<div style="color: #28a745; margin-left: 24px; margin-bottom: 6px; font-size: 14px;">✓ ' . esc_html($response->option_text) . ' <span style="color: #6c757d;">(Peso: ' . number_format($response->option_weight, 2) . ')</span></div>';

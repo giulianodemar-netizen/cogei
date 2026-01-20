@@ -66,16 +66,62 @@ if (!$user) {
 
 global $wpdb;
 
+// Helper function to calculate score using correct formula
+function calculateQuestionnaireScore($assignment_id) {
+    global $wpdb;
+    
+    // Ottieni assignment per trovare il questionario
+    $assignment = $wpdb->get_row($wpdb->prepare(
+        "SELECT questionnaire_id FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
+        $assignment_id
+    ), ARRAY_A);
+    
+    if (!$assignment) {
+        return 0;
+    }
+    
+    // Ottieni tutte le aree del questionario
+    $areas = $wpdb->get_results($wpdb->prepare(
+        "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
+        $assignment['questionnaire_id']
+    ), ARRAY_A);
+    
+    $total_score = 0;
+    
+    foreach ($areas as $area) {
+        // Ottieni tutte le risposte per quest'area
+        $area_responses = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.computed_score
+            FROM {$wpdb->prefix}cogei_responses r
+            INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
+            WHERE r.assignment_id = %d AND q.area_id = %d",
+            $assignment_id,
+            $area['id']
+        ), ARRAY_A);
+        
+        // Somma i pesi delle domande in quest'area
+        $area_sum = 0;
+        foreach ($area_responses as $resp) {
+            $area_sum += floatval($resp['computed_score']);
+        }
+        
+        // Moltiplica la somma per il peso dell'area
+        $area_score = $area_sum * floatval($area['weight']);
+        $total_score += $area_score;
+    }
+    
+    // Scala a 0-100
+    return $total_score * 100;
+}
+
 // Query per recuperare tutti i questionari completati del fornitore
 $assignments = $wpdb->get_results($wpdb->prepare("
     SELECT 
         a.id as assignment_id,
         a.sent_at,
+        a.questionnaire_id,
         q.title as questionnaire_title,
         q.description as questionnaire_description,
-        (SELECT AVG(r2.computed_score) * 100
-         FROM {$wpdb->prefix}cogei_responses r2 
-         WHERE r2.assignment_id = a.id) as avg_score,
         (SELECT MAX(r2.answered_at)
          FROM {$wpdb->prefix}cogei_responses r2
          WHERE r2.assignment_id = a.id) as completion_date
@@ -90,6 +136,11 @@ $assignments = $wpdb->get_results($wpdb->prepare("
       )
     ORDER BY a.sent_at DESC
 ", $user_id));
+
+// Calcola score per ogni assignment
+foreach ($assignments as $assignment) {
+    $assignment->avg_score = calculateQuestionnaireScore($assignment->assignment_id);
+}
 
 if (empty($assignments)) {
     die(json_encode([
