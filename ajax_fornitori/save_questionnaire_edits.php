@@ -65,10 +65,12 @@ if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'boq_edit_quest
 $assignment_id = isset($_POST['assignment_id']) ? intval($_POST['assignment_id']) : 0;
 $responses_json = isset($_POST['responses']) ? $_POST['responses'] : '';
 
-// Debug logging
+// Debug logging - log ALL POST data
+error_log("BOQ Edit Save - ALL POST keys: " . implode(', ', array_keys($_POST)));
 error_log("BOQ Edit Save - Assignment ID: {$assignment_id}");
 error_log("BOQ Edit Save - Responses JSON raw: " . substr($responses_json, 0, 200));
 error_log("BOQ Edit Save - Responses JSON length: " . strlen($responses_json));
+error_log("BOQ Edit Save - Responses JSON full: " . $responses_json);
 
 if ($assignment_id <= 0) {
     http_response_code(400);
@@ -77,14 +79,20 @@ if ($assignment_id <= 0) {
 
 if (empty($responses_json)) {
     http_response_code(400);
-    die(json_encode(['error' => 'Nessuna risposta fornita']));
+    die(json_encode(['error' => 'Nessuna risposta fornita', 'debug' => ['post_keys' => array_keys($_POST)]]));
 }
 
 // Decodifica risposte
 $responses = json_decode($responses_json, true);
+$json_error = json_last_error();
+$json_error_msg = json_last_error_msg();
+
 error_log("BOQ Edit Save - Decoded responses: " . print_r($responses, true));
+error_log("BOQ Edit Save - JSON error code: " . $json_error);
+error_log("BOQ Edit Save - JSON error message: " . $json_error_msg);
 error_log("BOQ Edit Save - Is array: " . (is_array($responses) ? 'yes' : 'no'));
 error_log("BOQ Edit Save - Count: " . (is_array($responses) ? count($responses) : 'N/A'));
+error_log("BOQ Edit Save - Empty check: " . (empty($responses) ? 'yes' : 'no'));
 
 if (!is_array($responses) || empty($responses)) {
     http_response_code(400);
