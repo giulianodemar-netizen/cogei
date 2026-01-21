@@ -567,6 +567,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
         echo '<div class="notice notice-success"><p>Questionario eliminato con successo</p></div>';
     }
     
+    // AZIONE: Duplica Questionario
+    if ($action === 'duplicate_questionnaire') {
+        $source_id = intval($_POST['questionnaire_id']);
+        
+        // Recupera questionario originale
+        $source_questionnaire = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}cogei_questionnaires WHERE id = %d",
+            $source_id
+        ), ARRAY_A);
+        
+        if ($source_questionnaire) {
+            // Crea copia del questionario
+            $new_title = $source_questionnaire['title'] . ' (Copia)';
+            $wpdb->insert(
+                $wpdb->prefix . 'cogei_questionnaires',
+                [
+                    'title' => $new_title,
+                    'description' => $source_questionnaire['description'],
+                    'status' => 'draft', // Imposta come bozza
+                    'created_by' => get_current_user_id()
+                ],
+                ['%s', '%s', '%s', '%d']
+            );
+            $new_questionnaire_id = $wpdb->insert_id;
+            
+            // Duplica aree
+            $areas = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d ORDER BY sort_order",
+                $source_id
+            ), ARRAY_A);
+            
+            foreach ($areas as $area) {
+                $old_area_id = $area['id'];
+                $wpdb->insert(
+                    $wpdb->prefix . 'cogei_areas',
+                    [
+                        'questionnaire_id' => $new_questionnaire_id,
+                        'title' => $area['title'],
+                        'weight' => $area['weight'],
+                        'sort_order' => $area['sort_order']
+                    ],
+                    ['%d', '%s', '%f', '%d']
+                );
+                $new_area_id = $wpdb->insert_id;
+                
+                // Duplica domande per questa area
+                $questions = $wpdb->get_results($wpdb->prepare(
+                    "SELECT * FROM {$wpdb->prefix}cogei_questions WHERE area_id = %d ORDER BY sort_order",
+                    $old_area_id
+                ), ARRAY_A);
+                
+                foreach ($questions as $question) {
+                    $old_question_id = $question['id'];
+                    $wpdb->insert(
+                        $wpdb->prefix . 'cogei_questions',
+                        [
+                            'area_id' => $new_area_id,
+                            'text' => $question['text'],
+                            'is_required' => $question['is_required'],
+                            'sort_order' => $question['sort_order']
+                        ],
+                        ['%d', '%s', '%d', '%d']
+                    );
+                    $new_question_id = $wpdb->insert_id;
+                    
+                    // Duplica opzioni per questa domanda
+                    $options = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM {$wpdb->prefix}cogei_options WHERE question_id = %d ORDER BY sort_order",
+                        $old_question_id
+                    ), ARRAY_A);
+                    
+                    foreach ($options as $option) {
+                        $wpdb->insert(
+                            $wpdb->prefix . 'cogei_options',
+                            [
+                                'question_id' => $new_question_id,
+                                'text' => $option['text'],
+                                'weight' => $option['weight'],
+                                'is_na' => $option['is_na'],
+                                'sort_order' => $option['sort_order']
+                            ],
+                            ['%d', '%s', '%f', '%d', '%d']
+                        );
+                    }
+                }
+            }
+            
+            echo '<div class="notice notice-success"><p>Questionario duplicato con successo! <a href="?boq_tab=questionnaires&edit=' . $new_questionnaire_id . '">Modifica ora</a></p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>Questionario non trovato</p></div>';
+        }
+    }
+    
     // AZIONE: Salva Area
     if ($action === 'save_area') {
         $area_id = isset($_POST['area_id']) ? intval($_POST['area_id']) : 0;
@@ -1568,6 +1661,13 @@ function boq_renderQuestionnairesTab() {
                     <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($q['created_at'])); ?></td>
                     <td style="padding: 12px; text-align: center;">
                         <a href="?boq_tab=questionnaires&edit=<?php echo $q['id']; ?>" style="color: #03679e; text-decoration: none; margin: 0 5px;">✏️ Modifica</a>
+                        |
+                        <form method="POST" style="display: inline;" onsubmit="return confirm('Duplicare questo questionario?');">
+                            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
+                            <input type="hidden" name="boq_action" value="duplicate_questionnaire">
+                            <input type="hidden" name="questionnaire_id" value="<?php echo $q['id']; ?>">
+                            <button type="submit" style="background: none; border: none; color: #ff9800; cursor: pointer; text-decoration: none; font-size: 14px;">📋 Duplica</button>
+                        </form>
                         |
                         <a href="?boq_tab=assignments&send=<?php echo $q['id']; ?>" style="color: #4caf50; text-decoration: none; margin: 0 5px;">📤 Invia</a>
                         |
