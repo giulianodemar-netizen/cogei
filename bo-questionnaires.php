@@ -2422,18 +2422,21 @@ function boq_renderRatingsTab() {
         $scores = [];
         foreach ($assignment_ids as $assignment_id) {
             $score = boq_calculateScore(intval($assignment_id));
-            if ($score >= 0) {  // Include 0 scores, but they're valid
-                $scores[] = $score;
+            // Accept any numeric score, including 0
+            if ($score !== false && $score !== null) {
+                $scores[] = floatval($score);
             }
         }
         
-        $result['avg_score'] = !empty($scores) ? (array_sum($scores) / count($scores)) : null;
+        $result['avg_score'] = !empty($scores) ? (array_sum($scores) / count($scores)) : 0;
         $result['score_count'] = count($scores);
         $result['individual_scores'] = $scores; // For debugging
     }
     
-    // Filter out suppliers with no scores and sort by score
-    $results = array_filter($results, function($r) { return $r['avg_score'] !== null; });
+    // Filter out suppliers with no completed questionnaires (keep those with score 0)
+    $results = array_filter($results, function($r) { 
+        return $r['completed_questionnaires'] > 0; 
+    });
     
     // Remove duplicates by user_id (in case GROUP BY didn't work properly)
     $unique_results = [];
@@ -2530,12 +2533,6 @@ function boq_renderRatingsTab() {
                             </strong>
                             <br>
                             <span style="color: #999; font-size: 12px;">/ 100</span>
-                            <?php if (isset($result['individual_scores']) && !empty($result['individual_scores'])): ?>
-                            <br>
-                            <span style="color: #999; font-size: 11px; font-style: italic;">
-                                (<?php echo implode(' + ', array_map(function($s) { return number_format($s, 0); }, $result['individual_scores'])); ?>) / <?php echo count($result['individual_scores']); ?>
-                            </span>
-                            <?php endif; ?>
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <a href="#" 

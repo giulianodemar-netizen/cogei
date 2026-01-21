@@ -225,6 +225,7 @@ foreach ($assignments as $assignment) {
     // Rating e badge
     $html .= '<div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; flex-wrap: wrap;">';
     $html .= '<div>' . renderStars($stars) . ' <span style="color: #666; font-size: 14px;">(' . number_format($stars, 1) . ')</span></div>';
+    $html .= '<div style="background: #f0f0f0; padding: 6px 12px; border-radius: 4px;"><strong style="color: #03679e; font-size: 15px;">' . number_format($assignment->avg_score, 2) . '</strong> <span style="color: #999; font-size: 13px;">/ 100</span></div>';
     $html .= '<span style="background: ' . $color . '; color: white; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;">' . $evaluation . '</span>';
     $html .= '</div>';
     
