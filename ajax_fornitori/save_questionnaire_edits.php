@@ -63,12 +63,14 @@ if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'boq_edit_quest
 
 // Recupera parametri
 $assignment_id = isset($_POST['assignment_id']) ? intval($_POST['assignment_id']) : 0;
-$responses_json = isset($_POST['responses']) ? $_POST['responses'] : '';
+// WordPress adds slashes to POST data - we need to remove them before JSON decoding
+$responses_json = isset($_POST['responses']) ? stripslashes($_POST['responses']) : '';
 
 // Debug logging - log ALL POST data
 error_log("BOQ Edit Save - ALL POST keys: " . implode(', ', array_keys($_POST)));
 error_log("BOQ Edit Save - Assignment ID: {$assignment_id}");
-error_log("BOQ Edit Save - Responses JSON raw: " . substr($responses_json, 0, 200));
+error_log("BOQ Edit Save - Responses JSON raw (before stripslashes): " . (isset($_POST['responses']) ? substr($_POST['responses'], 0, 200) : 'N/A'));
+error_log("BOQ Edit Save - Responses JSON (after stripslashes): " . substr($responses_json, 0, 200));
 error_log("BOQ Edit Save - Responses JSON length: " . strlen($responses_json));
 error_log("BOQ Edit Save - Responses JSON full: " . $responses_json);
 
