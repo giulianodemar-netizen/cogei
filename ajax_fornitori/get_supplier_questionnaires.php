@@ -66,17 +66,75 @@ if (!$user) {
 
 global $wpdb;
 
+// Helper function to calculate score using correct formula
+// NOTA: Ricalcola sempre dai dati originali, non usa computed_score memorizzato
+function calculateQuestionnaireScore($assignment_id) {
+    global $wpdb;
+    
+    // Ottieni assignment per trovare il questionario
+    $assignment = $wpdb->get_row($wpdb->prepare(
+        "SELECT questionnaire_id FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
+        $assignment_id
+    ), ARRAY_A);
+    
+    if (!$assignment) {
+        return 0;
+    }
+    
+    // Ottieni tutte le aree del questionario
+    $areas = $wpdb->get_results($wpdb->prepare(
+        "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
+        $assignment['questionnaire_id']
+    ), ARRAY_A);
+    
+    $total_score = 0;
+    
+    foreach ($areas as $area) {
+        // Ottieni tutte le risposte per quest'area con informazioni complete
+        $area_responses = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.question_id, r.selected_option_id, o.weight as option_weight, o.is_na
+            FROM {$wpdb->prefix}cogei_responses r
+            INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
+            INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
+            WHERE r.assignment_id = %d AND q.area_id = %d",
+            $assignment_id,
+            $area['id']
+        ), ARRAY_A);
+        
+        // Somma i pesi delle domande in quest'area (ricalcolando)
+        $area_sum = 0;
+        foreach ($area_responses as $resp) {
+            $question_weight = floatval($resp['option_weight']);
+            
+            // Se è N.A., usa il peso massimo per quella domanda
+            if (isset($resp['is_na']) && $resp['is_na'] == 1) {
+                $max_weight = $wpdb->get_var($wpdb->prepare(
+                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                    $resp['question_id']
+                ));
+                $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
+            }
+            
+            $area_sum += $question_weight;
+        }
+        
+        // Moltiplica la somma per il peso dell'area
+        $area_score = $area_sum * floatval($area['weight']);
+        $total_score += $area_score;
+    }
+    
+    // Scala a 0-100
+    return $total_score * 100;
+}
+
 // Query per recuperare tutti i questionari completati del fornitore
 $assignments = $wpdb->get_results($wpdb->prepare("
     SELECT 
         a.id as assignment_id,
         a.sent_at,
+        a.questionnaire_id,
         q.title as questionnaire_title,
         q.description as questionnaire_description,
-        (SELECT AVG(r2.computed_score) * 100
-         FROM {$wpdb->prefix}cogei_responses r2 
-         INNER JOIN {$wpdb->prefix}cogei_options o2 ON r2.selected_option_id = o2.id
-         WHERE r2.assignment_id = a.id AND o2.is_na = 0) as avg_score,
         (SELECT MAX(r2.answered_at)
          FROM {$wpdb->prefix}cogei_responses r2
          WHERE r2.assignment_id = a.id) as completion_date
@@ -91,6 +149,11 @@ $assignments = $wpdb->get_results($wpdb->prepare("
       )
     ORDER BY a.sent_at DESC
 ", $user_id));
+
+// Calcola score per ogni assignment
+foreach ($assignments as $assignment) {
+    $assignment->avg_score = calculateQuestionnaireScore($assignment->assignment_id);
+}
 
 if (empty($assignments)) {
     die(json_encode([
@@ -107,9 +170,12 @@ function convertScoreToStars($score) {
 
 // Funzione per renderizzare stelle
 function renderStars($stars) {
+    // Ensure stars is in valid range 0-5
+    $stars = max(0, min(5, $stars));
+    
     $full = floor($stars);
     $half = ($stars - $full) >= 0.5 ? 1 : 0;
-    $empty = 5 - $full - $half;
+    $empty = max(0, 5 - $full - $half); // Ensure non-negative
     
     $html = '<span style="color: #FFD700; font-size: 20px; letter-spacing: 2px;">';
     $html .= str_repeat('★', $full);
@@ -159,6 +225,7 @@ foreach ($assignments as $assignment) {
     // Rating e badge
     $html .= '<div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; flex-wrap: wrap;">';
     $html .= '<div>' . renderStars($stars) . ' <span style="color: #666; font-size: 14px;">(' . number_format($stars, 1) . ')</span></div>';
+    $html .= '<div style="background: #f0f0f0; padding: 6px 12px; border-radius: 4px;"><strong style="color: #03679e; font-size: 15px;">' . number_format($assignment->avg_score, 2) . '</strong> <span style="color: #999; font-size: 13px;">/ 100</span></div>';
     $html .= '<span style="background: ' . $color . '; color: white; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;">' . $evaluation . '</span>';
     $html .= '</div>';
     
