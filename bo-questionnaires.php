@@ -1314,6 +1314,125 @@ function boq_renderAdminInterface() {
             <?php endif; ?>
             
         </div>
+        
+        <!-- Modal for Editing Questionnaire (Available on all tabs) -->
+        <div id="boqEditModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10001; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 10px; max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 20px; position: relative;">
+                <button onclick="boqCloseEditModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold; z-index: 1;">×</button>
+                <div id="boqEditContent" style="min-height: 200px;">
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        Caricamento form di modifica...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        // Edit Modal Functions (Available on all tabs)
+        function boqOpenEditModal(assignmentId) {
+            const modal = document.getElementById('boqEditModal');
+            const content = document.getElementById('boqEditContent');
+            
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Caricamento form di modifica...</p></div>';
+            modal.style.display = 'flex';
+            
+            // AJAX request to get editable questionnaire
+            fetch('<?php echo site_url('/ajax_fornitori/get_editable_questionnaire.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'assignment_id=' + assignmentId + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    content.innerHTML = data.html;
+                } else {
+                    content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + (data.error || 'Impossibile caricare il questionario') + '</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: Impossibile caricare il questionario</div>';
+            });
+        }
+        
+        function boqCloseEditModal() {
+            document.getElementById('boqEditModal').style.display = 'none';
+        }
+        
+        function boqSaveEdits(assignmentId) {
+            const form = document.getElementById('boqEditForm');
+            const formData = new FormData(form);
+            
+            // Valida form
+            if (!form.checkValidity()) {
+                alert('Per favore, rispondi a tutte le domande obbligatorie.');
+                form.reportValidity();
+                return;
+            }
+            
+            // Raccogli risposte
+            const responses = {};
+            formData.forEach((value, key) => {
+                if (key.startsWith('question_')) {
+                    const questionId = key.replace('question_', '');
+                    responses[questionId] = value;
+                }
+            });
+            
+            // Mostra loading
+            const content = document.getElementById('boqEditContent');
+            const originalContent = content.innerHTML;
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Salvataggio in corso...</p></div>';
+            
+            // AJAX request to save edits
+            fetch('<?php echo site_url('/ajax_fornitori/save_questionnaire_edits.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'assignment_id=' + assignmentId + '&responses=' + encodeURIComponent(JSON.stringify(responses)) + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Mostra messaggio di successo con nuovo punteggio
+                    const score = data.score;
+                    content.innerHTML = '<div style="text-align: center; padding: 40px;">' +
+                        '<div style="font-size: 60px; color: #4caf50; margin-bottom: 20px;">✓</div>' +
+                        '<h2 style="color: #4caf50; margin-bottom: 15px;">Modifiche Salvate con Successo!</h2>' +
+                        '<div style="background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">' +
+                        '<div style="font-size: 16px; color: #666; margin-bottom: 10px;">Nuovo Punteggio</div>' +
+                        '<div style="font-size: 36px; font-weight: bold; color: ' + score.eval_color + '; margin-bottom: 10px;">' + score.value + ' / 100</div>' +
+                        '<div style="color: #FFD700; font-size: 24px; margin-bottom: 10px;">' + ('★'.repeat(Math.floor(score.stars))) + (score.stars % 1 >= 0.5 ? '☆' : '') + ('☆'.repeat(5 - Math.ceil(score.stars))) + '</div>' +
+                        '<div style="background: ' + score.eval_color + '; color: white; display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: 600;">' + score.evaluation + '</div>' +
+                        '</div>' +
+                        '<p style="color: #666; margin-top: 20px;">Il punteggio è stato ricalcolato automaticamente.</p>' +
+                        '<button onclick="boqCloseEditModal(); window.location.reload();" style="background: #667eea; color: white; padding: 12px 30px; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px;">Chiudi</button>' +
+                        '</div>';
+                } else {
+                    alert('Errore durante il salvataggio: ' + (data.error || 'Errore sconosciuto'));
+                    content.innerHTML = originalContent;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Errore durante il salvataggio. Riprova.');
+                content.innerHTML = originalContent;
+            });
+        }
+        
+        // Close edit modal on click outside
+        document.getElementById('boqEditModal')?.addEventListener('click', function(e) {
+            if (e.target === this) boqCloseEditModal();
+        });
+        
+        // Add spinner animation
+        if (!document.getElementById('boq-spinner-style')) {
+            const style = document.createElement('style');
+            style.id = 'boq-spinner-style';
+            style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+            document.head.appendChild(style);
+        }
+        </script>
     </div>
     <?php
 }
@@ -2594,18 +2713,6 @@ function boq_renderRatingsTab() {
             </div>
         </div>
         
-        <!-- Modal for Editing Questionnaire -->
-        <div id="boqEditModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10001; align-items: center; justify-content: center;">
-            <div style="background: white; border-radius: 10px; max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 20px; position: relative;">
-                <button onclick="boqCloseEditModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold; z-index: 1;">×</button>
-                <div id="boqEditContent" style="min-height: 200px;">
-                    <div style="text-align: center; padding: 40px; color: #999;">
-                        Caricamento form di modifica...
-                    </div>
-                </div>
-            </div>
-        </div>
-        
         <script>
         function boqOpenQuestionnaireModal(event, userId, userName) {
             event.preventDefault();
@@ -2684,106 +2791,12 @@ function boq_renderRatingsTab() {
             document.getElementById('boqDetailsModal').style.display = 'none';
         }
         
-        function boqOpenEditModal(assignmentId) {
-            const modal = document.getElementById('boqEditModal');
-            const content = document.getElementById('boqEditContent');
-            
-            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Caricamento form di modifica...</p></div>';
-            modal.style.display = 'flex';
-            
-            // AJAX request to get editable questionnaire
-            fetch('<?php echo site_url('/ajax_fornitori/get_editable_questionnaire.php'); ?>', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'assignment_id=' + assignmentId + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    content.innerHTML = data.html;
-                } else {
-                    content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + (data.error || 'Impossibile caricare il questionario') + '</div>';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: Impossibile caricare il questionario</div>';
-            });
-        }
-        
-        function boqCloseEditModal() {
-            document.getElementById('boqEditModal').style.display = 'none';
-        }
-        
-        function boqSaveEdits(assignmentId) {
-            const form = document.getElementById('boqEditForm');
-            const formData = new FormData(form);
-            
-            // Valida form
-            if (!form.checkValidity()) {
-                alert('Per favore, rispondi a tutte le domande obbligatorie.');
-                form.reportValidity();
-                return;
-            }
-            
-            // Raccogli risposte
-            const responses = {};
-            formData.forEach((value, key) => {
-                if (key.startsWith('question_')) {
-                    const questionId = key.replace('question_', '');
-                    responses[questionId] = value;
-                }
-            });
-            
-            // Mostra loading
-            const content = document.getElementById('boqEditContent');
-            const originalContent = content.innerHTML;
-            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Salvataggio in corso...</p></div>';
-            
-            // AJAX request to save edits
-            fetch('<?php echo site_url('/ajax_fornitori/save_questionnaire_edits.php'); ?>', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'assignment_id=' + assignmentId + '&responses=' + encodeURIComponent(JSON.stringify(responses)) + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Mostra messaggio di successo con nuovo punteggio
-                    const score = data.score;
-                    content.innerHTML = '<div style="text-align: center; padding: 40px;">' +
-                        '<div style="font-size: 60px; color: #4caf50; margin-bottom: 20px;">✓</div>' +
-                        '<h2 style="color: #4caf50; margin-bottom: 15px;">Modifiche Salvate con Successo!</h2>' +
-                        '<div style="background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">' +
-                        '<div style="font-size: 16px; color: #666; margin-bottom: 10px;">Nuovo Punteggio</div>' +
-                        '<div style="font-size: 36px; font-weight: bold; color: ' + score.eval_color + '; margin-bottom: 10px;">' + score.value + ' / 100</div>' +
-                        '<div style="color: #FFD700; font-size: 24px; margin-bottom: 10px;">' + ('★'.repeat(Math.floor(score.stars))) + (score.stars % 1 >= 0.5 ? '☆' : '') + ('☆'.repeat(5 - Math.ceil(score.stars))) + '</div>' +
-                        '<div style="background: ' + score.eval_color + '; color: white; display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: 600;">' + score.evaluation + '</div>' +
-                        '</div>' +
-                        '<p style="color: #666; margin-top: 20px;">Il punteggio è stato ricalcolato automaticamente.</p>' +
-                        '<button onclick="boqCloseEditModal(); window.location.reload();" style="background: #667eea; color: white; padding: 12px 30px; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px;">Chiudi</button>' +
-                        '</div>';
-                } else {
-                    alert('Errore durante il salvataggio: ' + (data.error || 'Errore sconosciuto'));
-                    content.innerHTML = originalContent;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Errore durante il salvataggio. Riprova.');
-                content.innerHTML = originalContent;
-            });
-        }
-        
         // Close modals on click outside
         document.getElementById('boqQuestionnaireModal')?.addEventListener('click', function(e) {
             if (e.target === this) boqCloseModal();
         });
         document.getElementById('boqDetailsModal')?.addEventListener('click', function(e) {
             if (e.target === this) boqCloseDetailsModal();
-        });
-        document.getElementById('boqEditModal')?.addEventListener('click', function(e) {
-            if (e.target === this) boqCloseEditModal();
         });
         
         // Add spinner animation
