@@ -2405,7 +2405,7 @@ function boq_renderRatingsTab() {
             a.target_user_id as user_id,
             COUNT(DISTINCT a.id) as total_questionnaires,
             COUNT(DISTINCT CASE WHEN a.status = 'completed' THEN a.id END) as completed_questionnaires,
-            GROUP_CONCAT(DISTINCT a.id) as assignment_ids
+            GROUP_CONCAT(a.id ORDER BY a.id) as assignment_ids
         FROM {$wpdb->prefix}cogei_assignments a
         WHERE a.status = 'completed'
         GROUP BY a.target_user_id
@@ -2415,23 +2415,37 @@ function boq_renderRatingsTab() {
     
     // Calculate average score for each supplier using correct formula
     foreach ($results as &$result) {
-        $assignment_ids = explode(',', $result['assignment_ids']);
-        $total_score = 0;
-        $score_count = 0;
+        $assignment_ids = array_unique(array_filter(explode(',', $result['assignment_ids']), function($id) {
+            return !empty($id) && is_numeric($id);
+        }));
         
+        $scores = [];
         foreach ($assignment_ids as $assignment_id) {
             $score = boq_calculateScore(intval($assignment_id));
-            if ($score > 0) {
-                $total_score += $score;
-                $score_count++;
+            if ($score >= 0) {  // Include 0 scores, but they're valid
+                $scores[] = $score;
             }
         }
         
-        $result['avg_score'] = $score_count > 0 ? ($total_score / $score_count) : null;
+        $result['avg_score'] = !empty($scores) ? (array_sum($scores) / count($scores)) : null;
+        $result['score_count'] = count($scores);
+        $result['individual_scores'] = $scores; // For debugging
     }
     
     // Filter out suppliers with no scores and sort by score
     $results = array_filter($results, function($r) { return $r['avg_score'] !== null; });
+    
+    // Remove duplicates by user_id (in case GROUP BY didn't work properly)
+    $unique_results = [];
+    $seen_user_ids = [];
+    foreach ($results as $result) {
+        if (!in_array($result['user_id'], $seen_user_ids)) {
+            $unique_results[] = $result;
+            $seen_user_ids[] = $result['user_id'];
+        }
+    }
+    $results = $unique_results;
+    
     usort($results, function($a, $b) { return $b['avg_score'] <=> $a['avg_score']; });
     
     ?>
@@ -2589,17 +2603,29 @@ function boq_renderRatingsTab() {
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: 'user_id=' + userId
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    content.innerHTML = data.html;
-                } else {
-                    content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + (data.error || 'Impossibile caricare i dati') + '</div>';
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP error ' + response.status);
+                }
+                return response.text();
+            })
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data.success) {
+                        content.innerHTML = data.html;
+                    } else {
+                        content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + (data.error || 'Impossibile caricare i dati') + '</div>';
+                    }
+                } catch (e) {
+                    console.error('JSON Parse Error:', e);
+                    console.error('Response text:', text);
+                    content.innerHTML = '<div style="padding: 20px; color: #c00;"><strong>Errore JSON:</strong><br><pre style="background: #f5f5f5; padding: 10px; overflow: auto; max-height: 300px;">' + text.substring(0, 500) + '</pre></div>';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: Impossibile caricare i dati</div>';
+                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + error.message + '</div>';
             });
         }
         
