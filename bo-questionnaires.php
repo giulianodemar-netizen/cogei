@@ -2525,7 +2525,7 @@ function boq_renderResultsTab() {
                         </div>
                     </td>
                     <td style="padding: 12px; text-align: center;">
-                        <span style="padding: 6px 16px; border-radius: 5px; background: <?php echo $eval_color; ?>; color: white; font-weight: bold;">
+                        <span style="padding: 6px 16px; border-radius: 5px; background: <?php echo $eval_color; ?>; color: white; font-weight: bold; white-space: nowrap; display: inline-block;">
                             <?php echo esc_html($evaluation); ?>
                         </span>
                     </td>
