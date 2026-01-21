@@ -158,6 +158,8 @@ if (!$assignment) {
 if ($assignment['status'] === 'completed') {
     $table_responses = $wpdb->prefix . 'cogei_responses';
     $table_options = $wpdb->prefix . 'cogei_options';
+    $table_areas = $wpdb->prefix . 'cogei_areas';
+    $table_questions = $wpdb->prefix . 'cogei_questions';
     
     // Calcola punteggio finale usando la formula corretta:
     // Per ogni area: area_score = (somma pesi domande area) × peso_area
