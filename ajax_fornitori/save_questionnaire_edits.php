@@ -65,6 +65,11 @@ if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'boq_edit_quest
 $assignment_id = isset($_POST['assignment_id']) ? intval($_POST['assignment_id']) : 0;
 $responses_json = isset($_POST['responses']) ? $_POST['responses'] : '';
 
+// Debug logging
+error_log("BOQ Edit Save - Assignment ID: {$assignment_id}");
+error_log("BOQ Edit Save - Responses JSON raw: " . substr($responses_json, 0, 200));
+error_log("BOQ Edit Save - Responses JSON length: " . strlen($responses_json));
+
 if ($assignment_id <= 0) {
     http_response_code(400);
     die(json_encode(['error' => 'ID assignment non valido']));
@@ -77,9 +82,18 @@ if (empty($responses_json)) {
 
 // Decodifica risposte
 $responses = json_decode($responses_json, true);
+error_log("BOQ Edit Save - Decoded responses: " . print_r($responses, true));
+error_log("BOQ Edit Save - Is array: " . (is_array($responses) ? 'yes' : 'no'));
+error_log("BOQ Edit Save - Count: " . (is_array($responses) ? count($responses) : 'N/A'));
+
 if (!is_array($responses) || empty($responses)) {
     http_response_code(400);
-    die(json_encode(['error' => 'Formato risposte non valido']));
+    die(json_encode(['error' => 'Formato risposte non valido', 'debug' => [
+        'json_last_error' => json_last_error_msg(),
+        'is_array' => is_array($responses),
+        'empty' => empty($responses),
+        'type' => gettype($responses)
+    ]]));
 }
 
 global $wpdb;

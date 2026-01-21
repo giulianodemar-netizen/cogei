@@ -1380,6 +1380,17 @@ function boq_renderAdminInterface() {
                 }
             });
             
+            // Debug: Log responses
+            console.log('Responses collected:', responses);
+            console.log('Number of responses:', Object.keys(responses).length);
+            console.log('JSON to send:', JSON.stringify(responses));
+            
+            // Validate we have responses
+            if (Object.keys(responses).length === 0) {
+                alert('Errore: Nessuna risposta trovata nel form. Verifica che le domande siano state caricate correttamente.');
+                return;
+            }
+            
             // Mostra loading
             const content = document.getElementById('boqEditContent');
             const originalContent = content.innerHTML;
@@ -1409,7 +1420,12 @@ function boq_renderAdminInterface() {
                         '<button onclick="boqCloseEditModal(); window.location.reload();" style="background: #667eea; color: white; padding: 12px 30px; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px;">Chiudi</button>' +
                         '</div>';
                 } else {
-                    alert('Errore durante il salvataggio: ' + (data.error || 'Errore sconosciuto'));
+                    let errorMsg = 'Errore durante il salvataggio: ' + (data.error || 'Errore sconosciuto');
+                    if (data.debug) {
+                        console.error('Debug info:', data.debug);
+                        errorMsg += '\n\nDebug: ' + JSON.stringify(data.debug, null, 2);
+                    }
+                    alert(errorMsg);
                     content.innerHTML = originalContent;
                 }
             })
