@@ -55,6 +55,12 @@ if (!current_user_can('administrator')) {
     die(json_encode(['error' => 'Accesso negato. Solo gli amministratori possono modificare i questionari.']));
 }
 
+// Verifica nonce per CSRF protection
+if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'boq_edit_questionnaire')) {
+    http_response_code(403);
+    die(json_encode(['error' => 'Errore di sicurezza. Token non valido.']));
+}
+
 // Recupera parametri
 $assignment_id = isset($_POST['assignment_id']) ? intval($_POST['assignment_id']) : 0;
 

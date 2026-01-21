@@ -2695,7 +2695,7 @@ function boq_renderRatingsTab() {
             fetch('<?php echo site_url('/ajax_fornitori/get_editable_questionnaire.php'); ?>', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'assignment_id=' + assignmentId
+                body: 'assignment_id=' + assignmentId + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
             })
             .then(response => response.json())
             .then(data => {
@@ -2744,7 +2744,7 @@ function boq_renderRatingsTab() {
             fetch('<?php echo site_url('/ajax_fornitori/save_questionnaire_edits.php'); ?>', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'assignment_id=' + assignmentId + '&responses=' + encodeURIComponent(JSON.stringify(responses))
+                body: 'assignment_id=' + assignmentId + '&responses=' + encodeURIComponent(JSON.stringify(responses)) + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
             })
             .then(response => response.json())
             .then(data => {
