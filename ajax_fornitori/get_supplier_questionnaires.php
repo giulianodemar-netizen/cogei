@@ -170,9 +170,12 @@ function convertScoreToStars($score) {
 
 // Funzione per renderizzare stelle
 function renderStars($stars) {
+    // Ensure stars is in valid range 0-5
+    $stars = max(0, min(5, $stars));
+    
     $full = floor($stars);
     $half = ($stars - $full) >= 0.5 ? 1 : 0;
-    $empty = 5 - $full - $half;
+    $empty = max(0, 5 - $full - $half); // Ensure non-negative
     
     $html = '<span style="color: #FFD700; font-size: 20px; letter-spacing: 2px;">';
     $html .= str_repeat('★', $full);

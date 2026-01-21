@@ -2530,6 +2530,12 @@ function boq_renderRatingsTab() {
                             </strong>
                             <br>
                             <span style="color: #999; font-size: 12px;">/ 100</span>
+                            <?php if (isset($result['individual_scores']) && !empty($result['individual_scores'])): ?>
+                            <br>
+                            <span style="color: #999; font-size: 11px; font-style: italic;">
+                                (<?php echo implode(' + ', array_map(function($s) { return number_format($s, 0); }, $result['individual_scores'])); ?>) / <?php echo count($result['individual_scores']); ?>
+                            </span>
+                            <?php endif; ?>
                         </td>
                         <td style="padding: 15px; text-align: center;">
                             <a href="#" 
