@@ -213,7 +213,7 @@ foreach ($areas as $area) {
                 $html .= '<div style="margin-left: 24px; margin-bottom: 6px; font-size: 14px;">';
                 $html .= '<span style="color: #6c757d;">✓ ' . esc_html($response->option_text) . '</span> ';
                 $html .= '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px;">N.A.</span>';
-                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Esclusa dal calcolo)</span>';
+                $html .= ' <span style="color: #999; font-size: 12px; font-style: italic;">(Peso massimo applicato)</span>';
                 $html .= '</div>';
             } else {
                 // Normal response

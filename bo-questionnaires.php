@@ -2180,7 +2180,7 @@ function boq_renderResultsTab() {
                                         <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-left: 4px solid #ffc107; border-radius: 3px;">
                                             <span style="color: #6c757d;">✓ <?php echo esc_html($option['text']); ?></span>
                                             <span style="display: inline-block; background: #ffc107; color: #000; font-weight: bold; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">N.A.</span>
-                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Esclusa dal calcolo)</span>
+                                            <span style="color: #999; font-size: 12px; font-style: italic; margin-left: 8px;">(Peso massimo applicato)</span>
                                         </div>
                                     <?php else: ?>
                                         <div style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-left: 4px solid #03679e; border-radius: 3px;">
