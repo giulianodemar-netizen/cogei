@@ -221,7 +221,7 @@ echo "12. TEST 3: Eliminazione parziale struttura questionario...\n";
 
 // Elimina opzioni
 $wpdb->delete($wpdb->prefix . 'cogei_options', ['question_id' => $question_id]);
-echo "    ✓ Opzioni eliminate\n";
+    echo "    ✓ Opzioni eliminate\n";
 
 // Elimina domanda
 $wpdb->delete($wpdb->prefix . 'cogei_questions', ['id' => $question_id]);
