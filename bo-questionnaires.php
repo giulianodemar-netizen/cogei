@@ -567,6 +567,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
         echo '<div class="notice notice-success"><p>Questionario eliminato con successo</p></div>';
     }
     
+    // AZIONE: Duplica Questionario
+    if ($action === 'duplicate_questionnaire') {
+        $source_id = intval($_POST['questionnaire_id']);
+        
+        // Recupera questionario originale
+        $source_questionnaire = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}cogei_questionnaires WHERE id = %d",
+            $source_id
+        ), ARRAY_A);
+        
+        if ($source_questionnaire) {
+            // Crea copia del questionario
+            $new_title = $source_questionnaire['title'] . ' (Copia)';
+            $wpdb->insert(
+                $wpdb->prefix . 'cogei_questionnaires',
+                [
+                    'title' => $new_title,
+                    'description' => $source_questionnaire['description'],
+                    'status' => 'draft', // Imposta come bozza
+                    'created_by' => get_current_user_id()
+                ],
+                ['%s', '%s', '%s', '%d']
+            );
+            $new_questionnaire_id = $wpdb->insert_id;
+            
+            // Duplica aree
+            $areas = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d ORDER BY sort_order",
+                $source_id
+            ), ARRAY_A);
+            
+            foreach ($areas as $area) {
+                $old_area_id = $area['id'];
+                $wpdb->insert(
+                    $wpdb->prefix . 'cogei_areas',
+                    [
+                        'questionnaire_id' => $new_questionnaire_id,
+                        'title' => $area['title'],
+                        'weight' => $area['weight'],
+                        'sort_order' => $area['sort_order']
+                    ],
+                    ['%d', '%s', '%f', '%d']
+                );
+                $new_area_id = $wpdb->insert_id;
+                
+                // Duplica domande per questa area
+                $questions = $wpdb->get_results($wpdb->prepare(
+                    "SELECT * FROM {$wpdb->prefix}cogei_questions WHERE area_id = %d ORDER BY sort_order",
+                    $old_area_id
+                ), ARRAY_A);
+                
+                foreach ($questions as $question) {
+                    $old_question_id = $question['id'];
+                    $wpdb->insert(
+                        $wpdb->prefix . 'cogei_questions',
+                        [
+                            'area_id' => $new_area_id,
+                            'text' => $question['text'],
+                            'is_required' => $question['is_required'],
+                            'sort_order' => $question['sort_order']
+                        ],
+                        ['%d', '%s', '%d', '%d']
+                    );
+                    $new_question_id = $wpdb->insert_id;
+                    
+                    // Duplica opzioni per questa domanda
+                    $options = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM {$wpdb->prefix}cogei_options WHERE question_id = %d ORDER BY sort_order",
+                        $old_question_id
+                    ), ARRAY_A);
+                    
+                    foreach ($options as $option) {
+                        $wpdb->insert(
+                            $wpdb->prefix . 'cogei_options',
+                            [
+                                'question_id' => $new_question_id,
+                                'text' => $option['text'],
+                                'weight' => $option['weight'],
+                                'is_na' => $option['is_na'],
+                                'sort_order' => $option['sort_order']
+                            ],
+                            ['%d', '%s', '%f', '%d', '%d']
+                        );
+                    }
+                }
+            }
+            
+            echo '<div class="notice notice-success"><p>Questionario duplicato con successo! <a href="?boq_tab=questionnaires&edit=' . $new_questionnaire_id . '">Modifica ora</a></p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>Questionario non trovato</p></div>';
+        }
+    }
+    
     // AZIONE: Salva Area
     if ($action === 'save_area') {
         $area_id = isset($_POST['area_id']) ? intval($_POST['area_id']) : 0;
@@ -1314,6 +1407,141 @@ function boq_renderAdminInterface() {
             <?php endif; ?>
             
         </div>
+        
+        <!-- Modal for Editing Questionnaire (Available on all tabs) -->
+        <div id="boqEditModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10001; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 10px; max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 20px; position: relative;">
+                <button onclick="boqCloseEditModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold; z-index: 1;">×</button>
+                <div id="boqEditContent" style="min-height: 200px;">
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        Caricamento form di modifica...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        // Edit Modal Functions (Available on all tabs)
+        function boqOpenEditModal(assignmentId) {
+            const modal = document.getElementById('boqEditModal');
+            const content = document.getElementById('boqEditContent');
+            
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Caricamento form di modifica...</p></div>';
+            modal.style.display = 'flex';
+            
+            // AJAX request to get editable questionnaire
+            fetch('<?php echo site_url('/ajax_fornitori/get_editable_questionnaire.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'assignment_id=' + assignmentId + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    content.innerHTML = data.html;
+                } else {
+                    content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: ' + (data.error || 'Impossibile caricare il questionario') + '</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                content.innerHTML = '<div style="padding: 20px; text-align: center; color: #c00;">Errore: Impossibile caricare il questionario</div>';
+            });
+        }
+        
+        function boqCloseEditModal() {
+            document.getElementById('boqEditModal').style.display = 'none';
+        }
+        
+        function boqSaveEdits(assignmentId) {
+            const form = document.getElementById('boqEditForm');
+            const formData = new FormData(form);
+            
+            // Valida form
+            if (!form.checkValidity()) {
+                alert('Per favore, rispondi a tutte le domande obbligatorie.');
+                form.reportValidity();
+                return;
+            }
+            
+            // Raccogli risposte
+            const responses = {};
+            formData.forEach((value, key) => {
+                if (key.startsWith('question_')) {
+                    const questionId = key.replace('question_', '');
+                    responses[questionId] = value;
+                }
+            });
+            
+            // Debug: Log responses
+            console.log('Responses collected:', responses);
+            console.log('Number of responses:', Object.keys(responses).length);
+            console.log('JSON to send:', JSON.stringify(responses));
+            
+            // Validate we have responses
+            if (Object.keys(responses).length === 0) {
+                alert('Errore: Nessuna risposta trovata nel form. Verifica che le domande siano state caricate correttamente.');
+                return;
+            }
+            
+            // Mostra loading
+            const content = document.getElementById('boqEditContent');
+            const originalContent = content.innerHTML;
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto;"></div><p style="margin-top: 15px; color: #666;">Salvataggio in corso...</p></div>';
+            
+            // AJAX request to save edits
+            fetch('<?php echo site_url('/ajax_fornitori/save_questionnaire_edits.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'assignment_id=' + assignmentId + '&responses=' + encodeURIComponent(JSON.stringify(responses)) + '&nonce=' + encodeURIComponent('<?php echo wp_create_nonce('boq_edit_questionnaire'); ?>')
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Mostra messaggio di successo con nuovo punteggio
+                    const score = data.score;
+                    content.innerHTML = '<div style="text-align: center; padding: 40px;">' +
+                        '<div style="font-size: 60px; color: #4caf50; margin-bottom: 20px;">✓</div>' +
+                        '<h2 style="color: #4caf50; margin-bottom: 15px;">Modifiche Salvate con Successo!</h2>' +
+                        '<div style="background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">' +
+                        '<div style="font-size: 16px; color: #666; margin-bottom: 10px;">Nuovo Punteggio</div>' +
+                        '<div style="font-size: 36px; font-weight: bold; color: ' + score.eval_color + '; margin-bottom: 10px;">' + score.value + ' / 100</div>' +
+                        '<div style="color: #FFD700; font-size: 24px; margin-bottom: 10px;">' + ('★'.repeat(Math.floor(score.stars))) + (score.stars % 1 >= 0.5 ? '☆' : '') + ('☆'.repeat(5 - Math.ceil(score.stars))) + '</div>' +
+                        '<div style="background: ' + score.eval_color + '; color: white; display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: 600;">' + score.evaluation + '</div>' +
+                        '</div>' +
+                        '<p style="color: #666; margin-top: 20px;">Il punteggio è stato ricalcolato automaticamente.</p>' +
+                        '<button onclick="boqCloseEditModal(); window.location.reload();" style="background: #667eea; color: white; padding: 12px 30px; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px;">Chiudi</button>' +
+                        '</div>';
+                } else {
+                    let errorMsg = 'Errore durante il salvataggio: ' + (data.error || 'Errore sconosciuto');
+                    if (data.debug) {
+                        console.error('Debug info:', data.debug);
+                        errorMsg += '\n\nDebug: ' + JSON.stringify(data.debug, null, 2);
+                    }
+                    alert(errorMsg);
+                    content.innerHTML = originalContent;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Errore durante il salvataggio. Riprova.');
+                content.innerHTML = originalContent;
+            });
+        }
+        
+        // Close edit modal on click outside
+        document.getElementById('boqEditModal')?.addEventListener('click', function(e) {
+            if (e.target === this) boqCloseEditModal();
+        });
+        
+        // Add spinner animation
+        if (!document.getElementById('boq-spinner-style')) {
+            const style = document.createElement('style');
+            style.id = 'boq-spinner-style';
+            style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+            document.head.appendChild(style);
+        }
+        </script>
     </div>
     <?php
 }
@@ -1433,6 +1661,13 @@ function boq_renderQuestionnairesTab() {
                     <td style="padding: 12px;"><?php echo date('d/m/Y H:i', strtotime($q['created_at'])); ?></td>
                     <td style="padding: 12px; text-align: center;">
                         <a href="?boq_tab=questionnaires&edit=<?php echo $q['id']; ?>" style="color: #03679e; text-decoration: none; margin: 0 5px;">✏️ Modifica</a>
+                        |
+                        <form method="POST" style="display: inline;" onsubmit="return confirm('Duplicare questo questionario?');">
+                            <?php wp_nonce_field('boq_admin_action', 'boq_nonce'); ?>
+                            <input type="hidden" name="boq_action" value="duplicate_questionnaire">
+                            <input type="hidden" name="questionnaire_id" value="<?php echo $q['id']; ?>">
+                            <button type="submit" style="background: none; border: none; color: #ff9800; cursor: pointer; text-decoration: none; font-size: 14px;">📋 Duplica</button>
+                        </form>
                         |
                         <a href="?boq_tab=assignments&send=<?php echo $q['id']; ?>" style="color: #4caf50; text-decoration: none; margin: 0 5px;">📤 Invia</a>
                         |
@@ -2097,6 +2332,11 @@ function boq_renderAssignmentsTab() {
                         <a href="?boq_tab=results&assignment=<?php echo $assignment['id']; ?>" style="color: #03679e; text-decoration: none;">
                             📊 Visualizza Risultato
                         </a>
+                        <br>
+                        <button onclick="boqOpenEditModal(<?php echo $assignment['id']; ?>)" 
+                                style="background: #ff9800; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-top: 8px; transition: all 0.2s;">
+                            ✏️ Modifica Risposte
+                        </button>
                     <?php else: ?>
                         <span style="color: #999; font-size: 0.9em;">In attesa</span>
                     <?php endif; ?>
@@ -2285,7 +2525,7 @@ function boq_renderResultsTab() {
                         </div>
                     </td>
                     <td style="padding: 12px; text-align: center;">
-                        <span style="padding: 6px 16px; border-radius: 5px; background: <?php echo $eval_color; ?>; color: white; font-weight: bold;">
+                        <span style="padding: 6px 16px; border-radius: 5px; background: <?php echo $eval_color; ?>; color: white; font-weight: bold; white-space: nowrap; display: inline-block;">
                             <?php echo esc_html($evaluation); ?>
                         </span>
                     </td>
