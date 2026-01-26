@@ -160,43 +160,82 @@ if ($assignment['status'] === 'completed') {
     $table_options = $wpdb->prefix . 'cogei_options';
     $table_areas = $wpdb->prefix . 'cogei_areas';
     $table_questions = $wpdb->prefix . 'cogei_questions';
+    $table_assignments = $wpdb->prefix . 'cogei_assignments';
     
-    // Calcola punteggio finale usando la formula corretta:
-    // Per ogni area: area_score = (somma pesi domande area) × peso_area
-    // Punteggio totale = somma di tutti gli area_score
+    /**
+     * IMPORTANTE - COMPORTAMENTO MODIFICATO PER GARANTIRE CONSISTENZA DATI:
+     * Usa SEMPRE i punteggi computed_score memorizzati e i pesi dallo snapshot
+     * per garantire che i punteggi storici non cambino mai.
+     */
     
-    // Ottieni tutte le aree del questionario
-    $areas = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, weight FROM $table_areas WHERE questionnaire_id = %d",
-        $assignment['questionnaire_id']
+    // Recupera assignment completo con snapshot
+    $assignment_full = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_assignments WHERE id = %d",
+        $assignment['id']
     ), ARRAY_A);
+    
+    $snapshot = null;
+    if ($assignment_full && !empty($assignment_full['questionnaire_snapshot'])) {
+        $snapshot = json_decode($assignment_full['questionnaire_snapshot'], true);
+    }
     
     $total_score = 0;
     $completion_date = null;
     
-    foreach ($areas as $area) {
-        // Ottieni tutte le risposte per quest'area (includendo N.A.)
-        $area_responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.computed_score, r.answered_at, q.area_id
-            FROM $table_responses r
-            INNER JOIN $table_questions q ON r.question_id = q.id
-            WHERE r.assignment_id = %d AND q.area_id = %d",
-            $assignment['id'],
-            $area['id']
+    // Usa lo snapshot se disponibile
+    if ($snapshot && isset($snapshot['areas'])) {
+        foreach ($snapshot['areas'] as $area_data) {
+            // USA computed_score MEMORIZZATO
+            $area_responses = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.computed_score, r.answered_at
+                FROM $table_responses r
+                INNER JOIN $table_questions q ON r.question_id = q.id
+                WHERE r.assignment_id = %d AND q.area_id = %d",
+                $assignment['id'],
+                $area_data['id']
+            ), ARRAY_A);
+            
+            $area_sum = 0;
+            foreach ($area_responses as $resp) {
+                $area_sum += floatval($resp['computed_score']);
+                if ($completion_date === null || $resp['answered_at'] > $completion_date) {
+                    $completion_date = $resp['answered_at'];
+                }
+            }
+            
+            // Usa peso area DALLO SNAPSHOT
+            $area_score = $area_sum * floatval($area_data['weight']);
+            $total_score += $area_score;
+        }
+    } else {
+        // FALLBACK per questionari completati prima del fix
+        $areas = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, weight FROM $table_areas WHERE questionnaire_id = %d",
+            $assignment['questionnaire_id']
         ), ARRAY_A);
         
-        // Somma i pesi delle domande in quest'area
-        $area_sum = 0;
-        foreach ($area_responses as $resp) {
-            $area_sum += floatval($resp['computed_score']);
-            if ($completion_date === null || $resp['answered_at'] > $completion_date) {
-                $completion_date = $resp['answered_at'];
+        foreach ($areas as $area) {
+            // USA computed_score MEMORIZZATO
+            $area_responses = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.computed_score, r.answered_at
+                FROM $table_responses r
+                INNER JOIN $table_questions q ON r.question_id = q.id
+                WHERE r.assignment_id = %d AND q.area_id = %d",
+                $assignment['id'],
+                $area['id']
+            ), ARRAY_A);
+            
+            $area_sum = 0;
+            foreach ($area_responses as $resp) {
+                $area_sum += floatval($resp['computed_score']);
+                if ($completion_date === null || $resp['answered_at'] > $completion_date) {
+                    $completion_date = $resp['answered_at'];
+                }
             }
+            
+            $area_score = $area_sum * floatval($area['weight']);
+            $total_score += $area_score;
         }
-        
-        // Moltiplica la somma per il peso dell'area
-        $area_score = $area_sum * floatval($area['weight']);
-        $total_score += $area_score;
     }
     
     $final_score = $total_score * 100; // Scala a 0-100
@@ -337,38 +376,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale usando la formula corretta:
-        // Per ogni area: area_score = (somma pesi domande area) × peso_area
-        // Punteggio totale = somma di tutti gli area_score
+        /**
+         * IMPORTANTE - COMPORTAMENTO MODIFICATO PER GARANTIRE CONSISTENZA DATI:
+         * Usa SEMPRE i punteggi computed_score memorizzati e i pesi dallo snapshot
+         * per garantire che i punteggi storici non cambino mai.
+         */
         
-        // Ottieni tutte le aree del questionario
-        $questionnaire_areas = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, weight FROM $table_areas WHERE questionnaire_id = %d",
-            $assignment['questionnaire_id']
+        // Recupera assignment completo con snapshot
+        $assignment_full = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_assignments WHERE id = %d",
+            $assignment['id']
         ), ARRAY_A);
+        
+        $snapshot = null;
+        if ($assignment_full && !empty($assignment_full['questionnaire_snapshot'])) {
+            $snapshot = json_decode($assignment_full['questionnaire_snapshot'], true);
+        }
         
         $total_score = 0;
         
-        foreach ($questionnaire_areas as $q_area) {
-            // Ottieni tutte le risposte per quest'area (includendo N.A.)
-            $area_responses = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.computed_score
-                FROM $table_responses r
-                INNER JOIN $table_questions q ON r.question_id = q.id
-                WHERE r.assignment_id = %d AND q.area_id = %d",
-                $assignment['id'],
-                $q_area['id']
+        // Usa lo snapshot se disponibile
+        if ($snapshot && isset($snapshot['areas'])) {
+            foreach ($snapshot['areas'] as $area_data) {
+                // USA computed_score MEMORIZZATO
+                $area_responses = $wpdb->get_results($wpdb->prepare(
+                    "SELECT r.computed_score
+                    FROM $table_responses r
+                    INNER JOIN $table_questions q ON r.question_id = q.id
+                    WHERE r.assignment_id = %d AND q.area_id = %d",
+                    $assignment['id'],
+                    $area_data['id']
+                ), ARRAY_A);
+                
+                $area_sum = 0;
+                foreach ($area_responses as $resp) {
+                    $area_sum += floatval($resp['computed_score']);
+                }
+                
+                // Usa peso area DALLO SNAPSHOT
+                $area_score = $area_sum * floatval($area_data['weight']);
+                $total_score += $area_score;
+            }
+        } else {
+            // FALLBACK per questionari senza snapshot
+            $questionnaire_areas = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, weight FROM $table_areas WHERE questionnaire_id = %d",
+                $assignment['questionnaire_id']
             ), ARRAY_A);
             
-            // Somma i pesi delle domande in quest'area
-            $area_sum = 0;
-            foreach ($area_responses as $resp) {
-                $area_sum += floatval($resp['computed_score']);
+            foreach ($questionnaire_areas as $q_area) {
+                // USA computed_score MEMORIZZATO
+                $area_responses = $wpdb->get_results($wpdb->prepare(
+                    "SELECT r.computed_score
+                    FROM $table_responses r
+                    INNER JOIN $table_questions q ON r.question_id = q.id
+                    WHERE r.assignment_id = %d AND q.area_id = %d",
+                    $assignment['id'],
+                    $q_area['id']
+                ), ARRAY_A);
+                
+                $area_sum = 0;
+                foreach ($area_responses as $resp) {
+                    $area_sum += floatval($resp['computed_score']);
+                }
+                
+                $area_score = $area_sum * floatval($q_area['weight']);
+                $total_score += $area_score;
             }
-            
-            // Moltiplica la somma per il peso dell'area
-            $area_score = $area_sum * floatval($q_area['weight']);
-            $total_score += $area_score;
         }
         
         $final_score = $total_score * 100; // Scala a 0-100
