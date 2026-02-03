@@ -279,20 +279,30 @@ if ($existing_score) {
     );
 }
 
-// Determina valutazione
-if ($final_score >= 85) {
+// Converti score in stelle PRIMA di determinare la valutazione
+$stars = ($final_score / 100) * 5;
+$stars = round($stars * 2) / 2; // Arrotonda a 0.5
+$stars = max(0, min(5, $stars)); // Clamp tra 0 e 5
+
+// Determina valutazione basata sulle stelle per allineare con la legenda:
+// ★★★★★ 4.5-5.0 = Eccellente
+// ★★★★☆ 3.5-4.4 = Molto Buono
+// ★★★☆☆ 2.5-3.4 = Adeguato
+// ★★☆☆☆ 1.5-2.4 = Critico
+// ★☆☆☆☆ 0.0-1.4 = Inadeguato
+if ($stars >= 4.5) {
     $evaluation = "Eccellente";
     $eval_class = "excellent";
     $eval_color = "#4caf50";
-} elseif ($final_score >= 70) {
+} elseif ($stars >= 3.5) {
     $evaluation = "Molto Buono";
     $eval_class = "very-good";
     $eval_color = "#8bc34a";
-} elseif ($final_score >= 55) {
+} elseif ($stars >= 2.5) {
     $evaluation = "Adeguato";
     $eval_class = "adequate";
     $eval_color = "#ffc107";
-} elseif ($final_score >= 40) {
+} elseif ($stars >= 1.5) {
     $evaluation = "Critico";
     $eval_class = "critical";
     $eval_color = "#ff9800";
@@ -301,11 +311,6 @@ if ($final_score >= 85) {
     $eval_class = "inadequate";
     $eval_color = "#f44336";
 }
-
-// Converti score in stelle
-$stars = ($final_score / 100) * 5;
-$stars = round($stars * 2) / 2; // Arrotonda a 0.5
-$stars = max(0, min(5, $stars)); // Clamp tra 0 e 5
 
 // Restituisci risposta con nuovo punteggio
 die(json_encode([

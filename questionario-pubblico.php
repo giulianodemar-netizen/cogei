@@ -176,17 +176,27 @@ if ($assignment['status'] === 'completed') {
         $assignment['id']
     ));
     
-    // Determina valutazione
-    if ($final_score >= 85) {
+    // Converti score in stelle
+    $stars = ($final_score / 100) * 5;
+    $stars = round($stars * 2) / 2; // Arrotonda a 0.5
+    $stars = max(0, min(5, $stars)); // Clamp tra 0 e 5
+    
+    // Determina valutazione basata sulle stelle per allineare con la legenda:
+    // ★★★★★ 4.5-5.0 = Eccellente
+    // ★★★★☆ 3.5-4.4 = Molto Buono
+    // ★★★☆☆ 2.5-3.4 = Adeguato
+    // ★★☆☆☆ 1.5-2.4 = Critico
+    // ★☆☆☆☆ 0.0-1.4 = Inadeguato
+    if ($stars >= 4.5) {
         $evaluation = "Eccellente";
         $eval_class = "excellent";
-    } elseif ($final_score >= 70) {
+    } elseif ($stars >= 3.5) {
         $evaluation = "Molto Buono";
         $eval_class = "very-good";
-    } elseif ($final_score >= 55) {
+    } elseif ($stars >= 2.5) {
         $evaluation = "Adeguato";
         $eval_class = "adequate";
-    } elseif ($final_score >= 40) {
+    } elseif ($stars >= 1.5) {
         $evaluation = "Critico";
         $eval_class = "critical";
     } else {

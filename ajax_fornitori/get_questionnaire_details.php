@@ -120,22 +120,25 @@ function renderStars($stars) {
 }
 
 function getEvaluationText($stars) {
-    // Convert stars to 0-100 score for consistent thresholds
-    $score = ($stars / 5) * 100;
-    if ($score >= 85) return 'Eccellente';
-    if ($score >= 70) return 'Molto Buono';
-    if ($score >= 55) return 'Adeguato';
-    if ($score >= 40) return 'Critico';
+    // Use star-based thresholds to match the legend:
+    // ★★★★★ 4.5-5.0 = Eccellente
+    // ★★★★☆ 3.5-4.4 = Molto Buono
+    // ★★★☆☆ 2.5-3.4 = Adeguato
+    // ★★☆☆☆ 1.5-2.4 = Critico
+    // ★☆☆☆☆ 0.0-1.4 = Inadeguato
+    if ($stars >= 4.5) return 'Eccellente';
+    if ($stars >= 3.5) return 'Molto Buono';
+    if ($stars >= 2.5) return 'Adeguato';
+    if ($stars >= 1.5) return 'Critico';
     return 'Inadeguato';
 }
 
 function getEvaluationColor($stars) {
-    // Convert stars to 0-100 score for consistent thresholds
-    $score = ($stars / 5) * 100;
-    if ($score >= 85) return '#4caf50';
-    if ($score >= 70) return '#8bc34a';
-    if ($score >= 55) return '#ffc107';
-    if ($score >= 40) return '#ff9800';
+    // Use star-based thresholds to match the legend
+    if ($stars >= 4.5) return '#4caf50';
+    if ($stars >= 3.5) return '#8bc34a';
+    if ($stars >= 2.5) return '#ffc107';
+    if ($stars >= 1.5) return '#ff9800';
     return '#f44336';
 }
 

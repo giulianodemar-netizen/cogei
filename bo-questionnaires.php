@@ -507,22 +507,27 @@ function boq_getScore($assignment_id) {
 }
 
 /**
- * Valuta il punteggio secondo le soglie definite
- * Soglie di riferimento:
- * >= 0.85 = Eccellente
- * >= 0.70 = Molto Buono
- * >= 0.55 = Adeguato
- * >= 0.40 = Critico
- * < 0.40 = Inadeguato
+ * Valuta il punteggio secondo le soglie definite nella legenda
+ * Usa le soglie basate sulle stelle per garantire coerenza:
+ * >= 4.5 stelle (90/100) = Eccellente
+ * >= 3.5 stelle (70/100) = Molto Buono
+ * >= 2.5 stelle (50/100) = Adeguato
+ * >= 1.5 stelle (30/100) = Critico
+ * < 1.5 stelle (< 30/100) = Inadeguato
  */
 function boq_evaluateScore($score) {
-    if ($score >= 85) {
+    // Convert score to stars first
+    $stars = ($score / 100) * 5;
+    $stars = round($stars * 2) / 2; // Round to nearest 0.5
+    
+    // Use star-based thresholds to match the legend
+    if ($stars >= 4.5) {
         return 'Eccellente';
-    } elseif ($score >= 70) {
+    } elseif ($stars >= 3.5) {
         return 'Molto Buono';
-    } elseif ($score >= 55) {
+    } elseif ($stars >= 2.5) {
         return 'Adeguato';
-    } elseif ($score >= 40) {
+    } elseif ($stars >= 1.5) {
         return 'Critico';
     } else {
         return 'Inadeguato';
