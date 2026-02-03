@@ -293,10 +293,12 @@ function boq_getResponses($assignment_id) {
  * Questo metodo calcola il punteggio SOLO se non è già stato salvato nella tabella cogei_questionnaire_scores.
  * Una volta calcolato e salvato, il punteggio diventa immutabile.
  * 
- * Formula:
- * - Per ogni area: area_score = (somma pesi domande area) × peso_area
- * - Punteggio totale = somma di tutti gli area_score × 100 (scala 0-100)
- * - Per N.A.: usa peso massimo della domanda
+ * NUOVA FORMULA:
+ * 1. Peso Effettivo = peso_massimo_domanda × peso_area (0 se N.A.)
+ * 2. Punteggio = peso_risposta × peso_area (0 se N.A.)
+ * 3. Punteggio finale = (Somma Punteggi / Somma Pesi Effettivi) × 100
+ * 
+ * Le risposte N.A. vengono escluse dal calcolo (contributo 0 sia al punteggio che al peso effettivo).
  */
 function boq_calculateAndSaveScore($assignment_id) {
     global $wpdb;
@@ -322,7 +324,8 @@ function boq_calculateAndSaveScore($assignment_id) {
         $assignment['questionnaire_id']
     ), ARRAY_A);
     
-    $total_score = 0;
+    $total_punteggio = 0;
+    $total_peso_effettivo = 0;
     
     foreach ($areas as $area) {
         // Ottieni tutte le risposte per quest'area con informazioni complete
@@ -336,30 +339,40 @@ function boq_calculateAndSaveScore($assignment_id) {
             $area['id']
         ), ARRAY_A);
         
-        // Somma i pesi delle domande in quest'area
-        $area_sum = 0;
+        $area_weight = floatval($area['weight']);
+        
         foreach ($area_responses as $resp) {
-            $question_weight = floatval($resp['option_weight']);
+            $is_na = isset($resp['is_na']) && $resp['is_na'] == 1;
             
-            // Se è N.A., usa il peso massimo per quella domanda
-            if (isset($resp['is_na']) && $resp['is_na'] == 1) {
-                $max_weight = $wpdb->get_var($wpdb->prepare(
-                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
-                    $resp['question_id']
-                ));
-                $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
+            if ($is_na) {
+                // Se N.A., contributo è 0 sia al punteggio che al peso effettivo
+                // (esclude la domanda dal calcolo)
+                continue;
             }
             
-            $area_sum += $question_weight;
+            // Calcola peso massimo per questa domanda
+            $max_weight = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                $resp['question_id']
+            ));
+            $max_weight = $max_weight !== null ? floatval($max_weight) : 1.0;
+            
+            // Peso Effettivo = peso massimo * peso area
+            $peso_effettivo = $max_weight * $area_weight;
+            $total_peso_effettivo += $peso_effettivo;
+            
+            // Punteggio = peso risposta * peso area
+            $answer_weight = floatval($resp['option_weight']);
+            $punteggio = $answer_weight * $area_weight;
+            $total_punteggio += $punteggio;
         }
-        
-        // Moltiplica la somma per il peso dell'area
-        $area_score = $area_sum * floatval($area['weight']);
-        $total_score += $area_score;
     }
     
-    // Scala a 0-100
-    $final_score = $total_score * 100;
+    // Calcola score finale: (somma punteggi / somma pesi effettivi) * 100
+    // Se non ci sono pesi effettivi (tutte N.A.), il punteggio è 0
+    $final_score = ($total_peso_effettivo > 0) 
+        ? ($total_punteggio / $total_peso_effettivo) * 100 
+        : 0;
     
     // Salva il punteggio nella tabella dedicata (INSERT IGNORE per evitare duplicati)
     $wpdb->query($wpdb->prepare(
@@ -379,6 +392,13 @@ function boq_calculateAndSaveScore($assignment_id) {
  * Da usare quando le risposte di un questionario già completato vengono modificate.
  * 
  * IMPORTANTE: Usare questa funzione solo quando si modificano le risposte di un questionario già completato.
+ * 
+ * NUOVA FORMULA:
+ * 1. Peso Effettivo = peso_massimo_domanda × peso_area (0 se N.A.)
+ * 2. Punteggio = peso_risposta × peso_area (0 se N.A.)
+ * 3. Punteggio finale = (Somma Punteggi / Somma Pesi Effettivi) × 100
+ * 
+ * Le risposte N.A. vengono escluse dal calcolo (contributo 0 sia al punteggio che al peso effettivo).
  * 
  * @param int $assignment_id ID dell'assignment
  * @return float Punteggio finale aggiornato
@@ -407,7 +427,8 @@ function boq_recalculateAndUpdateScore($assignment_id) {
         $assignment['questionnaire_id']
     ), ARRAY_A);
     
-    $total_score = 0;
+    $total_punteggio = 0;
+    $total_peso_effettivo = 0;
     
     foreach ($areas as $area) {
         // Ottieni tutte le risposte per quest'area con informazioni complete
@@ -421,30 +442,40 @@ function boq_recalculateAndUpdateScore($assignment_id) {
             $area['id']
         ), ARRAY_A);
         
-        // Somma i pesi delle domande in quest'area
-        $area_sum = 0;
+        $area_weight = floatval($area['weight']);
+        
         foreach ($area_responses as $resp) {
-            $question_weight = floatval($resp['option_weight']);
+            $is_na = isset($resp['is_na']) && $resp['is_na'] == 1;
             
-            // Se è N.A., usa il peso massimo per quella domanda
-            if (isset($resp['is_na']) && $resp['is_na'] == 1) {
-                $max_weight = $wpdb->get_var($wpdb->prepare(
-                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
-                    $resp['question_id']
-                ));
-                $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
+            if ($is_na) {
+                // Se N.A., contributo è 0 sia al punteggio che al peso effettivo
+                // (esclude la domanda dal calcolo)
+                continue;
             }
             
-            $area_sum += $question_weight;
+            // Calcola peso massimo per questa domanda
+            $max_weight = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                $resp['question_id']
+            ));
+            $max_weight = $max_weight !== null ? floatval($max_weight) : 1.0;
+            
+            // Peso Effettivo = peso massimo * peso area
+            $peso_effettivo = $max_weight * $area_weight;
+            $total_peso_effettivo += $peso_effettivo;
+            
+            // Punteggio = peso risposta * peso area
+            $answer_weight = floatval($resp['option_weight']);
+            $punteggio = $answer_weight * $area_weight;
+            $total_punteggio += $punteggio;
         }
-        
-        // Moltiplica la somma per il peso dell'area
-        $area_score = $area_sum * floatval($area['weight']);
-        $total_score += $area_score;
     }
     
-    // Scala a 0-100
-    $final_score = $total_score * 100;
+    // Calcola score finale: (somma punteggi / somma pesi effettivi) * 100
+    // Se non ci sono pesi effettivi (tutte N.A.), il punteggio è 0
+    $final_score = ($total_peso_effettivo > 0) 
+        ? ($total_punteggio / $total_peso_effettivo) * 100 
+        : 0;
     
     // Verifica se il punteggio esiste già
     $existing_score = $wpdb->get_var($wpdb->prepare(
