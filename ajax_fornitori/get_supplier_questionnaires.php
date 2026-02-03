@@ -66,90 +66,24 @@ if (!$user) {
 
 global $wpdb;
 
-// Helper function to calculate score using correct formula
-/**
- * IMPORTANTE - COMPORTAMENTO MODIFICATO PER GARANTIRE CONSISTENZA DATI:
- * 
- * Questa funzione USA SEMPRE il campo 'computed_score' memorizzato nella tabella cogei_responses.
- * I punteggi NON vengono MAI ricalcolati dinamicamente, nemmeno se i pesi vengono modificati
- * o il questionario viene eliminato.
- * 
- * Questo garantisce che i punteggi storici rimangano immutati e consistenti nel tempo.
- */
+// Helper function to get the saved score
+// Ottiene il punteggio dalla tabella cogei_questionnaire_scores
 function calculateQuestionnaireScore($assignment_id) {
     global $wpdb;
     
-    // Ottieni assignment con snapshot
-    $assignment = $wpdb->get_row($wpdb->prepare(
-        "SELECT questionnaire_id, questionnaire_snapshot FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
+    // Recupera il punteggio salvato dalla tabella dedicata
+    $saved_score = $wpdb->get_var($wpdb->prepare(
+        "SELECT final_score FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id = %d",
         $assignment_id
-    ), ARRAY_A);
+    ));
     
-    if (!$assignment) {
-        return 0;
+    if ($saved_score !== null) {
+        return floatval($saved_score);
     }
     
-    // Usa lo snapshot se disponibile (questionari compilati dopo il fix)
-    if (!empty($assignment['questionnaire_snapshot'])) {
-        $snapshot = json_decode($assignment['questionnaire_snapshot'], true);
-        if ($snapshot && isset($snapshot['areas'])) {
-            $total_score = 0;
-            
-            foreach ($snapshot['areas'] as $area_data) {
-                // USA computed_score MEMORIZZATO
-                $area_responses = $wpdb->get_results($wpdb->prepare(
-                    "SELECT r.computed_score
-                    FROM {$wpdb->prefix}cogei_responses r
-                    INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
-                    WHERE r.assignment_id = %d AND q.area_id = %d",
-                    $assignment_id,
-                    $area_data['id']
-                ), ARRAY_A);
-                
-                // Somma i punteggi memorizzati
-                $area_sum = 0;
-                foreach ($area_responses as $resp) {
-                    $area_sum += floatval($resp['computed_score']);
-                }
-                
-                // Usa il peso dell'area DALLO SNAPSHOT
-                $area_score = $area_sum * floatval($area_data['weight']);
-                $total_score += $area_score;
-            }
-            
-            return $total_score * 100;
-        }
-    }
-    
-    // FALLBACK per questionari compilati PRIMA del fix
-    $areas = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
-        $assignment['questionnaire_id']
-    ), ARRAY_A);
-    
-    $total_score = 0;
-    
-    foreach ($areas as $area) {
-        // USA computed_score MEMORIZZATO, non ricalcolare
-        $area_responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.computed_score
-            FROM {$wpdb->prefix}cogei_responses r
-            INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
-            WHERE r.assignment_id = %d AND q.area_id = %d",
-            $assignment_id,
-            $area['id']
-        ), ARRAY_A);
-        
-        $area_sum = 0;
-        foreach ($area_responses as $resp) {
-            $area_sum += floatval($resp['computed_score']);
-        }
-        
-        $area_score = $area_sum * floatval($area['weight']);
-        $total_score += $area_score;
-    }
-    
-    return $total_score * 100;
+    // Se per qualche motivo il punteggio non è stato salvato, restituisci 0
+    // (questo non dovrebbe accadere in condizioni normali)
+    return 0;
 }
 
 // Query per recuperare tutti i questionari completati del fornitore

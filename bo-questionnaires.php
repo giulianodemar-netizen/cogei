@@ -172,14 +172,6 @@ function boq_createQuestionnaireTablesIfNotExists() {
         $wpdb->query("ALTER TABLE $table_assignments MODIFY target_user_id INT(11) NOT NULL");
     }
     
-    // Migrazione: aggiungi campo questionnaire_snapshot per memorizzare la struttura al momento dell'invio
-    // Questo garantisce che i punteggi storici non vengano mai ricalcolati dopo modifiche ai pesi
-    $snapshot_column = $wpdb->get_results("SHOW COLUMNS FROM $table_assignments LIKE 'questionnaire_snapshot'");
-    if (empty($snapshot_column)) {
-        $wpdb->query("ALTER TABLE $table_assignments ADD COLUMN questionnaire_snapshot LONGTEXT NULL AFTER token");
-        error_log("Aggiunto campo questionnaire_snapshot alla tabella $table_assignments");
-    }
-    
     // 📝 TABELLA RISPOSTE
     $table_responses = $wpdb->prefix . 'cogei_responses';
     $sql_responses = "CREATE TABLE IF NOT EXISTS $table_responses (
@@ -196,7 +188,22 @@ function boq_createQuestionnaireTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_responses);
     
-    error_log("Tabelle questionari create/verificate: $table_questionnaires, $table_areas, $table_questions, $table_options, $table_assignments, $table_responses");
+    // 📊 TABELLA PUNTEGGI QUESTIONARI
+    // Questa tabella memorizza il punteggio finale calcolato una sola volta alla completazione del questionario
+    // In questo modo il punteggio non viene mai ricalcolato e rimane immutabile anche se i pesi vengono modificati
+    $table_scores = $wpdb->prefix . 'cogei_questionnaire_scores';
+    $sql_scores = "CREATE TABLE IF NOT EXISTS $table_scores (
+        id int(11) NOT NULL AUTO_INCREMENT,
+        assignment_id int(11) NOT NULL,
+        final_score decimal(10,4) NOT NULL DEFAULT 0.0000,
+        calculated_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY assignment_id (assignment_id),
+        KEY final_score (final_score)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+    $wpdb->query($sql_scores);
+    
+    error_log("Tabelle questionari create/verificate: $table_questionnaires, $table_areas, $table_questions, $table_options, $table_assignments, $table_responses, $table_scores");
 }
 
 // Esegui creazione tabelle
@@ -270,82 +277,6 @@ function boq_getAssignmentByToken($token) {
 }
 
 /**
- * Crea uno snapshot completo della struttura del questionario al momento dell'invio
- * 
- * IMPORTANTE: Questo snapshot garantisce che i punteggi storici non cambino mai,
- * anche se il questionario viene modificato o eliminato successivamente.
- * 
- * Lo snapshot include:
- * - Titolo e descrizione del questionario
- * - Tutte le aree con i loro pesi
- * - Tutte le domande
- * - Tutte le opzioni di risposta con i loro pesi
- * 
- * @param int $questionnaire_id ID del questionario
- * @return array Snapshot completo della struttura
- */
-function boq_createQuestionnaireSnapshot($questionnaire_id) {
-    global $wpdb;
-    
-    // Recupera questionario base
-    $questionnaire = boq_getQuestionnaire($questionnaire_id);
-    if (!$questionnaire) {
-        return null;
-    }
-    
-    $snapshot = [
-        'questionnaire_id' => $questionnaire_id,
-        'title' => $questionnaire['title'],
-        'description' => $questionnaire['description'],
-        'created_at' => current_time('mysql'),
-        'areas' => []
-    ];
-    
-    // Recupera tutte le aree con le loro domande e opzioni
-    $areas = boq_getAreas($questionnaire_id);
-    
-    foreach ($areas as $area) {
-        $area_data = [
-            'id' => $area['id'],
-            'title' => $area['title'],
-            'weight' => $area['weight'],
-            'sort_order' => $area['sort_order'],
-            'questions' => []
-        ];
-        
-        $questions = boq_getQuestions($area['id']);
-        
-        foreach ($questions as $question) {
-            $question_data = [
-                'id' => $question['id'],
-                'text' => $question['text'],
-                'is_required' => $question['is_required'],
-                'sort_order' => $question['sort_order'],
-                'options' => []
-            ];
-            
-            $options = boq_getOptions($question['id']);
-            
-            foreach ($options as $option) {
-                $question_data['options'][] = [
-                    'id' => $option['id'],
-                    'text' => $option['text'],
-                    'weight' => $option['weight'],
-                    'is_na' => isset($option['is_na']) ? $option['is_na'] : 0,
-                    'sort_order' => $option['sort_order']
-                ];
-            }
-            
-            $area_data['questions'][] = $question_data;
-        }
-        
-        $snapshot['areas'][] = $area_data;
-    }
-    
-    return $snapshot;
-}
-
-/**
  * Ottieni risposte di un assignment
  */
 function boq_getResponses($assignment_id) {
@@ -357,33 +288,27 @@ function boq_getResponses($assignment_id) {
 }
 
 /**
- * Calcola punteggio per un assignment
+ * Calcola e salva il punteggio per un assignment
  * 
- * IMPORTANTE - COMPORTAMENTO MODIFICATO PER GARANTIRE CONSISTENZA DATI:
+ * Questo metodo calcola il punteggio SOLO se non è già stato salvato nella tabella cogei_questionnaire_scores.
+ * Una volta calcolato e salvato, il punteggio diventa immutabile.
  * 
- * Questa funzione USA SEMPRE il campo 'computed_score' memorizzato nella tabella cogei_responses
- * al momento della compilazione del questionario. I punteggi NON vengono MAI ricalcolati
- * dinamicamente, nemmeno se:
- * - I pesi delle domande/aree vengono modificati dopo la compilazione
- * - Il questionario viene eliminato
- * - La struttura del questionario cambia
- * 
- * Questo garantisce che i punteggi storici rimangano immutati e consistenti nel tempo.
- * 
- * Formula utilizzata (applicata al momento della compilazione):
- * - Per ogni domanda: question_score = peso_opzione_selezionata (per N.A. usa peso massimo)
- * - Per ogni area: area_score = (somma question_score) × peso_area
+ * Formula:
+ * - Per ogni area: area_score = (somma pesi domande area) × peso_area
  * - Punteggio totale = somma di tutti gli area_score × 100 (scala 0-100)
- * 
- * @param int $assignment_id ID dell'assignment da valutare
- * @return float Punteggio finale su scala 0-100
+ * - Per N.A.: usa peso massimo della domanda
  */
-function boq_calculateScore($assignment_id) {
+function boq_calculateAndSaveScore($assignment_id) {
     global $wpdb;
     
-    // Ottieni assignment con snapshot
+    $responses = boq_getResponses($assignment_id);
+    if (empty($responses)) {
+        return 0;
+    }
+    
+    // Ottieni assignment per trovare il questionario
     $assignment = $wpdb->get_row($wpdb->prepare(
-        "SELECT questionnaire_id, questionnaire_snapshot FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
+        "SELECT questionnaire_id FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
         $assignment_id
     ), ARRAY_A);
     
@@ -391,40 +316,7 @@ function boq_calculateScore($assignment_id) {
         return 0;
     }
     
-    // Usa lo snapshot se disponibile (questionari compilati dopo questo fix)
-    if (!empty($assignment['questionnaire_snapshot'])) {
-        $snapshot = json_decode($assignment['questionnaire_snapshot'], true);
-        if ($snapshot && isset($snapshot['areas'])) {
-            $total_score = 0;
-            
-            foreach ($snapshot['areas'] as $area_data) {
-                // Ottieni tutte le risposte per quest'area usando computed_score MEMORIZZATO
-                $area_responses = $wpdb->get_results($wpdb->prepare(
-                    "SELECT r.computed_score
-                    FROM {$wpdb->prefix}cogei_responses r
-                    INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
-                    WHERE r.assignment_id = %d AND q.area_id = %d",
-                    $assignment_id,
-                    $area_data['id']
-                ), ARRAY_A);
-                
-                // Somma i punteggi memorizzati delle domande
-                $area_sum = 0;
-                foreach ($area_responses as $resp) {
-                    $area_sum += floatval($resp['computed_score']);
-                }
-                
-                // Moltiplica la somma per il peso dell'area DALLO SNAPSHOT
-                $area_score = $area_sum * floatval($area_data['weight']);
-                $total_score += $area_score;
-            }
-            
-            return $total_score * 100;
-        }
-    }
-    
-    // FALLBACK per questionari compilati PRIMA di questo fix
-    // Usa i punteggi computed_score memorizzati combinati con i pesi correnti delle aree
+    // Ottieni tutte le aree del questionario
     $areas = $wpdb->get_results($wpdb->prepare(
         "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
         $assignment['questionnaire_id']
@@ -433,28 +325,77 @@ function boq_calculateScore($assignment_id) {
     $total_score = 0;
     
     foreach ($areas as $area) {
-        // USA computed_score MEMORIZZATO, non ricalcolare dai pesi attuali
+        // Ottieni tutte le risposte per quest'area con informazioni complete
         $area_responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.computed_score
+            "SELECT r.question_id, r.selected_option_id, o.weight as option_weight, o.is_na
             FROM {$wpdb->prefix}cogei_responses r
             INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
+            INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
             WHERE r.assignment_id = %d AND q.area_id = %d",
             $assignment_id,
             $area['id']
         ), ARRAY_A);
         
-        // Somma i punteggi MEMORIZZATI delle domande
+        // Somma i pesi delle domande in quest'area
         $area_sum = 0;
         foreach ($area_responses as $resp) {
-            $area_sum += floatval($resp['computed_score']);
+            $question_weight = floatval($resp['option_weight']);
+            
+            // Se è N.A., usa il peso massimo per quella domanda
+            if (isset($resp['is_na']) && $resp['is_na'] == 1) {
+                $max_weight = $wpdb->get_var($wpdb->prepare(
+                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                    $resp['question_id']
+                ));
+                $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
+            }
+            
+            $area_sum += $question_weight;
         }
         
-        // Moltiplica la somma per il peso corrente dell'area (limitazione del fallback)
+        // Moltiplica la somma per il peso dell'area
         $area_score = $area_sum * floatval($area['weight']);
         $total_score += $area_score;
     }
     
-    return $total_score * 100;
+    // Scala a 0-100
+    $final_score = $total_score * 100;
+    
+    // Salva il punteggio nella tabella dedicata (INSERT IGNORE per evitare duplicati)
+    $wpdb->query($wpdb->prepare(
+        "INSERT IGNORE INTO {$wpdb->prefix}cogei_questionnaire_scores (assignment_id, final_score, calculated_at) 
+         VALUES (%d, %f, NOW())",
+        $assignment_id,
+        $final_score
+    ));
+    
+    return $final_score;
+}
+
+/**
+ * Ottieni il punteggio salvato per un assignment
+ * 
+ * Questa funzione recupera il punteggio dalla tabella cogei_questionnaire_scores.
+ * Se il punteggio non esiste ancora, lo calcola e lo salva.
+ * 
+ * IMPORTANTE: Questa è l'unica funzione da usare per ottenere i punteggi dei questionari.
+ * Non ricalcolare mai i punteggi manualmente.
+ */
+function boq_getScore($assignment_id) {
+    global $wpdb;
+    
+    // Verifica se il punteggio è già salvato
+    $saved_score = $wpdb->get_var($wpdb->prepare(
+        "SELECT final_score FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id = %d",
+        $assignment_id
+    ));
+    
+    if ($saved_score !== null) {
+        return floatval($saved_score);
+    }
+    
+    // Se non esiste, calcolalo e salvalo
+    return boq_calculateAndSaveScore($assignment_id);
 }
 
 /**
@@ -585,7 +526,7 @@ if (isset($_GET['boq_csv_export']) && $_GET['boq_csv_export'] === '1') {
         $evaluation = 'N/A';
         
         if ($assignment['status'] === 'completed') {
-            $score = boq_calculateScore($assignment['id']);
+            $score = boq_getScore($assignment['id']);
             $evaluation = boq_evaluateScore($score);
         }
         
@@ -1128,24 +1069,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['boq_action'])) {
                 foreach ($valid_emails as $inspector_email) {
                     $token = boq_generateToken();
                     
-                    // IMPORTANTE: Crea uno snapshot della struttura del questionario al momento dell'invio
-                    // Questo garantisce che i punteggi storici non cambino se la struttura viene modificata
-                    $snapshot = boq_createQuestionnaireSnapshot($questionnaire_id);
-                    
                     $assignment_data = [
                         'questionnaire_id' => $questionnaire_id,
                         'target_user_id' => $target_user_id,
                         'inspector_email' => $inspector_email,
                         'sent_by' => get_current_user_id(),
                         'token' => $token,
-                        'status' => 'pending',
-                        'questionnaire_snapshot' => json_encode($snapshot)
+                        'status' => 'pending'
                     ];
                     
                     $wpdb->insert(
                         $wpdb->prefix . 'cogei_assignments',
                         $assignment_data,
-                        ['%d', '%d', '%s', '%d', '%s', '%s', '%s']
+                        ['%d', '%d', '%s', '%d', '%s', '%s']
                     );
                     
                     $assignment_id = $wpdb->insert_id;
@@ -1212,7 +1148,7 @@ function boq_renderPublicQuestionnaireForm() {
     }
     
     if ($assignment['status'] === 'completed') {
-        $score = boq_calculateScore($assignment['id']);
+        $score = boq_getScore($assignment['id']);
         $evaluation = boq_evaluateScore($score);
         $output = '<div style="padding: 30px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; margin: 20px 0;">';
         $output .= '<h2 style="color: #155724;">✅ Questionario già compilato</h2>';
@@ -1281,7 +1217,7 @@ function boq_renderPublicQuestionnaireForm() {
         );
         
         // Mostra risultato
-        $final_score = boq_calculateScore($assignment['id']);
+        $final_score = boq_getScore($assignment['id']);
         $evaluation = boq_evaluateScore($final_score);
         
         $output = '<div style="padding: 30px; background: #d4edda; border: 2px solid #c3e6cb; border-radius: 10px; margin: 20px 0; text-align: center;">';
@@ -2483,7 +2419,7 @@ function boq_renderResultsTab() {
         ), ARRAY_A);
         
         if ($assignment) {
-            $score = boq_calculateScore($assignment_id);
+            $score = boq_getScore($assignment_id);
             $evaluation = boq_evaluateScore($score);
             
             ?>
@@ -2607,7 +2543,7 @@ function boq_renderResultsTab() {
                 ", ARRAY_A);
                 
                 foreach ($completed_assignments as $assignment):
-                    $score = boq_calculateScore($assignment['id']);
+                    $score = boq_getScore($assignment['id']);
                     $evaluation = boq_evaluateScore($score);
                     
                     $hse_user = get_userdata($assignment['target_user_id']);
@@ -2778,7 +2714,7 @@ function boq_renderRatingsTab() {
         
         $scores = [];
         foreach ($assignment_ids as $assignment_id) {
-            $score = boq_calculateScore(intval($assignment_id));
+            $score = boq_getScore(intval($assignment_id));
             // Accept any numeric score, including 0
             if ($score !== false && $score !== null) {
                 $scores[] = floatval($score);
