@@ -202,9 +202,82 @@ try {
 
 // IMPORTANTE: Ricalcola e AGGIORNA il punteggio nella tabella cogei_questionnaire_scores
 // Quando le risposte vengono modificate, il punteggio deve essere aggiornato nella tabella dedicata
-require_once(dirname(__FILE__) . '/../bo-questionnaires.php');
 
-$final_score = boq_recalculateAndUpdateScore($assignment_id);
+// Ricalcola il punteggio dalle risposte attuali
+$questionnaire_areas = $wpdb->get_results($wpdb->prepare(
+    "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
+    $assignment->questionnaire_id
+), ARRAY_A);
+
+$total_score = 0;
+
+foreach ($questionnaire_areas as $q_area) {
+    // Ottieni tutte le risposte per quest'area con informazioni complete
+    $area_responses = $wpdb->get_results($wpdb->prepare(
+        "SELECT r.question_id, r.selected_option_id, o.weight as option_weight, o.is_na
+        FROM {$wpdb->prefix}cogei_responses r
+        INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
+        INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
+        WHERE r.assignment_id = %d AND q.area_id = %d",
+        $assignment_id,
+        $q_area['id']
+    ), ARRAY_A);
+    
+    // Somma i pesi delle domande in quest'area
+    $area_sum = 0;
+    foreach ($area_responses as $resp) {
+        $question_weight = floatval($resp['option_weight']);
+        
+        // Se è N.A., usa il peso massimo per quella domanda
+        if (isset($resp['is_na']) && $resp['is_na'] == 1) {
+            $max_weight = $wpdb->get_var($wpdb->prepare(
+                "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                $resp['question_id']
+            ));
+            $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
+        }
+        
+        $area_sum += $question_weight;
+    }
+    
+    // Moltiplica la somma per il peso dell'area
+    $area_score = $area_sum * floatval($q_area['weight']);
+    $total_score += $area_score;
+}
+
+$final_score = $total_score * 100; // Scala a 0-100
+
+// Aggiorna il punteggio nella tabella cogei_questionnaire_scores
+// Verifica se il punteggio esiste già
+$existing_score = $wpdb->get_var($wpdb->prepare(
+    "SELECT id FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id = %d",
+    $assignment_id
+));
+
+if ($existing_score) {
+    // Aggiorna il punteggio esistente
+    $wpdb->update(
+        $wpdb->prefix . 'cogei_questionnaire_scores',
+        [
+            'final_score' => $final_score,
+            'calculated_at' => current_time('mysql')
+        ],
+        ['assignment_id' => $assignment_id],
+        ['%f', '%s'],
+        ['%d']
+    );
+} else {
+    // Inserisci nuovo punteggio (caso in cui non esista ancora)
+    $wpdb->insert(
+        $wpdb->prefix . 'cogei_questionnaire_scores',
+        [
+            'assignment_id' => $assignment_id,
+            'final_score' => $final_score,
+            'calculated_at' => current_time('mysql')
+        ],
+        ['%d', '%f', '%s']
+    );
+}
 
 // Determina valutazione
 if ($final_score >= 85) {
