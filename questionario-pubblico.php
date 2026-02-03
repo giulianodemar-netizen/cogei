@@ -157,61 +157,46 @@ if (!$assignment) {
 // Verifica se il questionario è già stato completato
 if ($assignment['status'] === 'completed') {
     $table_responses = $wpdb->prefix . 'cogei_responses';
-    $table_options = $wpdb->prefix . 'cogei_options';
-    $table_areas = $wpdb->prefix . 'cogei_areas';
-    $table_questions = $wpdb->prefix . 'cogei_questions';
     
-    // Calcola punteggio finale usando la formula corretta:
-    // Per ogni area: area_score = (somma pesi domande area) × peso_area
-    // Punteggio totale = somma di tutti gli area_score
+    // Recupera il punteggio salvato dalla tabella dedicata
+    $final_score = $wpdb->get_var($wpdb->prepare(
+        "SELECT final_score FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id = %d",
+        $assignment['id']
+    ));
     
-    // Ottieni tutte le aree del questionario
-    $areas = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, weight FROM $table_areas WHERE questionnaire_id = %d",
-        $assignment['questionnaire_id']
-    ), ARRAY_A);
-    
-    $total_score = 0;
-    $completion_date = null;
-    
-    foreach ($areas as $area) {
-        // Ottieni tutte le risposte per quest'area (includendo N.A.)
-        $area_responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.computed_score, r.answered_at, q.area_id
-            FROM $table_responses r
-            INNER JOIN $table_questions q ON r.question_id = q.id
-            WHERE r.assignment_id = %d AND q.area_id = %d",
-            $assignment['id'],
-            $area['id']
-        ), ARRAY_A);
-        
-        // Somma i pesi delle domande in quest'area
-        $area_sum = 0;
-        foreach ($area_responses as $resp) {
-            $area_sum += floatval($resp['computed_score']);
-            if ($completion_date === null || $resp['answered_at'] > $completion_date) {
-                $completion_date = $resp['answered_at'];
-            }
-        }
-        
-        // Moltiplica la somma per il peso dell'area
-        $area_score = $area_sum * floatval($area['weight']);
-        $total_score += $area_score;
+    if ($final_score === null) {
+        $final_score = 0;
     }
     
-    $final_score = $total_score * 100; // Scala a 0-100
+    $final_score = floatval($final_score);
     
-    // Determina valutazione
-    if ($final_score >= 85) {
+    // Ottieni la data di completamento
+    $completion_date = $wpdb->get_var($wpdb->prepare(
+        "SELECT MAX(answered_at) FROM $table_responses WHERE assignment_id = %d",
+        $assignment['id']
+    ));
+    
+    // Converti score in stelle
+    $stars = ($final_score / 100) * 5;
+    $stars = round($stars * 2) / 2; // Arrotonda a 0.5
+    $stars = max(0, min(5, $stars)); // Clamp tra 0 e 5
+    
+    // Determina valutazione basata sulle stelle per allineare con la legenda:
+    // ★★★★★ 4.5-5.0 = Eccellente
+    // ★★★★☆ 3.5-4.4 = Molto Buono
+    // ★★★☆☆ 2.5-3.4 = Adeguato
+    // ★★☆☆☆ 1.5-2.4 = Critico
+    // ★☆☆☆☆ 0.0-1.4 = Inadeguato
+    if ($stars >= 4.5) {
         $evaluation = "Eccellente";
         $eval_class = "excellent";
-    } elseif ($final_score >= 70) {
+    } elseif ($stars >= 3.5) {
         $evaluation = "Molto Buono";
         $eval_class = "very-good";
-    } elseif ($final_score >= 55) {
+    } elseif ($stars >= 2.5) {
         $evaluation = "Adeguato";
         $eval_class = "adequate";
-    } elseif ($final_score >= 40) {
+    } elseif ($stars >= 1.5) {
         $evaluation = "Critico";
         $eval_class = "critical";
     } else {
@@ -337,9 +322,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
             ['id' => $assignment['id']]
         );
         
-        // Calcola punteggio finale usando la formula corretta:
-        // Per ogni area: area_score = (somma pesi domande area) × peso_area
-        // Punteggio totale = somma di tutti gli area_score
+        // Calcola punteggio finale UNA SOLA VOLTA e salvalo nella tabella dedicata
+        // Formula: Per ogni area: area_score = (somma pesi domande area) × peso_area
+        // Punteggio totale = somma di tutti gli area_score × 100
         
         // Ottieni tutte le aree del questionario
         $questionnaire_areas = $wpdb->get_results($wpdb->prepare(
@@ -350,7 +335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
         $total_score = 0;
         
         foreach ($questionnaire_areas as $q_area) {
-            // Ottieni tutte le risposte per quest'area (includendo N.A.)
+            // Ottieni tutte le risposte per quest'area
             $area_responses = $wpdb->get_results($wpdb->prepare(
                 "SELECT r.computed_score
                 FROM $table_responses r
@@ -372,6 +357,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_questionnaire'
         }
         
         $final_score = $total_score * 100; // Scala a 0-100
+        
+        // SALVA IL PUNTEGGIO NELLA TABELLA DEDICATA (solo se non esiste già)
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO {$wpdb->prefix}cogei_questionnaire_scores (assignment_id, final_score, calculated_at) 
+             VALUES (%d, %f, NOW())",
+            $assignment['id'],
+            $final_score
+        ));
         
         // Determina valutazione
         if ($final_score >= 85) {

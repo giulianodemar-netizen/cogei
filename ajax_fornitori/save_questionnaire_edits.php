@@ -200,10 +200,10 @@ try {
     die(json_encode(['error' => 'Errore durante il salvataggio: ' . $e->getMessage()]));
 }
 
-// Ricalcola punteggio finale usando la stessa logica del questionario pubblico
-// Per ogni area: area_score = (somma pesi domande area) × peso_area
-// Punteggio totale = somma di tutti gli area_score × 100
+// IMPORTANTE: Ricalcola e AGGIORNA il punteggio nella tabella cogei_questionnaire_scores
+// Quando le risposte vengono modificate, il punteggio deve essere aggiornato nella tabella dedicata
 
+// Ricalcola il punteggio dalle risposte attuali
 $questionnaire_areas = $wpdb->get_results($wpdb->prepare(
     "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
     $assignment->questionnaire_id
@@ -247,20 +247,62 @@ foreach ($questionnaire_areas as $q_area) {
 
 $final_score = $total_score * 100; // Scala a 0-100
 
-// Determina valutazione
-if ($final_score >= 85) {
+// Aggiorna il punteggio nella tabella cogei_questionnaire_scores
+// Verifica se il punteggio esiste già
+$existing_score = $wpdb->get_var($wpdb->prepare(
+    "SELECT id FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id = %d",
+    $assignment_id
+));
+
+if ($existing_score) {
+    // Aggiorna il punteggio esistente
+    $wpdb->update(
+        $wpdb->prefix . 'cogei_questionnaire_scores',
+        [
+            'final_score' => $final_score,
+            'calculated_at' => current_time('mysql')
+        ],
+        ['assignment_id' => $assignment_id],
+        ['%f', '%s'],
+        ['%d']
+    );
+} else {
+    // Inserisci nuovo punteggio (caso in cui non esista ancora)
+    $wpdb->insert(
+        $wpdb->prefix . 'cogei_questionnaire_scores',
+        [
+            'assignment_id' => $assignment_id,
+            'final_score' => $final_score,
+            'calculated_at' => current_time('mysql')
+        ],
+        ['%d', '%f', '%s']
+    );
+}
+
+// Converti score in stelle PRIMA di determinare la valutazione
+$stars = ($final_score / 100) * 5;
+$stars = round($stars * 2) / 2; // Arrotonda a 0.5
+$stars = max(0, min(5, $stars)); // Clamp tra 0 e 5
+
+// Determina valutazione basata sulle stelle per allineare con la legenda:
+// ★★★★★ 4.5-5.0 = Eccellente
+// ★★★★☆ 3.5-4.4 = Molto Buono
+// ★★★☆☆ 2.5-3.4 = Adeguato
+// ★★☆☆☆ 1.5-2.4 = Critico
+// ★☆☆☆☆ 0.0-1.4 = Inadeguato
+if ($stars >= 4.5) {
     $evaluation = "Eccellente";
     $eval_class = "excellent";
     $eval_color = "#4caf50";
-} elseif ($final_score >= 70) {
+} elseif ($stars >= 3.5) {
     $evaluation = "Molto Buono";
     $eval_class = "very-good";
     $eval_color = "#8bc34a";
-} elseif ($final_score >= 55) {
+} elseif ($stars >= 2.5) {
     $evaluation = "Adeguato";
     $eval_class = "adequate";
     $eval_color = "#ffc107";
-} elseif ($final_score >= 40) {
+} elseif ($stars >= 1.5) {
     $evaluation = "Critico";
     $eval_class = "critical";
     $eval_color = "#ff9800";
@@ -269,11 +311,6 @@ if ($final_score >= 85) {
     $eval_class = "inadequate";
     $eval_color = "#f44336";
 }
-
-// Converti score in stelle
-$stars = ($final_score / 100) * 5;
-$stars = round($stars * 2) / 2; // Arrotonda a 0.5
-$stars = max(0, min(5, $stars)); // Clamp tra 0 e 5
 
 // Restituisci risposta con nuovo punteggio
 die(json_encode([

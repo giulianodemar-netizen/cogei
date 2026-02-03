@@ -66,65 +66,24 @@ if (!$user) {
 
 global $wpdb;
 
-// Helper function to calculate score using correct formula
-// NOTA: Ricalcola sempre dai dati originali, non usa computed_score memorizzato
+// Helper function to get the saved score
+// Ottiene il punteggio dalla tabella cogei_questionnaire_scores
 function calculateQuestionnaireScore($assignment_id) {
     global $wpdb;
     
-    // Ottieni assignment per trovare il questionario
-    $assignment = $wpdb->get_row($wpdb->prepare(
-        "SELECT questionnaire_id FROM {$wpdb->prefix}cogei_assignments WHERE id = %d",
+    // Recupera il punteggio salvato dalla tabella dedicata
+    $saved_score = $wpdb->get_var($wpdb->prepare(
+        "SELECT final_score FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id = %d",
         $assignment_id
-    ), ARRAY_A);
+    ));
     
-    if (!$assignment) {
-        return 0;
+    if ($saved_score !== null) {
+        return floatval($saved_score);
     }
     
-    // Ottieni tutte le aree del questionario
-    $areas = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, weight FROM {$wpdb->prefix}cogei_areas WHERE questionnaire_id = %d",
-        $assignment['questionnaire_id']
-    ), ARRAY_A);
-    
-    $total_score = 0;
-    
-    foreach ($areas as $area) {
-        // Ottieni tutte le risposte per quest'area con informazioni complete
-        $area_responses = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.question_id, r.selected_option_id, o.weight as option_weight, o.is_na
-            FROM {$wpdb->prefix}cogei_responses r
-            INNER JOIN {$wpdb->prefix}cogei_questions q ON r.question_id = q.id
-            INNER JOIN {$wpdb->prefix}cogei_options o ON r.selected_option_id = o.id
-            WHERE r.assignment_id = %d AND q.area_id = %d",
-            $assignment_id,
-            $area['id']
-        ), ARRAY_A);
-        
-        // Somma i pesi delle domande in quest'area (ricalcolando)
-        $area_sum = 0;
-        foreach ($area_responses as $resp) {
-            $question_weight = floatval($resp['option_weight']);
-            
-            // Se è N.A., usa il peso massimo per quella domanda
-            if (isset($resp['is_na']) && $resp['is_na'] == 1) {
-                $max_weight = $wpdb->get_var($wpdb->prepare(
-                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
-                    $resp['question_id']
-                ));
-                $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
-            }
-            
-            $area_sum += $question_weight;
-        }
-        
-        // Moltiplica la somma per il peso dell'area
-        $area_score = $area_sum * floatval($area['weight']);
-        $total_score += $area_score;
-    }
-    
-    // Scala a 0-100
-    return $total_score * 100;
+    // Se per qualche motivo il punteggio non è stato salvato, restituisci 0
+    // (questo non dovrebbe accadere in condizioni normali)
+    return 0;
 }
 
 // Query per recuperare tutti i questionari completati del fornitore
@@ -192,21 +151,26 @@ function renderStars($stars) {
 
 // Funzione per ottenere valutazione testuale
 function getEvaluationText($stars) {
-    $score = ($stars / 5) * 100; // Convert stars to 0-100 score
-    if ($score >= 85) return 'Eccellente';
-    if ($score >= 70) return 'Molto Buono';
-    if ($score >= 55) return 'Adeguato';
-    if ($score >= 40) return 'Critico';
+    // Use star-based thresholds to match the legend:
+    // ★★★★★ 4.5-5.0 = Eccellente
+    // ★★★★☆ 3.5-4.4 = Molto Buono
+    // ★★★☆☆ 2.5-3.4 = Adeguato
+    // ★★☆☆☆ 1.5-2.4 = Critico
+    // ★☆☆☆☆ 0.0-1.4 = Inadeguato
+    if ($stars >= 4.5) return 'Eccellente';
+    if ($stars >= 3.5) return 'Molto Buono';
+    if ($stars >= 2.5) return 'Adeguato';
+    if ($stars >= 1.5) return 'Critico';
     return 'Inadeguato';
 }
 
 // Funzione per ottenere colore badge
 function getEvaluationColor($stars) {
-    $score = ($stars / 5) * 100; // Convert stars to 0-100 score
-    if ($score >= 85) return '#4caf50';
-    if ($score >= 70) return '#8bc34a';
-    if ($score >= 55) return '#ffc107';
-    if ($score >= 40) return '#ff9800';
+    // Use star-based thresholds to match the legend
+    if ($stars >= 4.5) return '#4caf50';
+    if ($stars >= 3.5) return '#8bc34a';
+    if ($stars >= 2.5) return '#ffc107';
+    if ($stars >= 1.5) return '#ff9800';
     return '#f44336';
 }
 
