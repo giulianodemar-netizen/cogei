@@ -130,7 +130,7 @@ foreach ($assignments as $assignment) {
         continue;
     }
     
-    // Calcola il punteggio
+    // Calcola il punteggio usando la NUOVA LOGICA
     try {
         // Ottieni tutte le aree del questionario
         $areas = $wpdb->get_results($wpdb->prepare(
@@ -138,7 +138,8 @@ foreach ($assignments as $assignment) {
             $assignment->questionnaire_id
         ), ARRAY_A);
         
-        $total_score = 0;
+        $total_punteggio = 0;
+        $total_peso_effettivo = 0;
         
         foreach ($areas as $area) {
             // Ottieni tutte le risposte per quest'area
@@ -152,29 +153,38 @@ foreach ($assignments as $assignment) {
                 $area['id']
             ), ARRAY_A);
             
-            // Somma i pesi delle domande
-            $area_sum = 0;
+            $area_weight = floatval($area['weight']);
+            
             foreach ($area_responses as $resp) {
-                $question_weight = floatval($resp['option_weight']);
+                $is_na = isset($resp['is_na']) && $resp['is_na'] == 1;
                 
-                // Gestisci N.A.
-                if (isset($resp['is_na']) && $resp['is_na'] == 1) {
-                    $max_weight = $wpdb->get_var($wpdb->prepare(
-                        "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
-                        $resp['question_id']
-                    ));
-                    $question_weight = $max_weight !== null ? floatval($max_weight) : $question_weight;
+                if ($is_na) {
+                    // Se N.A., contributo è 0 sia al punteggio che al peso effettivo
+                    continue;
                 }
                 
-                $area_sum += $question_weight;
+                // Calcola peso massimo per questa domanda
+                $max_weight = $wpdb->get_var($wpdb->prepare(
+                    "SELECT MAX(weight) FROM {$wpdb->prefix}cogei_options WHERE question_id = %d",
+                    $resp['question_id']
+                ));
+                $max_weight = $max_weight !== null ? floatval($max_weight) : 1.0;
+                
+                // Peso Effettivo = peso massimo * peso area
+                $peso_effettivo = $max_weight * $area_weight;
+                $total_peso_effettivo += $peso_effettivo;
+                
+                // Punteggio = peso risposta * peso area
+                $answer_weight = floatval($resp['option_weight']);
+                $punteggio = $answer_weight * $area_weight;
+                $total_punteggio += $punteggio;
             }
-            
-            // Moltiplica per il peso dell'area
-            $area_score = $area_sum * floatval($area['weight']);
-            $total_score += $area_score;
         }
         
-        $final_score = $total_score * 100;
+        // Calcola score finale: (somma punteggi / somma pesi effettivi) * 100
+        $final_score = ($total_peso_effettivo > 0) 
+            ? ($total_punteggio / $total_peso_effettivo) * 100 
+            : 0;
         
         // Salva il punteggio
         $result = $wpdb->insert(
