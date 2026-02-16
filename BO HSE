@@ -2510,7 +2510,7 @@ foreach ($richieste as $richiesta) {
             
             // Idoneità Sanitaria
             if (!empty($persona['idoneita_sanitaria_file'])) {
-                $idoneita_text = '🏥 IDONEITA\' SANITARIA';
+                $idoneita_text = '🏥 Idoneità Sanitaria';
                 if (!empty($persona['idoneita_sanitaria_scadenza'])) {
                     $idoneita_text .= ' (Sc: ' . date('d/m/Y', strtotime($persona['idoneita_sanitaria_scadenza'])) . ')';
                 }
