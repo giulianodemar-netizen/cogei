@@ -270,7 +270,7 @@ function sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_m
     
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'From: HSE COGEI <hse@cogei.net>' . "\r\n";
     
     $email_sent = false;
     if (!$debug_mode) {
@@ -471,7 +471,7 @@ Copyright © 2023 Cogei. All Rights Reserved.
     
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: <cron@cogei.net>' . "\r\n";
+    $headers .= 'From: HSE COGEI <hse@cogei.net>' . "\r\n";
     
     if (!$debug_mode) {
         mail($admin_email, $subject, $body, $headers);

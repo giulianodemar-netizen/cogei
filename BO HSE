@@ -1432,7 +1432,11 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
 </body>
 </html>";
                         
-                        $email_sent = wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                        $headers = array(
+                            'Content-Type: text/html; charset=UTF-8',
+                            'From: HSE COGEI <hse@cogei.net>'
+                        );
+                        $email_sent = wp_mail($user->user_email, $subject, $body, $headers);
                     } else {
                         $email_sent = false;
                     }

@@ -994,8 +994,8 @@ Copyright © 2023 Cogei. All Rights Reserved.
     
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: <sistema-hse@cogei.net>' . "\r\n";
-    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'From: HSE COGEI <hse@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: HSE COGEI <hse@cogei.net>' . "\r\n";
     
     $email_sent = mail($admin_email, $subject, $body, $headers);
     
