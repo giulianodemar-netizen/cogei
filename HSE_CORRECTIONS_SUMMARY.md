@@ -1,7 +1,7 @@
 # HSE System Corrections - Implementation Summary
 
 ## Overview
-This document summarizes all changes made to fix four critical issues in the HSE (Health, Safety and Environment) supplier registry system.
+This document summarizes all changes made to fix five critical issues in the HSE (Health, Safety and Environment) supplier registry system.
 
 ## Implementation Date
 February 15-16, 2026
@@ -125,15 +125,42 @@ Changed email template in `BO HSE` (lines 1423-1429):
 
 ---
 
+### 5. Updated Email Sender Configuration ✅
+
+**Problem**: HSE notification emails were being sent from "WordPress <wordpress@cogei.net>" making them appear generic and not from the HSE department.
+
+**Solution**: Updated email sender to "HSE COGEI <hse@cogei.net>" in all HSE-related emails:
+
+1. **BO HSE** (line 1435-1439):
+   - Changed `wp_mail` headers to include proper From header
+   - Integration request emails now show "HSE COGEI" as sender
+
+2. **cron/cron_controllo_scadenze_hse.php**:
+   - Line 273: Updated expiry notification sender
+   - Line 474: Updated admin notification sender
+
+3. **FRONT HSE** (lines 995-998):
+   - Updated admin update notification sender
+   - Changed Reply-To to also use hse@cogei.net
+
+**Impact**: All HSE emails now professionally display as coming from "HSE COGEI <hse@cogei.net>" instead of generic WordPress sender.
+
+**Files Modified**:
+- `BO HSE`
+- `cron/cron_controllo_scadenze_hse.php`
+- `FRONT HSE`
+
+---
+
 ## Files Changed Summary
 
 | File | Lines Changed | Description |
 |------|---------------|-------------|
-| `BO HSE` | +47, -5 | Added personal documents query & display, updated emails & text |
-| `FRONT HSE` | +14, -6 | Fixed date calculations, updated email |
-| `cron/cron_controllo_scadenze_hse.php` | +8, -6 | Fixed date calculation function, updated emails |
+| `BO HSE` | +49, -5 | Added personal documents query & display, updated emails, sender config |
+| `FRONT HSE` | +15, -6 | Fixed date calculations, updated email, sender config |
+| `cron/cron_controllo_scadenze_hse.php` | +9, -6 | Fixed date calculation function, updated emails, sender config |
 
-**Total**: 3 files changed, 69 insertions(+), 17 deletions(-)
+**Total**: 3 files changed, 73 insertions(+), 17 deletions(-)
 
 ---
 
@@ -171,14 +198,21 @@ Revert to previous commit if issues arise. All changes are self-contained.
 - [ ] Verify expiry notifications sent to hse@cogei.net
 - [ ] Check email content - should say "gestore HSE" not "ufficio qualità"
 
-### 3. Expiry Calculation
+### 3. Email Sender
+- [ ] Send integration request from back office to a supplier
+- [ ] Check supplier's email inbox
+- [ ] **Verify**: Email sender shows "HSE COGEI" (not "WordPress")
+- [ ] **Verify**: Email address is hse@cogei.net (not wordpress@cogei.net)
+- [ ] Check expiry notification emails - verify sender is "HSE COGEI"
+
+### 4. Expiry Calculation
 - [ ] Find equipment with expiry date 2-3 days in future
 - [ ] Verify it shows correct number of days remaining
 - [ ] Check same equipment at different times of day - should show same days
 - [ ] Find equipment expiring today - should show 0 days
 - [ ] Find expired equipment - should show negative days
 
-### 4. Integration Request Email
+### 5. Integration Request Email
 - [ ] Send integration request from back office to supplier
 - [ ] Check email received by supplier
 - [ ] Verify text says "dal gestore HSE"
@@ -195,7 +229,7 @@ Revert to previous commit if issues arise. All changes are self-contained.
 - **Cause**: Worker doesn't have these documents uploaded
 - **Solution**: Have supplier upload documents via FRONT HSE panel
 
-**Issue**: Emails still going to old address
+**Issue**: Emails still going to old address or showing wrong sender
 - **Cause**: WordPress email cache or old sessions
 - **Solution**: Clear WordPress cache and restart PHP-FPM
 

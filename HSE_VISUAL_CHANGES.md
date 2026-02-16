@@ -38,15 +38,28 @@ Specifiche:
 
 ---
 
-## 2. Email Recipients
+## 2. Email Recipients & Sender
 
-### BEFORE ❌
+### Email Recipients - BEFORE ❌
 All emails sent to: `ufficio_qualita@cogei.net`
 
-### AFTER ✅
+### Email Recipients - AFTER ✅
 All emails sent to: `hse@cogei.net`
 
+### Email Sender - BEFORE ❌
+```
+From: WordPress <wordpress@cogei.net>
+Sender Name: WordPress
+```
+
+### Email Sender - AFTER ✅
+```
+From: HSE COGEI <hse@cogei.net>
+Sender Name: HSE COGEI
+```
+
 **Emails Affected**:
+- ✉️ Integration request emails (to suppliers)
 - ✉️ Document expiry notifications (15, 5, 0 days before)
 - ✉️ Auto-suspension notifications (-15 days after)
 - ✉️ Admin update notifications (when suppliers update data)
@@ -163,18 +176,20 @@ Per ripristinare l'accesso è necessario:
 
 ---
 
-## Visual Impact Summary
+## 6. Visual Impact Summary
 
 ### User-Facing Changes
 1. **Suppliers**: Can see their UNILAV and Idoneità documents in back office
-2. **Suppliers**: Receive more professional integration request emails
-3. **Suppliers**: Get accurate expiry warnings (not premature)
-4. **Administrators**: See all personal documents when reviewing suppliers
-5. **HSE Department**: Receives all notifications at correct email address
+2. **Suppliers**: Receive emails from "HSE COGEI" instead of "WordPress"
+3. **Suppliers**: Receive more professional integration request emails
+4. **Suppliers**: Get accurate expiry warnings (not premature)
+5. **Administrators**: See all personal documents when reviewing suppliers
+6. **HSE Department**: Receives all notifications at correct email address
 
 ### Behind-the-Scenes Changes
 - 8 date calculation fixes across codebase
 - 6 email address updates
+- 4 email sender updates
 - Consistent terminology ("gestore HSE" everywhere)
 
 ---
@@ -198,13 +213,20 @@ Per ripristinare l'accesso è necessario:
 6. Check next day
 7. **Verify**: Shows "4 days remaining"
 
-### Scenario 3: Email Recipient
+### Scenario 3: Email Sender
+1. Send integration request from back office
+2. Check supplier's email inbox
+3. **Verify**: Email shows "HSE COGEI" as sender (not "WordPress")
+4. **Verify**: Email address is hse@cogei.net
+5. **Verify**: NOT from wordpress@cogei.net
+
+### Scenario 4: Email Recipient
 1. Update a worker's document as supplier
 2. Check email logs
 3. **Verify**: Notification sent to hse@cogei.net
 4. **Verify**: NOT sent to ufficio_qualita@cogei.net
 
-### Scenario 4: Integration Request
+### Scenario 5: Integration Request
 1. Send integration request from back office
 2. Check supplier's email
 3. **Verify**: Says "dal gestore HSE"
