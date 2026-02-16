@@ -365,7 +365,7 @@ Ti informiamo che il tuo accesso ai cantieri è stato <strong>sospeso automatica
 <br>
 Per ripristinare l'accesso è necessario:<br>
 1. Aggiornare tutta la documentazione scaduta<br>
-2. Contattare l'ufficio qualità: <a href='mailto:hse@cogei.net'>hse@cogei.net</a><br><br>
+2. Contattare il gestore HSE: <a href='mailto:hse@cogei.net'>hse@cogei.net</a><br><br>
 Non potrai accedere ai cantieri fino al ripristino dell'accesso.<br><br>";
             break;
             
