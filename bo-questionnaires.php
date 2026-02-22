@@ -1766,7 +1766,11 @@ function boq_renderQuestionnairesTab() {
                 <h2 style="margin: 0;">
                     <?php echo $questionnaire ? 'Modifica Questionario' : 'Crea Nuovo Questionario'; ?>
                 </h2>
-                <?php if ($has_questionnaires && !$questionnaire): ?>
+                <?php if (!$has_questionnaires && !$questionnaire): ?>
+                    <button onclick="boqOpenImportModal()" style="padding: 8px 15px; background: #03679e; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                        📦 Importa Questionario
+                    </button>
+                <?php elseif ($has_questionnaires && !$questionnaire): ?>
                     <a href="?boq_tab=questionnaires" style="padding: 8px 15px; background: #999; color: white; text-decoration: none; border-radius: 3px;">
                         ← Torna alla Lista
                     </a>
