@@ -1801,7 +1801,15 @@ function boq_renderAdminInterface() {
                 if (data.success) {
                     resultDiv.innerHTML = '<div style="background:#d4edda;color:#155724;padding:10px;border-radius:4px;border:1px solid #c3e6cb;">✅ ' + (data.message || 'Questionario importato con successo.') + ' (<strong>' + (data.title || '') + '</strong>)</div>';
                     btn.textContent = '✅ Importato';
-                    setTimeout(function() { window.location.reload(); }, 1500); // Attendi 1.5s per mostrare il messaggio di successo
+                    setTimeout(function() {
+                        // Redirect to edit page so imported content is immediately visible
+                        var baseUrl = window.location.href.split('?')[0];
+                        var editUrl = baseUrl + '?boq_tab=questionnaires';
+                        if (data.questionnaire_id) {
+                            editUrl += '&edit=' + data.questionnaire_id;
+                        }
+                        window.location.href = editUrl;
+                    }, 1500); // Attendi 1.5s per mostrare il messaggio di successo
                 } else {
                     resultDiv.innerHTML = '<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:4px;border:1px solid #f5c6cb;">❌ ' + (data.error || 'Errore durante l\'importazione.') + '</div>';
                     btn.disabled = false;
@@ -2039,7 +2047,7 @@ function boq_renderAreasEditor($questionnaire_id) {
     
     <script>
     // Stato dell'editor
-    let boqEditorState = <?php echo json_encode($existing_data); ?>;
+    let boqEditorState = <?php echo json_encode($existing_data, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE); ?>;
     let boqNextTempId = -1;
     let boqDraggedItem = null;
     let boqDraggedContext = null;

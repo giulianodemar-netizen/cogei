@@ -138,9 +138,10 @@ $wpdb->query('START TRANSACTION');
 
 $insert_ok = true;
 $error_msg = '';
+$counts = ['aree' => 0, 'domande' => 0, 'opzioni' => 0];
 
 // Inserisci questionario
-$wpdb->insert(
+$q_insert = $wpdb->insert(
     $wpdb->prefix . 'cogei_questionnaires',
     [
         'title'       => $title,
@@ -151,12 +152,17 @@ $wpdb->insert(
     ['%s', '%s', '%s', '%d']
 );
 
-if ($wpdb->last_error) {
+if ($q_insert === false || $wpdb->last_error) {
     $insert_ok = false;
     $error_msg = 'Errore creazione questionario: ' . $wpdb->last_error;
 }
 
 $new_questionnaire_id = (int) $wpdb->insert_id;
+
+if ($insert_ok && $new_questionnaire_id <= 0) {
+    $insert_ok = false;
+    $error_msg = 'Errore creazione questionario: insert_id non valido.';
+}
 
 // Inserisci aree, domande e opzioni
 if ($insert_ok) {
@@ -169,7 +175,7 @@ if ($insert_ok) {
         $area_weight     = isset($area['weight']) ? floatval($area['weight']) : 1.0;
         $area_sort_order = isset($area['sort_order']) ? intval($area['sort_order']) : $area_idx;
 
-        $wpdb->insert(
+        $a_insert = $wpdb->insert(
             $wpdb->prefix . 'cogei_areas',
             [
                 'questionnaire_id' => $new_questionnaire_id,
@@ -180,13 +186,14 @@ if ($insert_ok) {
             ['%d', '%s', '%f', '%d']
         );
 
-        if ($wpdb->last_error) {
+        if ($a_insert === false || $wpdb->last_error) {
             $insert_ok = false;
             $error_msg = 'Errore creazione area: ' . $wpdb->last_error;
             break;
         }
 
         $new_area_id = (int) $wpdb->insert_id;
+        $counts['aree']++;
 
         if (!isset($area['questions']) || !is_array($area['questions'])) {
             continue;
@@ -201,7 +208,7 @@ if ($insert_ok) {
             $q_required   = isset($question['is_required']) ? (int) $question['is_required'] : 1;
             $q_sort_order = isset($question['sort_order']) ? intval($question['sort_order']) : $q_idx;
 
-            $wpdb->insert(
+            $qu_insert = $wpdb->insert(
                 $wpdb->prefix . 'cogei_questions',
                 [
                     'area_id'     => $new_area_id,
@@ -212,13 +219,14 @@ if ($insert_ok) {
                 ['%d', '%s', '%d', '%d']
             );
 
-            if ($wpdb->last_error) {
+            if ($qu_insert === false || $wpdb->last_error) {
                 $insert_ok = false;
                 $error_msg = 'Errore creazione domanda: ' . $wpdb->last_error;
                 break 2;
             }
 
             $new_question_id = (int) $wpdb->insert_id;
+            $counts['domande']++;
 
             if (!isset($question['options']) || !is_array($question['options'])) {
                 continue;
@@ -234,7 +242,7 @@ if ($insert_ok) {
                 $o_sort_order = isset($option['sort_order']) ? intval($option['sort_order']) : $o_idx;
                 $o_is_na      = isset($option['is_na']) ? (int) $option['is_na'] : 0;
 
-                $wpdb->insert(
+                $o_insert = $wpdb->insert(
                     $wpdb->prefix . 'cogei_options',
                     [
                         'question_id' => $new_question_id,
@@ -246,11 +254,13 @@ if ($insert_ok) {
                     ['%d', '%s', '%f', '%d', '%d']
                 );
 
-                if ($wpdb->last_error) {
+                if ($o_insert === false || $wpdb->last_error) {
                     $insert_ok = false;
                     $error_msg = 'Errore creazione opzione: ' . $wpdb->last_error;
                     break 3;
                 }
+
+                $counts['opzioni']++;
             }
         }
     }
@@ -262,7 +272,8 @@ if ($insert_ok) {
         'success'          => true,
         'questionnaire_id' => $new_questionnaire_id,
         'title'            => $title,
-        'message'          => 'Questionario importato con successo.',
+        'message'          => 'Questionario importato con successo (' . $counts['aree'] . ' aree, ' . $counts['domande'] . ' domande, ' . $counts['opzioni'] . ' opzioni).',
+        'counts'           => $counts,
     ]));
 } else {
     $wpdb->query('ROLLBACK');
