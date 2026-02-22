@@ -624,6 +624,10 @@ function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
     $user_email = $user ? $user->user_email : 'N/A';
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true);
+    if (empty($p_iva)) {
+        $p_iva = ($user && $user->display_name) ? $user->display_name : 'N/A';
+    }
     
     $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
     
@@ -649,7 +653,7 @@ function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_
 
 <p>Ciao Admin,</p>
 
-<p>Il fornitore <strong>{$rag_soc}</strong> (ID: {$user_id}) è stato <strong>automaticamente disattivato</strong> 
+<p>Il fornitore <strong>{$rag_soc}</strong> (ID: {$user_id} - P.IVA: {$p_iva}) è stato <strong>automaticamente disattivato</strong> 
 a causa della modifica della documentazione nel database.</p>
 
 <div style='background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 4px;'>
@@ -707,6 +711,10 @@ function sendAdminNewUserProgressNotification($user_id, $filled_count, $total_co
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
     $user_email = $user ? $user->user_email : 'N/A';
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true);
+    if (empty($p_iva)) {
+        $p_iva = ($user && $user->display_name) ? $user->display_name : 'N/A';
+    }
     
     $subject = "NUOVO UTENTE: Caricamento documenti in corso";
     
@@ -723,7 +731,7 @@ function sendAdminNewUserProgressNotification($user_id, $filled_count, $total_co
 
 <p>Ciao Admin,</p>
 
-<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha <strong>iniziato a caricare i documenti necessari</strong>.</p>
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id} - P.IVA: {$p_iva}) ha <strong>iniziato a caricare i documenti necessari</strong>.</p>
 
 <div style='background: #d1ecf1; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;'>
 <h3 style='margin: 0 0 10px 0; color: #0c5460;'>📊 Progresso caricamento:</h3>
@@ -788,6 +796,10 @@ function sendAdminNewUserCompletionNotification($user_id, $rag_soc) {
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
     $user_email = $user ? $user->user_email : 'N/A';
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true);
+    if (empty($p_iva)) {
+        $p_iva = ($user && $user->display_name) ? $user->display_name : 'N/A';
+    }
     
     $subject = "NUOVO UTENTE: Documenti completati - Pronto per la revisione";
     
@@ -802,7 +814,7 @@ function sendAdminNewUserCompletionNotification($user_id, $rag_soc) {
 
 <p>Ciao Admin,</p>
 
-<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha <strong>completato il caricamento di tutti i documenti obbligatori</strong>!</p>
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id} - P.IVA: {$p_iva}) ha <strong>completato il caricamento di tutti i documenti obbligatori</strong>!</p>
 
 <div style='background: #d4edda; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;'>
 <h3 style='margin: 0 0 10px 0; color: #155724;'>✓ Stato completamento:</h3>
@@ -1994,7 +2006,16 @@ foreach ($suppliers as $user) {
         echo '<div style="background: #fff3cd; color: #856404; padding: 8px; border-radius: 4px; border-left: 3px solid #ffc107; font-size: 11px;">';
         echo '<strong>📄 Richiesta attiva</strong><br>';
         echo '<div style="margin-top: 4px; font-size: 10px;">';
-        echo '<strong>Nota:</strong> ' . htmlspecialchars(substr($document_request['richiesta_note'], 0, 100)) . (strlen($document_request['richiesta_note']) > 100 ? '...' : '') . '<br>';
+        echo '<strong>Nota:</strong> ';
+        if (strlen($document_request['richiesta_note']) > 100) {
+            $note_json = json_encode($document_request['richiesta_note']);
+            $supplier_json = json_encode($rag_soc);
+            echo '<span style="cursor: pointer; text-decoration: underline dotted;" onclick="openNoteModal(' . htmlspecialchars($note_json, ENT_QUOTES) . ', ' . htmlspecialchars($supplier_json, ENT_QUOTES) . ')" title="Clicca per leggere la nota completa">'
+                . htmlspecialchars(substr($document_request['richiesta_note'], 0, 100)) . '... <span style="color: #007bff; font-size: 10px;">📖 Leggi tutto</span></span>';
+        } else {
+            echo htmlspecialchars($document_request['richiesta_note']);
+        }
+        echo '<br>';
         echo '<strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($document_request['data_richiesta']));
         echo '</div>';
         echo '</div>';
@@ -3232,6 +3253,23 @@ function toggleDocumentChangesAccordion() {
         arrow.style.transform = 'rotate(0deg)';
     }
 }
+
+function openNoteModal(note, supplier) {
+    document.getElementById('noteModalContent').textContent = note;
+    document.getElementById('noteModalSupplier').textContent = supplier;
+    document.getElementById('noteModal').style.display = 'flex';
+}
+function closeNoteModal() {
+    document.getElementById('noteModal').style.display = 'none';
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var noteModal = document.getElementById('noteModal');
+    if (noteModal) {
+        noteModal.addEventListener('click', function(e) {
+            if (e.target === this) closeNoteModal();
+        });
+    }
+});
 </script>
 
 <style>
@@ -3241,6 +3279,21 @@ function toggleDocumentChangesAccordion() {
     100% { opacity: 1; }
 }
 </style>
+
+<!-- Modal Nota Completa -->
+<div id="noteModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; justify-content:center; align-items:center;">
+    <div style="background:white; border-radius:8px; padding:25px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:2px solid #ffc107; padding-bottom:10px;">
+            <h3 style="margin:0; color:#333;">📄 Nota Richiesta Documenti</h3>
+            <span onclick="closeNoteModal()" style="cursor:pointer; font-size:24px; color:#666; font-weight:bold;">&times;</span>
+        </div>
+        <p style="margin-bottom:10px;"><strong>Fornitore:</strong> <span id="noteModalSupplier"></span></p>
+        <div id="noteModalContent" style="background:#f8f9fa; padding:15px; border-radius:4px; border-left:3px solid #ffc107; white-space:pre-wrap; word-wrap:break-word; font-size:13px; line-height:1.6;"></div>
+        <div style="text-align:right; margin-top:15px;">
+            <button onclick="closeNoteModal()" style="padding:8px 20px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">Chiudi</button>
+        </div>
+    </div>
+</div>
 
 <?php
 ?>
