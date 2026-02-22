@@ -1616,6 +1616,27 @@ function boq_renderAdminInterface() {
                 </div>
             </div>
         </div>
+
+        <!-- Modal for Import Questionnaire (Available on all tabs) -->
+        <div id="boqImportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10002; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 10px; max-width: 500px; width: 95%; padding: 30px; position: relative;">
+                <button onclick="boqCloseImportModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold;">×</button>
+                <h2 style="color: #03679e; margin-bottom: 20px; padding-right: 40px;">📦 Importa Questionario</h2>
+                <p style="color: #666; margin-bottom: 20px;">Seleziona un file JSON precedentemente esportato per importare il questionario in questa installazione.</p>
+                <div id="boqImportResult" style="display: none; margin-bottom: 15px;"></div>
+                <form id="boqImportForm" enctype="multipart/form-data">
+                    <input type="hidden" name="nonce" value="<?php echo wp_create_nonce('boq_import_questionnaire'); ?>">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 8px;">File JSON del questionario *</label>
+                        <input type="file" name="questionnaire_file" id="boqImportFile" accept=".json"
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+                    </div>
+                    <button type="submit" id="boqImportBtn" style="background: #03679e; color: white; padding: 10px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 15px;">
+                        📦 Importa
+                    </button>
+                </form>
+            </div>
+        </div>
         
         <script>
         // Edit Modal Functions (Available on all tabs)
@@ -1730,7 +1751,71 @@ function boq_renderAdminInterface() {
         document.getElementById('boqEditModal')?.addEventListener('click', function(e) {
             if (e.target === this) boqCloseEditModal();
         });
-        
+
+        // ---- Import Modal Functions (Available on all tabs) ----
+        function boqOpenImportModal() {
+            const modal = document.getElementById('boqImportModal');
+            if (modal) {
+                document.getElementById('boqImportResult').style.display = 'none';
+                document.getElementById('boqImportForm').reset();
+                document.getElementById('boqImportBtn').disabled = false;
+                document.getElementById('boqImportBtn').textContent = '📦 Importa';
+                modal.style.display = 'flex';
+            }
+        }
+
+        function boqCloseImportModal() {
+            const modal = document.getElementById('boqImportModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        document.getElementById('boqImportModal')?.addEventListener('click', function(e) {
+            if (e.target === this) boqCloseImportModal();
+        });
+
+        document.getElementById('boqImportForm')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('boqImportFile');
+            const resultDiv = document.getElementById('boqImportResult');
+            const btn = document.getElementById('boqImportBtn');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '<div style="background:#fff3cd;color:#856404;padding:10px;border-radius:4px;border:1px solid #ffc107;">⚠️ Seleziona un file JSON da importare.</div>';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Importazione in corso...';
+            resultDiv.style.display = 'none';
+
+            const formData = new FormData(this);
+
+            fetch('<?php echo site_url('/ajax_fornitori/import_questionnaire.php'); ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                resultDiv.style.display = 'block';
+                if (data.success) {
+                    resultDiv.innerHTML = '<div style="background:#d4edda;color:#155724;padding:10px;border-radius:4px;border:1px solid #c3e6cb;">✅ ' + (data.message || 'Questionario importato con successo.') + ' (<strong>' + (data.title || '') + '</strong>)</div>';
+                    btn.textContent = '✅ Importato';
+                    setTimeout(function() { window.location.reload(); }, 1500); // Attendi 1.5s per mostrare il messaggio di successo
+                } else {
+                    resultDiv.innerHTML = '<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:4px;border:1px solid #f5c6cb;">❌ ' + (data.error || 'Errore durante l\'importazione.') + '</div>';
+                    btn.disabled = false;
+                    btn.textContent = '📦 Importa';
+                }
+            })
+            .catch(error => {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:4px;border:1px solid #f5c6cb;">❌ Errore: ' + error.message + '</div>';
+                btn.disabled = false;
+                btn.textContent = '📦 Importa';
+            });
+        });
+
         // Add spinner animation
         if (!document.getElementById('boq-spinner-style')) {
             const style = document.createElement('style');
@@ -3011,27 +3096,6 @@ function boq_renderRatingsTab() {
                 <span style="color: #FFD700;">★</span>☆☆☆☆ 0.0-1.4 = Inadeguato
             </div>
         <?php endif; ?>
-        
-        <!-- Modal for Import Questionnaire -->
-        <div id="boqImportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10002; align-items: center; justify-content: center;">
-            <div style="background: white; border-radius: 10px; max-width: 500px; width: 95%; padding: 30px; position: relative;">
-                <button onclick="boqCloseImportModal()" style="position: absolute; top: 15px; right: 15px; background: #f44336; color: white; border: none; border-radius: 50%; width: 35px; height: 35px; font-size: 20px; cursor: pointer; font-weight: bold;">×</button>
-                <h2 style="color: #03679e; margin-bottom: 20px; padding-right: 40px;">📦 Importa Questionario</h2>
-                <p style="color: #666; margin-bottom: 20px;">Seleziona un file JSON precedentemente esportato per importare il questionario in questa installazione.</p>
-                <div id="boqImportResult" style="display: none; margin-bottom: 15px;"></div>
-                <form id="boqImportForm" enctype="multipart/form-data">
-                    <input type="hidden" name="nonce" value="<?php echo wp_create_nonce('boq_import_questionnaire'); ?>">
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; font-weight: bold; margin-bottom: 8px;">File JSON del questionario *</label>
-                        <input type="file" name="questionnaire_file" id="boqImportFile" accept=".json"
-                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
-                    </div>
-                    <button type="submit" id="boqImportBtn" style="background: #03679e; color: white; padding: 10px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 15px;">
-                        📦 Importa
-                    </button>
-                </form>
-            </div>
-        </div>
 
         <!-- Modal for Questionnaire List -->
         <div id="boqQuestionnaireModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
@@ -3148,70 +3212,6 @@ function boq_renderRatingsTab() {
         const style = document.createElement('style');
         style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
         document.head.appendChild(style);
-
-        // ---- Import Modal Functions ----
-        function boqOpenImportModal() {
-            const modal = document.getElementById('boqImportModal');
-            if (modal) {
-                document.getElementById('boqImportResult').style.display = 'none';
-                document.getElementById('boqImportForm').reset();
-                document.getElementById('boqImportBtn').disabled = false;
-                document.getElementById('boqImportBtn').textContent = '📦 Importa';
-                modal.style.display = 'flex';
-            }
-        }
-
-        function boqCloseImportModal() {
-            const modal = document.getElementById('boqImportModal');
-            if (modal) modal.style.display = 'none';
-        }
-
-        document.getElementById('boqImportModal')?.addEventListener('click', function(e) {
-            if (e.target === this) boqCloseImportModal();
-        });
-
-        document.getElementById('boqImportForm')?.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const fileInput = document.getElementById('boqImportFile');
-            const resultDiv = document.getElementById('boqImportResult');
-            const btn = document.getElementById('boqImportBtn');
-
-            if (!fileInput.files || fileInput.files.length === 0) {
-                resultDiv.style.display = 'block';
-                resultDiv.innerHTML = '<div style="background:#fff3cd;color:#856404;padding:10px;border-radius:4px;border:1px solid #ffc107;">⚠️ Seleziona un file JSON da importare.</div>';
-                return;
-            }
-
-            btn.disabled = true;
-            btn.textContent = '⏳ Importazione in corso...';
-            resultDiv.style.display = 'none';
-
-            const formData = new FormData(this);
-
-            fetch('<?php echo site_url('/ajax_fornitori/import_questionnaire.php'); ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                resultDiv.style.display = 'block';
-                if (data.success) {
-                    resultDiv.innerHTML = '<div style="background:#d4edda;color:#155724;padding:10px;border-radius:4px;border:1px solid #c3e6cb;">✅ ' + (data.message || 'Questionario importato con successo.') + ' (<strong>' + (data.title || '') + '</strong>)</div>';
-                    btn.textContent = '✅ Importato';
-                    setTimeout(function() { window.location.reload(); }, 1500); // Attendi 1.5s per mostrare il messaggio di successo
-                } else {
-                    resultDiv.innerHTML = '<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:4px;border:1px solid #f5c6cb;">❌ ' + (data.error || 'Errore durante l\'importazione.') + '</div>';
-                    btn.disabled = false;
-                    btn.textContent = '📦 Importa';
-                }
-            })
-            .catch(error => {
-                resultDiv.style.display = 'block';
-                resultDiv.innerHTML = '<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:4px;border:1px solid #f5c6cb;">❌ Errore: ' + error.message + '</div>';
-                btn.disabled = false;
-                btn.textContent = '📦 Importa';
-            });
-        });
         </script>
     </div>
     <?php
