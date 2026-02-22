@@ -44,7 +44,7 @@ require_once(ABSPATH . 'includes/log_mail_hse.php');
 date_default_timezone_set('Europe/Rome');
 
 // Email amministratore HSE
-$admin_email = 'ufficio_qualita@cogei.net';
+$admin_email = 'hse@cogei.net';
 
 // Giorni trigger per le notifiche
 $trigger_days = [15, 5, 0, -15];
@@ -59,23 +59,27 @@ function calculateDaysToExpiry($scadenza_date) {
     
     // Gestisci formato date SQL (Y-m-d) e italiano (d/m/Y)
     try {
-        $now = new DateTime("now");
+        // Normalizza la data di oggi a mezzanotte per calcolo corretto dei giorni
+        $now = new DateTime("today");
         $expiry_date = null;
         
         // Prova formato italiano d/m/Y
         if (strpos($scadenza_date, '/') !== false) {
-            $expiry_date = DateTime::createFromFormat('d/m/Y H:i:s', $scadenza_date . ' 23:59:59');
+            $expiry_date = DateTime::createFromFormat('d/m/Y', $scadenza_date);
         }
         
         // Prova formato SQL Y-m-d se il precedente fallisce
         if (!$expiry_date) {
-            $expiry_date = DateTime::createFromFormat('Y-m-d H:i:s', $scadenza_date . ' 23:59:59');
+            $expiry_date = DateTime::createFromFormat('Y-m-d', $scadenza_date);
         }
         
         // Fallback al parsing standard se entrambi falliscono
         if (!$expiry_date) {
-            $expiry_date = new DateTime($scadenza_date . ' 23:59:59');
+            $expiry_date = new DateTime($scadenza_date);
         }
+        
+        // Normalizza la data di scadenza a mezzanotte
+        $expiry_date->setTime(0, 0, 0);
         
         $interval = $now->diff($expiry_date);
         return (int)$interval->format('%r%a');
@@ -266,7 +270,7 @@ function sendExpiryNotification($user_id, $trigger_day, $expiring_docs, $debug_m
     
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'From: HSE COGEI <hse@cogei.net>' . "\r\n";
     
     $email_sent = false;
     if (!$debug_mode) {
@@ -361,7 +365,7 @@ Ti informiamo che il tuo accesso ai cantieri è stato <strong>sospeso automatica
 <br>
 Per ripristinare l'accesso è necessario:<br>
 1. Aggiornare tutta la documentazione scaduta<br>
-2. Contattare l'ufficio qualità: <a href='mailto:ufficio_qualita@cogei.net'>ufficio_qualita@cogei.net</a><br><br>
+2. Contattare il gestore HSE: <a href='mailto:hse@cogei.net'>hse@cogei.net</a><br><br>
 Non potrai accedere ai cantieri fino al ripristino dell'accesso.<br><br>";
             break;
             
@@ -467,7 +471,7 @@ Copyright © 2023 Cogei. All Rights Reserved.
     
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: <cron@cogei.net>' . "\r\n";
+    $headers .= 'From: HSE COGEI <hse@cogei.net>' . "\r\n";
     
     if (!$debug_mode) {
         mail($admin_email, $subject, $body, $headers);

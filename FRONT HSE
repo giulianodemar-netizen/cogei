@@ -589,10 +589,11 @@ function hse_getAttrezzoCantieriAssegnazioni($attrezzo_id, $user_id) {
 
 function hse_checkAttrezzoScadenze($attrezzo) {
     $warnings = array();
-    $oggi = new DateTime();
+    $oggi = new DateTime('today');
     
     if (!empty($attrezzo['data_revisione'])) {
         $revisione_scadenza = new DateTime($attrezzo['data_revisione']);
+        $revisione_scadenza->setTime(0, 0, 0);
         $diff_giorni = $oggi->diff($revisione_scadenza)->days;
         $is_scaduto = $oggi > $revisione_scadenza;
         
@@ -888,10 +889,11 @@ function hse_calculateSkillPercentagesForCantiere($operai_assegnati) {
 
 function hse_checkOperaioScadenze($operaio) {
     $warnings = array();
-    $oggi = new DateTime();
+    $oggi = new DateTime('today');
     
     if (!empty($operaio['unilav_data_scadenza'])) {
         $unilav_scadenza = new DateTime($operaio['unilav_data_scadenza']);
+        $unilav_scadenza->setTime(0, 0, 0);
         $diff_giorni = $oggi->diff($unilav_scadenza)->days;
         $is_scaduto = $oggi > $unilav_scadenza;
         
@@ -904,6 +906,7 @@ function hse_checkOperaioScadenze($operaio) {
     
     if (!empty($operaio['idoneita_sanitaria_scadenza'])) {
         $sanitaria_scadenza = new DateTime($operaio['idoneita_sanitaria_scadenza']);
+        $sanitaria_scadenza->setTime(0, 0, 0);
         $diff_giorni = $oggi->diff($sanitaria_scadenza)->days;
         $is_scaduto = $oggi > $sanitaria_scadenza;
         
@@ -921,7 +924,7 @@ function hse_checkOperaioScadenze($operaio) {
  * Invia notifica email all'admin HSE quando un utente aggiorna i dati
  */
 function sendHseAdminUpdateNotification($user_id, $update_type, $details = array()) {
-    $admin_email = 'ufficio_qualita@cogei.net';
+    $admin_email = 'hse@cogei.net';
     $user = get_userdata($user_id);
     if (!$user) return false;
     
@@ -991,8 +994,8 @@ Copyright © 2023 Cogei. All Rights Reserved.
     
     $headers = "MIME-Version: 1.0" . "\r\n";
     $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= 'From: <sistema-hse@cogei.net>' . "\r\n";
-    $headers .= 'Reply-To: <no-reply@cogei.net>' . "\r\n";
+    $headers .= 'From: HSE COGEI <hse@cogei.net>' . "\r\n";
+    $headers .= 'Reply-To: HSE COGEI <hse@cogei.net>' . "\r\n";
     
     $email_sent = mail($admin_email, $subject, $body, $headers);
     
@@ -1792,7 +1795,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     
                     $nearest_personale_exp = null;
                     $nearest_personale_days = PHP_INT_MAX;
-                    $today = new DateTime();
+                    $today = new DateTime('today');
                     
                     foreach ($db_personale as $person) {
                         $person_name = $person['nome'] . ' ' . $person['cognome'];
@@ -1817,6 +1820,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                         $expiry_date = DateTime::createFromFormat('d/m/Y', $date_str);
                                     }
                                     if ($expiry_date) {
+                                        $expiry_date->setTime(0, 0, 0);
                                         $interval = $today->diff($expiry_date);
                                         $days = (int)$interval->format('%r%a');
                                         if (abs($days) < abs($nearest_personale_days)) {
@@ -1848,6 +1852,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                         $expiry_date = DateTime::createFromFormat('d/m/Y', $date_str);
                                     }
                                     if ($expiry_date) {
+                                        $expiry_date->setTime(0, 0, 0);
                                         $interval = $today->diff($expiry_date);
                                         $days = (int)$interval->format('%r%a');
                                         if (abs($days) < abs($nearest_automezzi_days)) {
@@ -1874,6 +1879,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                     $expiry_date = DateTime::createFromFormat('d/m/Y', $date_str);
                                 }
                                 if ($expiry_date) {
+                                    $expiry_date->setTime(0, 0, 0);
                                     $interval = $today->diff($expiry_date);
                                     $days = (int)$interval->format('%r%a');
                                     if (abs($days) < abs($nearest_attrezzi_days)) {
@@ -2582,8 +2588,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Evidenzia se in scadenza o scaduto
         if ($hse_unilav_scadenza_value) {
-            $oggi = new DateTime();
+            $oggi = new DateTime('today');
             $scadenza = new DateTime($hse_unilav_scadenza_value);
+            $scadenza->setTime(0, 0, 0);
             $diff_giorni = $oggi->diff($scadenza)->days;
             $is_scaduto = $oggi > $scadenza;
             
@@ -2633,8 +2640,9 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         
         // Evidenzia se in scadenza o scaduto
         if ($hse_idoneita_scadenza_value) {
-            $oggi = new DateTime();
+            $oggi = new DateTime('today');
             $scadenza = new DateTime($hse_idoneita_scadenza_value);
+            $scadenza->setTime(0, 0, 0);
             $diff_giorni = $oggi->diff($scadenza)->days;
             $is_scaduto = $oggi > $scadenza;
             

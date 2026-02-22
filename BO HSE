@@ -770,7 +770,9 @@ function getOperaiAssegnatiCantiere($cantiere_id, $user_id = null) {
                p.aspp_file, p.aspp_data_nomina, p.aspp_data_scadenza,
                p.formazione_ple_file, p.formazione_ple_data_emissione, p.formazione_ple_data_scadenza,
                p.formazione_carrelli_file, p.formazione_carrelli_data_emissione, p.formazione_carrelli_data_scadenza,
-               p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file
+               p.formazione_lavori_quota_file, p.formazione_dpi_terza_categoria_file, p.formazione_ambienti_confinati_file,
+               p.unilav_data_emissione, p.unilav_data_scadenza, p.unilav_file,
+               p.idoneita_sanitaria_scadenza, p.idoneita_sanitaria_file
         FROM {$wpdb->prefix}cantiere_operai_assegnazioni oa
         JOIN {$wpdb->prefix}cantiere_personale p ON oa.operaio_id = p.id
         WHERE oa.cantiere_id = %d $where_user
@@ -1221,7 +1223,7 @@ ti informiamo che il tuo accesso al cantiere è stato <strong>{$body_action}</st
     if ($action === 'abilita') {
         $body .= "Ora puoi accedere alla sezione cantiere per caricare i documenti richiesti e gestire il tuo personale.<br><br>";
     } else {
-        $body .= "Per maggiori informazioni contatta <a href='mailto:ufficio_qualita@cogei.net'>ufficio_qualita@cogei.net</a><br><br>";
+        $body .= "Per maggiori informazioni contatta <a href='mailto:hse@cogei.net'>hse@cogei.net</a><br><br>";
     }
 
     $body .= "Cordiali Saluti,<br>
@@ -1419,19 +1421,22 @@ if (isset($_POST['document_action'])) {
 <h2 style='margin: 0; color: white;'>Richiesta Documenti</h2>
 </div>
 Gentile {$rag_soc},<br><br>
-hai ricevuto una richiesta di documenti dal pannello di amministrazione:<br><br>
+hai ricevuto una richiesta di integrazione dei documenti dal gestore HSE:<br><br>
 <div style='background: #f8f9fa; padding: 15px; border-left: 4px solid #0066a2; margin: 20px 0;'>
 <strong>Richiesta:</strong><br>
 {$richiesta_note}
 </div>
-<strong>Richiesto da:</strong> {$admin_user->display_name}<br>
 <strong>Data richiesta:</strong> " . date('d/m/Y H:i') . "<br><br>
 Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br>
 <a href='" . home_url() . "' style='background: #0066a2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;'>Accedi al Pannello</a>
 </body>
 </html>";
                         
-                        $email_sent = wp_mail($user->user_email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+                        $headers = array(
+                            'Content-Type: text/html; charset=UTF-8',
+                            'From: HSE COGEI <hse@cogei.net>'
+                        );
+                        $email_sent = wp_mail($user->user_email, $subject, $body, $headers);
                     } else {
                         $email_sent = false;
                     }
@@ -1743,7 +1748,7 @@ if (!empty($recent_hse_updates)) {
     
     echo '<div style="margin-top: 15px; padding: 10px; background: rgba(23,162,184,0.1); border-radius: 4px; font-size: 12px; color: #0c5460;">';
     echo '<strong>ℹ️ Nota:</strong> Questi sono gli aggiornamenti effettuati dagli utenti HSE nelle ultime 48 ore. ';
-    echo 'Per ogni modifica è stata inviata una notifica email all\'amministratore (ufficio_qualita@cogei.net).';
+    echo 'Per ogni modifica è stata inviata una notifica email all\'amministratore (hse@cogei.net).';
     echo '</div>';
     
     echo '</div>'; // Close accordion content
@@ -2483,6 +2488,45 @@ foreach ($richieste as $richiesta) {
             if (empty($formazioni) && empty($formazioni_nuove) && empty($formazioni_aggiuntive)) {
                 echo '<div style="font-size: 14px; color: #dc3545; font-style: italic; padding: 10px; background: rgba(220, 53, 69, 0.1); border-radius: 4px;">⚠️ Nessuna formazione caricata</div>';
             }
+            echo '</div>';
+            
+            // 📋 SEZIONE: Dati Personali (UNILAV e Idoneità Sanitaria)
+            echo '<div style="margin-top: 12px;">';
+            echo '<div style="font-size: 14px; font-weight: 700; color: #495057; margin-bottom: 8px;">📋 DATI PERSONALI</div>';
+            
+            $dati_personali = [];
+            
+            // UNILAV
+            if (!empty($persona['unilav_file'])) {
+                $unilav_text = '📄 UNILAV';
+                if (!empty($persona['unilav_data_emissione']) || !empty($persona['unilav_data_scadenza'])) {
+                    $unilav_text .= ' (';
+                    if (!empty($persona['unilav_data_emissione'])) {
+                        $unilav_text .= 'Em: ' . date('d/m/Y', strtotime($persona['unilav_data_emissione']));
+                    }
+                    if (!empty($persona['unilav_data_scadenza'])) {
+                        $unilav_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['unilav_data_scadenza']));
+                    }
+                    $unilav_text .= ')';
+                }
+                $dati_personali[] = '<a href="' . esc_url($persona['unilav_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $unilav_text . '</a>';
+            }
+            
+            // Idoneità Sanitaria
+            if (!empty($persona['idoneita_sanitaria_file'])) {
+                $idoneita_text = '🏥 Idoneità Sanitaria';
+                if (!empty($persona['idoneita_sanitaria_scadenza'])) {
+                    $idoneita_text .= ' (Sc: ' . date('d/m/Y', strtotime($persona['idoneita_sanitaria_scadenza'])) . ')';
+                }
+                $dati_personali[] = '<a href="' . esc_url($persona['idoneita_sanitaria_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $idoneita_text . '</a>';
+            }
+            
+            if (!empty($dati_personali)) {
+                echo '<div style="font-size: 14px; padding: 10px; background: rgba(108, 117, 125, 0.08); border-left: 3px solid #6c757d; border-radius: 4px; line-height: 1.6;">' . implode('<br>', $dati_personali) . '</div>';
+            } else {
+                echo '<div style="font-size: 14px; color: #6c757d; font-style: italic; padding: 10px; background: rgba(108, 117, 125, 0.05); border-radius: 4px;">⚠️ Nessun documento personale caricato</div>';
+            }
+            
             echo '</div>';
             
             // 🚀 SEZIONE: Mostra cantieri assegnati per questa persona
