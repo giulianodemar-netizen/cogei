@@ -1422,6 +1422,16 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                 $copy_data = getSupplierCopyData($user_id);
                 $richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti'])) ? $copy_data['richiesta_documenti'] : 0;
                 
+                // Se il fornitore viene attivato, cancellare la richiesta documenti attiva
+                if ($new_status === 'Attivo') {
+                    $wpdb->delete(
+                        $wpdb->prefix . 'document_requests',
+                        array('user_id' => $user_id),
+                        array('%d')
+                    );
+                    $richiesta_documenti = 0;
+                }
+                
                 $sync_data = [
                     'tipo' => $tipo ?: '',
                     'ragione_sociale' => $rag_soc ?: '',
