@@ -1673,7 +1673,8 @@ foreach ($user_types as $type) {
 }
 echo '</div>';
 
-// FILTRI ATTIVI
+// FILTRI SOTTOCATEGORIE (mostrato dinamicamente via JS)
+echo '<div id="subcategory-filters" style="display:none; margin-bottom: 15px; padding: 10px; background: #e8f5e9; border-radius: 5px; border-left: 4px solid #4caf50;"></div>';
 echo '<div id="active-filters" style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107; display: none;">';
 echo '<strong>Filtri Attivi:</strong> <span id="filter-list"></span>';
 echo '<button onclick="clearAllFilters()" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px; cursor: pointer;">Rimuovi Tutti</button>';
@@ -1965,7 +1966,7 @@ foreach ($suppliers as $user) {
         $row_style .= ' background-color: #f8d7da;';
     }
     
-    echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
+    echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . esc_attr($tipo ?: 'N/A') . '" data-campo="' . esc_attr($user_campo_spec ?: '') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . ($user_campo_spec ?: 'N/A') . '</td>';
@@ -2760,6 +2761,12 @@ function shouldRowBeVisible(row) {
     typeCheckboxes.forEach(function(checkbox) {
         selectedTypes.push(checkbox.id.replace("type_", ""));
     });
+
+    var selectedCampos = [];
+    var campoCheckboxes = document.querySelectorAll("input[id^=campo_]:checked");
+    campoCheckboxes.forEach(function(checkbox) {
+        selectedCampos.push(decodeURIComponent(checkbox.id.replace("campo_", "")));
+    });
     
     var richiestiDocumentiFilter = document.getElementById("filter_richiesti_documenti");
     var showOnlyRichiestiDocumenti = richiestiDocumentiFilter && richiestiDocumentiFilter.checked;
@@ -2767,7 +2774,7 @@ function shouldRowBeVisible(row) {
     var autoDisattivatoFilter = document.getElementById("filter_auto_disattivato");
     var showOnlyAutoDisattivato = autoDisattivatoFilter && autoDisattivatoFilter.checked;
     
-    if (selectedStatuses.length === 0 && selectedTypes.length === 0 && !showOnlyRichiestiDocumenti && !showOnlyAutoDisattivato) {
+    if (selectedStatuses.length === 0 && selectedTypes.length === 0 && selectedCampos.length === 0 && !showOnlyRichiestiDocumenti && !showOnlyAutoDisattivato) {
         return true;
     }
     
@@ -2793,6 +2800,21 @@ function shouldRowBeVisible(row) {
             return false;
         }
     }
+
+    if (selectedCampos.length > 0) {
+        var rowCampo = row.getAttribute("data-campo") || "";
+        if (!rowCampo) {
+            return false;
+        }
+        // rowCampo may be a comma-separated list; check if any selected campo appears in it
+        var rowCampoItems = rowCampo.split(",").map(function(s) { return s.trim(); });
+        var matchesCampo = selectedCampos.some(function(c) {
+            return rowCampoItems.indexOf(c) !== -1;
+        });
+        if (!matchesCampo) {
+            return false;
+        }
+    }
     
     if (showOnlyRichiestiDocumenti) {
         var hasRichiestaDocumenti = row.getAttribute("data-richiesta-documenti") === "1";
@@ -2811,7 +2833,82 @@ function shouldRowBeVisible(row) {
     return true;
 }
 
+function updateSubcategoryFilters() {
+    var subcategoryDiv = document.getElementById("subcategory-filters");
+    if (!subcategoryDiv) return;
+
+    // Collect checked types
+    var selectedTypes = [];
+    document.querySelectorAll("input[id^=type_]:checked").forEach(function(cb) {
+        selectedTypes.push(cb.id.replace("type_", ""));
+    });
+
+    if (selectedTypes.length === 0) {
+        subcategoryDiv.style.display = "none";
+        subcategoryDiv.innerHTML = "";
+        return;
+    }
+
+    // Preserve currently checked campo values so we can restore them after redraw
+    var prevChecked = {};
+    document.querySelectorAll("input[id^=campo_]").forEach(function(cb) {
+        prevChecked[cb.id] = cb.checked;
+    });
+
+    // Collect unique subcategories for the selected types from all rows
+    var camposByType = {};
+    selectedTypes.forEach(function(t) { camposByType[t] = []; });
+
+    document.querySelectorAll(".supplier-row").forEach(function(row) {
+        var rowType = row.getAttribute("data-type") || "";
+        if (selectedTypes.indexOf(rowType) === -1) return;
+        var rowCampo = row.getAttribute("data-campo") || "";
+        if (!rowCampo) return;
+        rowCampo.split(",").forEach(function(c) {
+            c = c.trim();
+            if (c && camposByType[rowType].indexOf(c) === -1) {
+                camposByType[rowType].push(c);
+            }
+        });
+    });
+
+    // Check if any type has subcategories
+    var hasAnyCampo = selectedTypes.some(function(t) { return camposByType[t].length > 0; });
+    if (!hasAnyCampo) {
+        subcategoryDiv.style.display = "none";
+        subcategoryDiv.innerHTML = "";
+        return;
+    }
+
+    // Build HTML
+    var html = '<strong>Filtra per Sottocategoria (Campo Utente):</strong><br><br>';
+    selectedTypes.forEach(function(tipo) {
+        var campos = camposByType[tipo];
+        if (campos.length === 0) return;
+        html += '<span style="font-size:11px; font-weight:bold; color:#2e7d32; margin-right:8px;">' + tipo + ':</span>';
+        campos.forEach(function(campo) {
+            var safeId = "campo_" + encodeURIComponent(campo);
+            html += '<label style="display:inline-block; margin:2px; cursor:pointer;">';
+            html += '<input type="checkbox" id="' + safeId + '" onchange="updateFilters()" style="margin-right:4px;">';
+            html += '<span style="background:#4caf50; color:white; padding:3px 7px; border-radius:8px; font-size:11px;">' + campo + '</span>';
+            html += '</label> ';
+        });
+        html += '<br>';
+    });
+
+    subcategoryDiv.innerHTML = html;
+    subcategoryDiv.style.display = "block";
+
+    // Restore previously checked state
+    Object.keys(prevChecked).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.checked = prevChecked[id];
+    });
+}
+
 function updateFilters() {
+    updateSubcategoryFilters();
+
     var rows = document.querySelectorAll(".supplier-row");
     var visibleCount = 0;
     
@@ -2839,6 +2936,12 @@ function clearAllFilters() {
     allCheckboxes.forEach(function(checkbox) {
         checkbox.checked = false;
     });
+    
+    var subcategoryFilters = document.getElementById("subcategory-filters");
+    if (subcategoryFilters) {
+        subcategoryFilters.style.display = "none";
+        subcategoryFilters.innerHTML = "";
+    }
     
     var searchInput = document.getElementById("searchInput");
     if (searchInput) {
@@ -2868,6 +2971,12 @@ function updateActiveFiltersDisplay(visibleCount) {
     typeCheckboxes.forEach(function(checkbox) {
         selectedTypes.push(checkbox.id.replace("type_", ""));
     });
+
+    var selectedCampos = [];
+    var campoCheckboxes = document.querySelectorAll("input[id^=campo_]:checked");
+    campoCheckboxes.forEach(function(checkbox) {
+        selectedCampos.push(decodeURIComponent(checkbox.id.replace("campo_", "")));
+    });
     
     var richiestiDocumentiFilter = document.getElementById("filter_richiesti_documenti");
     var showOnlyRichiestiDocumenti = richiestiDocumentiFilter && richiestiDocumentiFilter.checked;
@@ -2885,6 +2994,10 @@ function updateActiveFiltersDisplay(visibleCount) {
     
     if (selectedTypes.length > 0) {
         filters.push("Tipi: " + selectedTypes.join(", "));
+    }
+    
+    if (selectedCampos.length > 0) {
+        filters.push("Sottocategorie: " + selectedCampos.join(", "));
     }
     
     if (showOnlyRichiestiDocumenti) {
