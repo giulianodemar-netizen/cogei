@@ -1795,22 +1795,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             ];
                         }
                         
-                        // Check formazione date changes (use direct DB field comparison)
+                        // Check formazione date changes
+                        // Each entry: [db_field, label, post_key_prefix]
+                        // POST keys use hse_{name}_scadenza_{i} (without _data), matching the actual form inputs
                         $formazione_fields = [
-                            'formazione_antincendio_data_scadenza' => 'Formazione Antincendio',
-                            'formazione_primo_soccorso_data_scadenza' => 'Formazione Primo Soccorso',
-                            'formazione_preposti_data_scadenza' => 'Formazione Preposti',
-                            'formazione_rspp_data_scadenza' => 'Formazione RSPP',
-                            'formazione_rls_data_scadenza' => 'Formazione RLS',
-                            'formazione_aspp_data_scadenza' => 'Formazione ASPP',
-                            'formazione_ple_data_scadenza' => 'Formazione PLE',
-                            'formazione_carrelli_data_scadenza' => 'Formazione Carrelli'
+                            ['formazione_antincendio_data_scadenza',          'Formazione Antincendio',           'hse_formazione_antincendio_scadenza'],
+                            ['formazione_primo_soccorso_data_scadenza',       'Formazione Primo Soccorso',        'hse_formazione_primo_soccorso_scadenza'],
+                            ['formazione_preposti_data_scadenza',             'Formazione Preposti',              'hse_formazione_preposti_scadenza'],
+                            ['formazione_generale_specifica_data_scadenza',   'Formazione Generale e Specifica',  'hse_formazione_generale_specifica_scadenza'],
+                            ['rspp_data_scadenza',                            'RSPP',                             'hse_rspp_scadenza'],
+                            ['rls_data_scadenza',                             'RLS',                              'hse_rls_scadenza'],
+                            ['aspp_data_scadenza',                            'ASPP',                             'hse_aspp_scadenza'],
+                            ['formazione_ple_data_scadenza',                  'Formazione PLE',                   'hse_formazione_ple_scadenza'],
+                            ['formazione_carrelli_data_scadenza',             'Formazione Carrelli',              'hse_formazione_carrelli_scadenza'],
                         ];
                         
-                        foreach ($formazione_fields as $db_field => $label) {
+                        foreach ($formazione_fields as [$db_field, $label, $post_key_prefix]) {
                             $old_date = $old_person[$db_field] ?? '';
-                            // Check if this field was in the POST data
-                            $post_key = 'hse_' . $db_field . '_' . $i;
+                            $post_key = $post_key_prefix . '_' . $i;
                             if (isset($_POST[$post_key])) {
                                 $new_date = sanitize_text_field($_POST[$post_key]);
                                 if ($old_date != $new_date && !empty($new_date)) {
@@ -1826,16 +1828,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         
                         // Track file uploads for personnel
                         $file_fields = [
-                            'hse_idoneita_file_' . $i => 'Idoneità Sanitaria File',
-                            'hse_unilav_file_' . $i => 'UNILAV File',
-                            'hse_formazione_antincendio_' . $i => 'Formazione Antincendio File',
-                            'hse_formazione_primo_soccorso_' . $i => 'Formazione Primo Soccorso File',
-                            'hse_formazione_preposti_' . $i => 'Formazione Preposti File',
-                            'hse_formazione_rspp_' . $i => 'Formazione RSPP File',
-                            'hse_formazione_rls_' . $i => 'Formazione RLS File',
-                            'hse_formazione_aspp_' . $i => 'Formazione ASPP File',
-                            'hse_formazione_ple_' . $i => 'Formazione PLE File',
-                            'hse_formazione_carrelli_' . $i => 'Formazione Carrelli File'
+                            'hse_idoneita_file_' . $i                    => 'Idoneità Sanitaria File',
+                            'hse_unilav_file_' . $i                      => 'UNILAV File',
+                            'hse_formazione_antincendio_' . $i           => 'Formazione Antincendio File',
+                            'hse_formazione_primo_soccorso_' . $i        => 'Formazione Primo Soccorso File',
+                            'hse_formazione_preposti_' . $i              => 'Formazione Preposti File',
+                            'hse_formazione_generale_specifica_' . $i    => 'Formazione Generale e Specifica File',
+                            'hse_rspp_' . $i                             => 'RSPP File',
+                            'hse_rls_' . $i                              => 'RLS File',
+                            'hse_aspp_' . $i                             => 'ASPP File',
+                            'hse_formazione_ple_' . $i                   => 'Formazione PLE File',
+                            'hse_formazione_carrelli_' . $i              => 'Formazione Carrelli File',
+                            'hse_formazione_lavori_quota_' . $i          => 'Formazione Lavori in Quota File',
+                            'hse_formazione_dpi_terza_categoria_' . $i   => 'Formazione DPI Terza Categoria File',
+                            'hse_formazione_ambienti_confinati_' . $i    => 'Formazione Ambienti Confinati File',
                         ];
                         
                         foreach ($file_fields as $file_key => $label) {
