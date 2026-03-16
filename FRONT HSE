@@ -1751,6 +1751,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                     'new_value' => $new_targa
                                 ];
                             }
+                            // Check verifiche periodiche change
+                            $old_verifiche = $old_mezzo['scadenza_verifiche_periodiche'] ?? '';
+                            $new_verifiche = $new_mezzo['scadenza_verifiche_periodiche'] ?? '';
+                            if ($old_verifiche != $new_verifiche && !empty($new_verifiche)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Scadenza Verifiche Periodiche - ' . $mezzo_desc,
+                                    'old_value' => $old_verifiche ?: 'Non impostata',
+                                    'new_value' => $new_verifiche
+                                ];
+                            }
                         }
                     }
                     
@@ -1854,6 +1865,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
+                    // Track existing attrezzi date changes
+                    for ($i = 0; $i < min($hse_new_attrezzi_count, count($hse_existing_attrezzi)); $i++) {
+                        if (isset($hse_attrezzi_data[$i]) && isset($hse_existing_attrezzi[$i])) {
+                            $old_attrezzo = $hse_existing_attrezzi[$i];
+                            $new_attrezzo = $hse_attrezzi_data[$i];
+                            $attrezzo_desc = $new_attrezzo['descrizione_attrezzo'];
+
+                            $old_revisione = $old_attrezzo['data_revisione'] ?? '';
+                            $new_revisione = $new_attrezzo['data_revisione'] ?? '';
+                            if ($old_revisione != $new_revisione && !empty($new_revisione)) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Data Revisione Attrezzo - ' . $attrezzo_desc,
+                                    'old_value' => $old_revisione ?: 'Non impostata',
+                                    'new_value' => $new_revisione
+                                ];
+                            }
+                        }
+                    }
+
+                    // Track deleted items (personnel, vehicles, attrezzi removed from the list)
+                    if ($hse_new_count < count($hse_existing_personale)) {
+                        for ($i = $hse_new_count; $i < count($hse_existing_personale); $i++) {
+                            if (isset($hse_existing_personale[$i])) {
+                                $person_name = $hse_existing_personale[$i]['nome'] . ' ' . $hse_existing_personale[$i]['cognome'];
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Personale rimosso',
+                                    'old_value' => $person_name,
+                                    'new_value' => '(eliminato)'
+                                ];
+                            }
+                        }
+                    }
+                    if ($hse_new_automezzi_count < count($hse_existing_automezzi)) {
+                        for ($i = $hse_new_automezzi_count; $i < count($hse_existing_automezzi); $i++) {
+                            if (isset($hse_existing_automezzi[$i])) {
+                                $mezzo_desc = $hse_existing_automezzi[$i]['descrizione_automezzo'] . ' (' . $hse_existing_automezzi[$i]['targa'] . ')';
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Automezzo rimosso',
+                                    'old_value' => $mezzo_desc,
+                                    'new_value' => '(eliminato)'
+                                ];
+                            }
+                        }
+                    }
+                    if ($hse_new_attrezzi_count < count($hse_existing_attrezzi)) {
+                        for ($i = $hse_new_attrezzi_count; $i < count($hse_existing_attrezzi); $i++) {
+                            if (isset($hse_existing_attrezzi[$i])) {
+                                $tracked_changes[] = [
+                                    'type' => 'update',
+                                    'field' => 'Attrezzo rimosso',
+                                    'old_value' => $hse_existing_attrezzi[$i]['descrizione_attrezzo'],
+                                    'new_value' => '(eliminato)'
+                                ];
+                            }
+                        }
+                    }
+
                     // Track new attrezzi
                     $new_attrezzi_count = max(0, $hse_new_attrezzi_count - count($hse_existing_attrezzi));
                     if ($new_attrezzi_count > 0) {
@@ -2183,14 +2254,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     ));
                     
                     $hse_success_message = "✅ Parte B salvata con successo per il cantiere '$hse_cantiere_nome'! Assegnati: $hse_assigned_operai_count operai, $hse_assigned_automezzi_count automezzi, $hse_assigned_attrezzi_count attrezzi.";
-                    
+
+                    // Build detailed tracked changes for Part B with individual names
+                    $tracked_changes_b = [];
+
+                    // Lookup operai names
+                    if (!empty($hse_operai_selezionati)) {
+                        $ids_placeholders = implode(',', array_fill(0, count($hse_operai_selezionati), '%d'));
+                        $operai_rows = $wpdb->get_results($wpdb->prepare(
+                            "SELECT id, nome, cognome FROM {$wpdb->prefix}cantiere_personale WHERE id IN ($ids_placeholders)",
+                            ...$hse_operai_selezionati
+                        ), ARRAY_A);
+                        foreach ($operai_rows as $op) {
+                            $tracked_changes_b[] = [
+                                'type' => 'new',
+                                'field' => 'Operaio assegnato - ' . $hse_cantiere_nome,
+                                'new_value' => $op['nome'] . ' ' . $op['cognome']
+                            ];
+                        }
+                    }
+
+                    // Lookup automezzi names
+                    if (!empty($hse_automezzi_selezionati)) {
+                        $ids_placeholders = implode(',', array_fill(0, count($hse_automezzi_selezionati), '%d'));
+                        $automezzi_rows = $wpdb->get_results($wpdb->prepare(
+                            "SELECT id, descrizione_automezzo, targa FROM {$wpdb->prefix}cantiere_automezzi WHERE id IN ($ids_placeholders)",
+                            ...$hse_automezzi_selezionati
+                        ), ARRAY_A);
+                        foreach ($automezzi_rows as $am) {
+                            $tracked_changes_b[] = [
+                                'type' => 'new',
+                                'field' => 'Automezzo assegnato - ' . $hse_cantiere_nome,
+                                'new_value' => $am['descrizione_automezzo'] . ' (' . $am['targa'] . ')'
+                            ];
+                        }
+                    }
+
+                    // Lookup attrezzi names
+                    if (!empty($hse_attrezzi_selezionati)) {
+                        $ids_placeholders = implode(',', array_fill(0, count($hse_attrezzi_selezionati), '%d'));
+                        $attrezzi_rows = $wpdb->get_results($wpdb->prepare(
+                            "SELECT id, descrizione_attrezzo FROM {$wpdb->prefix}cantiere_attrezzi WHERE id IN ($ids_placeholders)",
+                            ...$hse_attrezzi_selezionati
+                        ), ARRAY_A);
+                        foreach ($attrezzi_rows as $at) {
+                            $tracked_changes_b[] = [
+                                'type' => 'new',
+                                'field' => 'Attrezzo assegnato - ' . $hse_cantiere_nome,
+                                'new_value' => $at['descrizione_attrezzo']
+                            ];
+                        }
+                    }
+
+                    // Track POS file upload
+                    if ($hse_pos_file) {
+                        $tracked_changes_b[] = [
+                            'type' => 'file',
+                            'field' => 'POS - ' . $hse_cantiere_nome,
+                            'filename' => basename($hse_pos_file),
+                            'new_value' => 'File POS caricato'
+                        ];
+                    }
+
+                    if (empty($tracked_changes_b)) {
+                        $tracked_changes_b[] = [
+                            'type' => 'update',
+                            'field' => 'Parte B - ' . $hse_cantiere_nome,
+                            'new_value' => "Operai: $hse_assigned_operai_count, Automezzi: $hse_assigned_automezzi_count, Attrezzi: $hse_assigned_attrezzi_count"
+                        ];
+                    }
+
+                    // Save to BO HSE 48-hour panel
+                    trackHseChanges($hse_current_user_id, $tracked_changes_b);
+
                     // Invia notifica admin
-                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_b', [
+                    $parte_b_details = [
                         'Cantiere' => $hse_cantiere_nome,
                         'Operai assegnati' => $hse_assigned_operai_count,
                         'Automezzi assegnati' => $hse_assigned_automezzi_count,
                         'Attrezzi assegnati' => $hse_assigned_attrezzi_count
-                    ]);
+                    ];
+                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_b', $parte_b_details, false, $tracked_changes_b);
                     
                     $hse_has_any_assignment = $wpdb->get_var($wpdb->prepare(
                         "SELECT COUNT(*) FROM (
