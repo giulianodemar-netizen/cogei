@@ -574,7 +574,8 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
         'Stato Richiesta HSE',
         'Accesso al Cantiere',
         'Cantieri Assegnati',
-        'Data Creazione'
+        'Data Creazione',
+        'Stato Albo Fornitori'
     ];
     
     function escapeCsvField($field) {
@@ -620,7 +621,8 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
             $stato_hse['label'],
             $accesso_cantiere['label'],
             $cantieri_text ?: 'Nessuno',
-            $richiesta['data_creazione']
+            $richiesta['data_creazione'],
+            boh_hse_getAlboFornitoriStatus($richiesta['user_id'])['label']
         ];
         
         $csv_content .= implode(',', array_map('escapeCsvField', $row)) . "\n";
@@ -1177,6 +1179,97 @@ function calculateComplianceStatus($personale) {
             'competenze_personale' => $competenze_personale
         ]
     ];
+}
+
+/**
+ * Restituisce lo stato del fornitore nell'Albo Fornitori (identica logica di BO ALBO FORNITORI).
+ * Restituisce un array ['status' => string, 'color' => string, 'label' => string].
+ */
+function boh_hse_getAlboFornitoriStatus($user_id) {
+    $supplier_statuses = [
+        'Attivo'                    => ['color' => '#28a745', 'label' => 'Attivo'],
+        'Disattivo'                 => ['color' => '#dc3545', 'label' => 'Disattivo'],
+        'Solo_Registrato'           => ['color' => '#ffc107', 'label' => 'Solo Registrato'],
+        'Scaduto'                   => ['color' => '#fd7e14', 'label' => 'Documenti Scaduti'],
+        'Disattivo_In_Attesa'       => ['color' => '#6f42c1', 'label' => 'Disattivo + In Attesa'],
+        'Solo_Registrato_In_Attesa' => ['color' => '#20c997', 'label' => 'Registrato + In Attesa'],
+        'Richiesti_nuovi_documenti' => ['color' => '#e83e8c', 'label' => 'Richiesti Documenti'],
+        'Richiesti_Documenti'       => ['color' => '#e83e8c', 'label' => 'Richiesti Documenti'],
+    ];
+
+    // Se lo stato è forzato manualmente, usalo direttamente
+    $forced_status = get_user_meta($user_id, 'forced_supplier_status', true);
+    if (!empty($forced_status)) {
+        $status = $forced_status;
+        $config = $supplier_statuses[$status] ?? ['color' => '#6c757d', 'label' => $status];
+        return ['status' => $status, 'color' => $config['color'], 'label' => $config['label']];
+    }
+
+    // Calcolo dinamico dello stato (stessa logica di determineSupplierStatus in BO ALBO FORNITORI)
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+
+    $documenti_fondamentali = [
+        'user_registration_scad_CCIAA',
+        'user_registration_scad_wit',
+        'user_registration_scad_durc',
+        'user_registration_scadenza_altre_scadenze',
+    ];
+
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli' || $tipo === 'Nolo') {
+        $documenti_fondamentali[] = 'user_registration_scad_rct_rco';
+    } elseif ($tipo === 'Forniture') {
+        $documenti_fondamentali[] = 'user_registration_scad_rct_rco_forni';
+    }
+
+    $documenti_caricati = 0;
+    $documenti_totali   = count($documenti_fondamentali);
+    $has_expired        = false;
+    $has_any_document   = false;
+    $has_expired_15     = false;
+
+    foreach ($documenti_fondamentali as $field) {
+        $date = get_user_meta($user_id, $field, true);
+        if (!empty($date)) {
+            $documenti_caricati++;
+            $has_any_document = true;
+            $converted_date = str_replace('/', '-', $date);
+            try {
+                $now         = new DateTime('now');
+                $expiry_date = new DateTime($converted_date . ' 23:59:59');
+                $interval    = $now->diff($expiry_date);
+                $days        = (int)$interval->format('%r%a');
+                if ($days < 0) {
+                    $has_expired = true;
+                    if ($days <= -15) {
+                        $has_expired_15 = true;
+                    }
+                }
+            } catch (Exception $e) {}
+        }
+    }
+
+    if ($has_expired_15) {
+        $stato_base = 'Disattivo';
+    } elseif ($documenti_caricati === $documenti_totali && !$has_expired) {
+        $stato_base = 'Attivo';
+    } elseif ($has_expired) {
+        $stato_base = 'Scaduto';
+    } else {
+        $stato_base = 'Solo_Registrato';
+    }
+
+    $is_waiting_integration = ($documenti_caricati > 0 && $documenti_caricati < $documenti_totali);
+
+    if ($stato_base === 'Disattivo' && $is_waiting_integration) {
+        $status = 'Disattivo_In_Attesa';
+    } elseif ($stato_base === 'Solo_Registrato' && $is_waiting_integration) {
+        $status = 'Solo_Registrato_In_Attesa';
+    } else {
+        $status = $stato_base;
+    }
+
+    $config = $supplier_statuses[$status] ?? ['color' => '#6c757d', 'label' => $status];
+    return ['status' => $status, 'color' => $config['color'], 'label' => $config['label']];
 }
 
 function sendCantiereEmail($user_id, $action) {
@@ -1944,6 +2037,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 Assegnazioni Operai</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">📄 Nota richiesta documenti</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🏢 STATO ALBO FORNITORI</th>';
 echo '</tr>';
 
 $richieste = getCantiereRequests();
@@ -2289,11 +2383,18 @@ foreach ($richieste as $richiesta) {
     }
     
     echo '</td>';
+    
+    // 🏢 STATO ALBO FORNITORI
+    $albo_status = boh_hse_getAlboFornitoriStatus($user_id);
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    echo '<span style="background: ' . $albo_status['color'] . '; color: white; padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: bold; white-space: nowrap;">' . htmlspecialchars($albo_status['label']) . '</span>';
+    echo '</td>';
+    
     echo '</tr>';
     
     // 🚀 RIGA DETTAGLI PERSONALE MIGLIORATA (CON ASSEGNAZIONI CANTIERI)
     echo '<tr id="personale-details-' . $richiesta['id'] . '" style="display: none; background: #f8f9fa;">';
-    echo '<td colspan="16" style="padding: 15px; border: 1px solid #ddd;">';
+    echo '<td colspan="17" style="padding: 15px; border: 1px solid #ddd;">';
     echo '<h4 style="margin: 0 0 10px 0; color: #0066a2;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
     
     if (!empty($personale)) {
@@ -6128,7 +6229,8 @@ function generateClientSideCSV() {
     var headers = [
         'ID Richiesta', 'Ragione Sociale', 'Email', 'P.IVA', 'DVR', 'RCT', 
         'Personale', 'Stato Richiesta HSE', 
-        'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai'
+        'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai',
+        'Stato Albo Fornitori'
     ];
     
     var csvContent = "\uFEFF";
@@ -6161,6 +6263,14 @@ function generateClientSideCSV() {
         // 🚀 NUOVO: Assegnazioni operai (colonna 14)
         var operaiText = cells[13].textContent.trim().replace(/\s+/g, ' ');
         rowData.push('"' + operaiText.replace(/"/g, '""') + '"');
+        
+        // 🏢 Stato Albo Fornitori (ultima colonna)
+        if (cells.length > 15) {
+            var alboText = cells[15].textContent.trim().replace(/\s+/g, ' ');
+            rowData.push('"' + alboText.replace(/"/g, '""') + '"');
+        } else {
+            rowData.push('""');
+        }
         
         csvContent += rowData.join(',') + '\n';
         exportedRows++;

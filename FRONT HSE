@@ -443,12 +443,10 @@ function hse_determineSupplierStatus($user_id) {
         'user_registration_scadenza_altre_scadenze'
     );
     
-    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli') {
-        if ($tipo === 'Forniture') {
-            $documenti_fondamentali[] = 'user_registration_scad_rct_rco_forni';
-        } else {
-            $documenti_fondamentali[] = 'user_registration_scad_rct_rco';
-        }
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli' || $tipo === 'Nolo') {
+        $documenti_fondamentali[] = 'user_registration_scad_rct_rco';
+    } elseif ($tipo === 'Forniture') {
+        $documenti_fondamentali[] = 'user_registration_scad_rct_rco_forni';
     }
     
     $documenti_caricati = 0;
@@ -921,69 +919,172 @@ function hse_checkOperaioScadenze($operaio) {
 }
 
 /**
- * Invia notifica email all'admin HSE quando un utente aggiorna i dati
+ * Invia notifica email all'admin HSE quando un utente compila o modifica i dati
+ *
+ * @param int    $user_id        ID utente WordPress
+ * @param string $update_type    'parte_a' o 'parte_b'
+ * @param array  $details        Dettagli semplificati (chiave => valore)
+ * @param bool   $is_new         true = prima compilazione, false = modifica dati esistenti
+ * @param array  $tracked_changes Array completo con type/field/old_value/new_value/filename
  */
-function sendHseAdminUpdateNotification($user_id, $update_type, $details = array()) {
-    $admin_email = 'hse@cogei.net';
+function sendHseAdminUpdateNotification($user_id, $update_type, $details = array(), $is_new = false, $tracked_changes = array()) {
+    $admin_email = 'HSE@COGEI.NET';
     $user = get_userdata($user_id);
     if (!$user) return false;
     
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true);
     $user_email = $user->user_email;
-    
-    $subject = "ALERT: Aggiornamento dati HSE da utente";
+    $data_ora = date('d/m/Y H:i:s');
     
     $type_labels = [
         'parte_a' => 'Parte A - Dati Personale, Mezzi e Attrezzi',
         'parte_b' => 'Parte B - Assegnazioni Cantiere'
     ];
-    
     $update_label = $type_labels[$update_type] ?? $update_type;
     
-    $details_html = '';
-    if (!empty($details)) {
-        $details_html = '<div style="background: #f8f9fa; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;">';
-        $details_html .= '<h3 style="margin: 0 0 10px 0; color: #0c5460;">📋 Dettagli aggiornamento:</h3>';
-        $details_html .= '<ul style="margin: 0; padding-left: 20px;">';
-        foreach ($details as $key => $value) {
-            $details_html .= "<li><strong>{$key}:</strong> {$value}</li>";
+    if ($is_new) {
+        // ── NUOVA COMPILAZIONE ────────────────────────────────────────────────
+        $subject = "✅ Nuova compilazione HSE - {$rag_soc}";
+        $header_bg  = '#28a745';
+        $header_text = '✅ NUOVA COMPILAZIONE - Dati HSE';
+        $intro_text  = "Il fornitore <strong>{$rag_soc}</strong> (ID: {$user_id}) ha compilato i propri dati HSE per la <strong>prima volta</strong>.";
+        
+        $changes_html = '';
+        if (!empty($tracked_changes)) {
+            $changes_html .= '<div style="background: #d4edda; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;">';
+            $changes_html .= '<h3 style="margin: 0 0 12px 0; color: #155724;">📋 Dati compilati:</h3>';
+            $changes_html .= '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+            $changes_html .= '<tr style="background:#c3e6cb;"><th style="padding:6px 8px; text-align:left; border:1px solid #b1dfbb;">Campo</th><th style="padding:6px 8px; text-align:left; border:1px solid #b1dfbb;">Valore</th></tr>';
+            foreach ($tracked_changes as $change) {
+                $field = htmlspecialchars($change['field'] ?? 'N/A');
+                $new_val = htmlspecialchars($change['new_value'] ?? ($change['filename'] ?? 'N/A'));
+                $changes_html .= "<tr><td style='padding:5px 8px; border:1px solid #c3e6cb;'>{$field}</td><td style='padding:5px 8px; border:1px solid #c3e6cb;'>{$new_val}</td></tr>";
+            }
+            $changes_html .= '</table>';
+            $changes_html .= '</div>';
+        } elseif (!empty($details)) {
+            $changes_html .= '<div style="background: #d4edda; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;">';
+            $changes_html .= '<h3 style="margin: 0 0 10px 0; color: #155724;">📋 Dati compilati:</h3>';
+            $changes_html .= '<ul style="margin: 0; padding-left: 20px;">';
+            foreach ($details as $key => $value) {
+                $changes_html .= '<li><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars($value) . '</li>';
+            }
+            $changes_html .= '</ul>';
+            $changes_html .= '</div>';
         }
-        $details_html .= '</ul>';
-        $details_html .= '</div>';
+    } else {
+        // ── MODIFICA DATI ESISTENTI ───────────────────────────────────────────
+        $subject = "⚠️ MODIFICA dati HSE - {$rag_soc}";
+        $header_bg  = '#fd7e14';
+        $header_text = '⚠️ ATTENZIONE: MODIFICA dati HSE esistenti';
+        $intro_text  = '⚠️ <strong>ATTENZIONE:</strong> Questa è una <strong>MODIFICA</strong> ai dati HSE già esistenti, NON una nuova registrazione.<br><br>'
+                     . "Fornitore: <strong>{$rag_soc}</strong> (ID: {$user_id})<br>"
+                     . "Data modifica: <strong>{$data_ora}</strong>";
+        
+        $changes_html = '';
+        if (!empty($tracked_changes)) {
+            $modified_items  = [];
+            $new_items       = [];
+            $file_items      = [];
+            $unchanged_items = [];
+            
+            foreach ($tracked_changes as $change) {
+                $type  = $change['type'] ?? 'update';
+                $field = $change['field'] ?? 'N/A';
+                if ($type === 'update') {
+                    $old_val = $change['old_value'] ?? 'N/A';
+                    $new_val = $change['new_value'] ?? 'N/A';
+                    $modified_items[] = ['field' => $field, 'old' => $old_val, 'new' => $new_val];
+                } elseif ($type === 'new') {
+                    $new_items[] = ['field' => $field, 'value' => $change['new_value'] ?? 'N/A'];
+                } elseif ($type === 'file') {
+                    $file_items[] = ['field' => $field, 'filename' => $change['filename'] ?? 'N/A', 'extra' => $change['new_value'] ?? ''];
+                } else {
+                    $unchanged_items[] = $field;
+                }
+            }
+            
+            $changes_html .= '<div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;">';
+            $changes_html .= '<h3 style="margin: 0 0 12px 0; color: #856404;">🔄 MODIFICHE EFFETTUATE:</h3>';
+            $changes_html .= '<hr style="border: 1px solid #ffc107; margin-bottom: 12px;">';
+            
+            if (!empty($modified_items)) {
+                foreach ($modified_items as $item) {
+                    $changes_html .= '<div style="margin-bottom: 10px; padding: 8px; background: #fff8e1; border-radius: 4px;">';
+                    $changes_html .= '📄 <strong>' . htmlspecialchars($item['field']) . ':</strong> MODIFICATO<br>';
+                    $changes_html .= '&nbsp;&nbsp;&nbsp;Valore precedente: <span style="color:#dc3545; text-decoration:line-through;">' . htmlspecialchars($item['old']) . '</span><br>';
+                    $changes_html .= '&nbsp;&nbsp;&nbsp;Nuovo valore: <span style="color:#28a745; font-weight:bold;">' . htmlspecialchars($item['new']) . '</span>';
+                    $changes_html .= '</div>';
+                }
+            }
+            
+            if (!empty($file_items)) {
+                foreach ($file_items as $item) {
+                    $changes_html .= '<div style="margin-bottom: 10px; padding: 8px; background: #e8f4f8; border-radius: 4px;">';
+                    $changes_html .= '📎 <strong>' . htmlspecialchars($item['field']) . ':</strong> FILE CARICATO<br>';
+                    $changes_html .= '&nbsp;&nbsp;&nbsp;File: <span style="color:#28a745; font-weight:bold;">' . htmlspecialchars($item['filename']) . '</span>';
+                    if (!empty($item['extra'])) {
+                        $changes_html .= '<br>&nbsp;&nbsp;&nbsp;Dettagli: ' . htmlspecialchars($item['extra']);
+                    }
+                    $changes_html .= '</div>';
+                }
+            }
+            
+            if (!empty($new_items)) {
+                foreach ($new_items as $item) {
+                    $changes_html .= '<div style="margin-bottom: 10px; padding: 8px; background: #e8f8e8; border-radius: 4px;">';
+                    $changes_html .= '➕ <strong>' . htmlspecialchars($item['field']) . ':</strong> AGGIUNTO<br>';
+                    $changes_html .= '&nbsp;&nbsp;&nbsp;Valore: <span style="color:#28a745; font-weight:bold;">' . htmlspecialchars($item['value']) . '</span>';
+                    $changes_html .= '</div>';
+                }
+            }
+            
+            if (empty($modified_items) && empty($file_items) && empty($new_items)) {
+                $changes_html .= '<p style="color:#856404;">ℹ️ ' . $update_label . ' aggiornato.</p>';
+            }
+            
+            $changes_html .= '<hr style="border: 1px solid #ffc107; margin-top: 12px;">';
+            $changes_html .= '</div>';
+        } elseif (!empty($details)) {
+            $changes_html .= '<div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;">';
+            $changes_html .= '<h3 style="margin: 0 0 10px 0; color: #856404;">🔄 Modifiche effettuate:</h3>';
+            $changes_html .= '<ul style="margin: 0; padding-left: 20px;">';
+            foreach ($details as $key => $value) {
+                $changes_html .= '<li><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars($value) . '</li>';
+            }
+            $changes_html .= '</ul>';
+            $changes_html .= '</div>';
+        }
     }
     
     $body = "<html>
 <head>
-<title>Notifica Aggiornamento HSE</title>
+<title>Notifica HSE</title>
 </head>
-<body>
-<div style='background: #17a2b8; color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
-<h2 style='margin: 0; color: white;'>📢 ALERT - Aggiornamento Dati HSE</h2>
+<body style='font-family: Arial, sans-serif; color: #333; max-width: 700px; margin: 0 auto;'>
+<div style='background: {$header_bg}; color: white; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;'>
+<h2 style='margin: 0; color: white;'>{$header_text}</h2>
 </div>
 
-<p>Ciao Admin,</p>
+<p>{$intro_text}</p>
 
-<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha aggiornato i suoi dati HSE.</p>
-
-<div style='background: #d1ecf1; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;'>
-<h3 style='margin: 0 0 10px 0; color: #0c5460;'>📝 Tipo di aggiornamento:</h3>
-<strong>{$update_label}</strong>
+<div style='background: #d1ecf1; padding: 12px 15px; border-left: 4px solid #17a2b8; margin: 16px 0; border-radius: 4px;'>
+<strong>📝 Sezione:</strong> {$update_label}
 </div>
 
-{$details_html}
+{$changes_html}
 
-<div style='background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; border-radius: 4px;'>
-<h3 style='margin: 0 0 10px 0; color: #856404;'>👤 Informazioni Utente:</h3>
+<div style='background: #f8f9fa; padding: 15px; border-left: 4px solid #6c757d; margin: 20px 0; border-radius: 4px;'>
+<h3 style='margin: 0 0 10px 0; color: #495057;'>👤 Informazioni Fornitore:</h3>
 • <strong>ID:</strong> {$user_id}<br>
 • <strong>Ragione Sociale:</strong> {$rag_soc}<br>
-• <strong>Email:</strong> {$user_email}
+• <strong>Email:</strong> {$user_email}<br>
+• <strong>Data/Ora:</strong> {$data_ora}
 </div>
 
-<p><strong>Data aggiornamento:</strong> " . date('d/m/Y H:i:s') . "</p>
+<p>Verifica i dati aggiornati nel pannello <strong>BO HSE</strong>.</p>
 
-<p>Verifica i dati aggiornati nel pannello BO HSE.</p>
-
-<div class='footer' style='background: #03679e; padding: 10px; margin-top: 30px; border-radius: 4px;'>
+<div style='background: #03679e; padding: 10px; margin-top: 30px; border-radius: 4px;'>
 <div style='text-align: center; color: white; font-size: 12px;'>
 COGEI SRL - Sistema HSE Notifiche Automatiche<br>
 Copyright © 2023 Cogei. All Rights Reserved.
@@ -1046,8 +1147,8 @@ if (!$hse_current_user_id) {
     $hse_error_messages[] = "Devi essere loggato per accedere a questa sezione";
 } else {
     $hse_user_tipo = get_user_meta($hse_current_user_id, 'user_registration_tip_ut_rad', true);
-    if (!in_array($hse_user_tipo, ['Lavoro', 'Subappalto', 'Nolo'])) {
-        $hse_error_messages[] = "Questa sezione è disponibile solo per fornitori di tipo 'Lavoro', 'Subappalto' o 'Nolo'";
+    if (!in_array($hse_user_tipo, ['Lavoro', 'Subappalto', 'Nolo', 'Noli', 'Servizi'])) {
+        $hse_error_messages[] = "Questa sezione è disponibile solo per fornitori di tipo 'Lavoro', 'Subappalto', 'Nolo/Noli' o 'Servizi'";
     } else {
         $hse_user_status = hse_determineSupplierStatus($hse_current_user_id);
         if ($hse_user_status !== 'Attivo') {
@@ -1201,6 +1302,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         // Se checkbox non è spuntata, rimuovi l'email notifiche
                         $hse_richiesta_data['email_notifiche'] = null;
                     }
+                    
+                    // Determina se è nuova registrazione o modifica
+                    $hse_is_new_registration = ($hse_existing_request === null);
                     
                     if ($hse_dvr_file) $hse_richiesta_data['dvr_file'] = $hse_dvr_file;
                     if ($hse_dvr_data_emissione) $hse_richiesta_data['dvr_data_emissione'] = $hse_dvr_data_emissione;
@@ -1931,8 +2035,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         $notification_details['ℹ️ Aggiornamento'] = 'Parte A aggiornata (dettagli generici)';
                     }
                     
-                    // Send admin notification with ONLY the actual changes (no expiry dates)
-                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', $notification_details);
+                    // Send admin notification with new/modification distinction and full change tracking
+                    sendHseAdminUpdateNotification($hse_current_user_id, 'parte_a', $notification_details, $hse_is_new_registration, $tracked_changes);
                 }
             }
         } elseif (isset($_POST['hse_cantiere_submit_parte_b'])) {
