@@ -329,7 +329,7 @@ function notifyAdminDisabling($disabled_users, $debug_mode) {
     
     $users_list = '';
     foreach ($disabled_users as $user_info) {
-        $users_list .= "• ID: {$user_info['id']} - {$user_info['name']} ({$user_info['email']})<br>";
+        $users_list .= "• ID: {$user_info['id']} - {$user_info['name']} (P.IVA: {$user_info['p_iva']}) - Email: {$user_info['email']}<br>";
     }
     
     $body = "<html>
@@ -409,8 +409,9 @@ foreach ($suppliers as $user) {
     $user_id = $user->ID;
     $rag_soc = get_user_meta($user_id, 'user_registration_rag_soc', true) ?: $user->display_name;
     $current_status = get_user_meta($user_id, 'forced_supplier_status', true);
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true) ?: $user->display_name ?: 'N/A';
     
-    echo "Controllo fornitore ID {$user_id} ({$rag_soc}) - Stato: {$current_status}...\n";
+    echo "Controllo fornitore ID {$user_id} ({$rag_soc}) - P.IVA: {$p_iva} - Stato: {$current_status}...\n";
     
     // Ottieni documenti richiesti
     $required_docs = getRequiredDocuments($user_id);
@@ -481,7 +482,8 @@ foreach ($suppliers as $user) {
                 $disabled_users[] = [
                     'id' => $user_id,
                     'name' => $rag_soc,
-                    'email' => $user->user_email
+                    'email' => $user->user_email,
+                    'p_iva' => $p_iva
                 ];
             }
         }

@@ -624,6 +624,10 @@ function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
     $user_email = $user ? $user->user_email : 'N/A';
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true);
+    if (empty($p_iva)) {
+        $p_iva = ($user && $user->display_name) ? $user->display_name : 'N/A';
+    }
     
     $subject = "ALERT: Disattivazione automatica fornitore per modifica documenti";
     
@@ -649,7 +653,7 @@ function sendAdminDocumentChangeNotification($user_id, $changed_documents, $rag_
 
 <p>Ciao Admin,</p>
 
-<p>Il fornitore <strong>{$rag_soc}</strong> (ID: {$user_id}) è stato <strong>automaticamente disattivato</strong> 
+<p>Il fornitore <strong>{$rag_soc}</strong> (ID: {$user_id} - P.IVA: {$p_iva}) è stato <strong>automaticamente disattivato</strong> 
 a causa della modifica della documentazione nel database.</p>
 
 <div style='background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 4px;'>
@@ -707,6 +711,10 @@ function sendAdminNewUserProgressNotification($user_id, $filled_count, $total_co
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
     $user_email = $user ? $user->user_email : 'N/A';
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true);
+    if (empty($p_iva)) {
+        $p_iva = ($user && $user->display_name) ? $user->display_name : 'N/A';
+    }
     
     $subject = "NUOVO UTENTE: Caricamento documenti in corso";
     
@@ -723,7 +731,7 @@ function sendAdminNewUserProgressNotification($user_id, $filled_count, $total_co
 
 <p>Ciao Admin,</p>
 
-<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha <strong>iniziato a caricare i documenti necessari</strong>.</p>
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id} - P.IVA: {$p_iva}) ha <strong>iniziato a caricare i documenti necessari</strong>.</p>
 
 <div style='background: #d1ecf1; padding: 15px; border-left: 4px solid #17a2b8; margin: 20px 0; border-radius: 4px;'>
 <h3 style='margin: 0 0 10px 0; color: #0c5460;'>📊 Progresso caricamento:</h3>
@@ -788,6 +796,10 @@ function sendAdminNewUserCompletionNotification($user_id, $rag_soc) {
     $admin_email = 'ufficio_qualita@cogei.net';
     $user = get_userdata($user_id);
     $user_email = $user ? $user->user_email : 'N/A';
+    $p_iva = get_user_meta($user_id, 'user_registration_p_iva', true);
+    if (empty($p_iva)) {
+        $p_iva = ($user && $user->display_name) ? $user->display_name : 'N/A';
+    }
     
     $subject = "NUOVO UTENTE: Documenti completati - Pronto per la revisione";
     
@@ -802,7 +814,7 @@ function sendAdminNewUserCompletionNotification($user_id, $rag_soc) {
 
 <p>Ciao Admin,</p>
 
-<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id}) ha <strong>completato il caricamento di tutti i documenti obbligatori</strong>!</p>
+<p>L'utente <strong>{$rag_soc}</strong> (ID: {$user_id} - P.IVA: {$p_iva}) ha <strong>completato il caricamento di tutti i documenti obbligatori</strong>!</p>
 
 <div style='background: #d4edda; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px;'>
 <h3 style='margin: 0 0 10px 0; color: #155724;'>✓ Stato completamento:</h3>
@@ -1410,6 +1422,16 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                 $copy_data = getSupplierCopyData($user_id);
                 $richiesta_documenti = ($copy_data && isset($copy_data['richiesta_documenti'])) ? $copy_data['richiesta_documenti'] : 0;
                 
+                // Se il fornitore viene attivato, cancellare la richiesta documenti attiva
+                if ($new_status === 'Attivo') {
+                    $wpdb->delete(
+                        $wpdb->prefix . 'document_requests',
+                        array('user_id' => $user_id),
+                        array('%d')
+                    );
+                    $richiesta_documenti = 0;
+                }
+                
                 $sync_data = [
                     'tipo' => $tipo ?: '',
                     'ragione_sociale' => $rag_soc ?: '',
@@ -1661,7 +1683,8 @@ foreach ($user_types as $type) {
 }
 echo '</div>';
 
-// FILTRI ATTIVI
+// FILTRI SOTTOCATEGORIE (mostrato dinamicamente via JS)
+echo '<div id="subcategory-filters" style="display:none; margin-bottom: 15px; padding: 10px; background: #e8f5e9; border-radius: 5px; border-left: 4px solid #4caf50;"></div>';
 echo '<div id="active-filters" style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107; display: none;">';
 echo '<strong>Filtri Attivi:</strong> <span id="filter-list"></span>';
 echo '<button onclick="clearAllFilters()" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px; cursor: pointer;">Rimuovi Tutti</button>';
@@ -1953,7 +1976,7 @@ foreach ($suppliers as $user) {
         $row_style .= ' background-color: #f8d7da;';
     }
     
-    echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . ($tipo ?: 'N/A') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
+    echo '<tr style="' . $row_style . '" class="supplier-row" data-status="' . $dynamic_status . '" data-type="' . esc_attr($tipo ?: 'N/A') . '" data-campo="' . esc_attr($user_campo_spec ?: '') . '" data-richiesta-documenti="' . ($has_document_request ? '1' : '0') . '" data-auto-disattivato="' . ($was_disabled ? '1' : '0') . '" data-registration-date="' . esc_attr($registration_date) . '">';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . $user_id . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd;">' . ($tipo ?: 'N/A') . '</td>';
     echo '<td style="padding: 8px; border: 1px solid #ddd; font-size: 11px;">' . ($user_campo_spec ?: 'N/A') . '</td>';
@@ -1994,7 +2017,16 @@ foreach ($suppliers as $user) {
         echo '<div style="background: #fff3cd; color: #856404; padding: 8px; border-radius: 4px; border-left: 3px solid #ffc107; font-size: 11px;">';
         echo '<strong>📄 Richiesta attiva</strong><br>';
         echo '<div style="margin-top: 4px; font-size: 10px;">';
-        echo '<strong>Nota:</strong> ' . htmlspecialchars(substr($document_request['richiesta_note'], 0, 100)) . (strlen($document_request['richiesta_note']) > 100 ? '...' : '') . '<br>';
+        echo '<strong>Nota:</strong> ';
+        if (strlen($document_request['richiesta_note']) > 100) {
+            $note_json = json_encode($document_request['richiesta_note']);
+            $supplier_json = json_encode($rag_soc);
+            echo '<span style="cursor: pointer; text-decoration: underline dotted;" onclick="openNoteModal(' . htmlspecialchars($note_json, ENT_QUOTES) . ', ' . htmlspecialchars($supplier_json, ENT_QUOTES) . ')" title="Clicca per leggere la nota completa">'
+                . htmlspecialchars(substr($document_request['richiesta_note'], 0, 100)) . '... <span style="color: #007bff; font-size: 10px;">📖 Leggi tutto</span></span>';
+        } else {
+            echo htmlspecialchars($document_request['richiesta_note']);
+        }
+        echo '<br>';
         echo '<strong>Data:</strong> ' . date('d/m/Y H:i', strtotime($document_request['data_richiesta']));
         echo '</div>';
         echo '</div>';
@@ -2739,6 +2771,12 @@ function shouldRowBeVisible(row) {
     typeCheckboxes.forEach(function(checkbox) {
         selectedTypes.push(checkbox.id.replace("type_", ""));
     });
+
+    var selectedCampos = [];
+    var campoCheckboxes = document.querySelectorAll("input[id^=campo_]:checked");
+    campoCheckboxes.forEach(function(checkbox) {
+        selectedCampos.push(decodeURIComponent(checkbox.id.replace("campo_", "")));
+    });
     
     var richiestiDocumentiFilter = document.getElementById("filter_richiesti_documenti");
     var showOnlyRichiestiDocumenti = richiestiDocumentiFilter && richiestiDocumentiFilter.checked;
@@ -2746,7 +2784,7 @@ function shouldRowBeVisible(row) {
     var autoDisattivatoFilter = document.getElementById("filter_auto_disattivato");
     var showOnlyAutoDisattivato = autoDisattivatoFilter && autoDisattivatoFilter.checked;
     
-    if (selectedStatuses.length === 0 && selectedTypes.length === 0 && !showOnlyRichiestiDocumenti && !showOnlyAutoDisattivato) {
+    if (selectedStatuses.length === 0 && selectedTypes.length === 0 && selectedCampos.length === 0 && !showOnlyRichiestiDocumenti && !showOnlyAutoDisattivato) {
         return true;
     }
     
@@ -2772,6 +2810,21 @@ function shouldRowBeVisible(row) {
             return false;
         }
     }
+
+    if (selectedCampos.length > 0) {
+        var rowCampo = row.getAttribute("data-campo") || "";
+        if (!rowCampo) {
+            return false;
+        }
+        // rowCampo may be a comma-separated list; check if any selected campo appears in it
+        var rowCampoItems = rowCampo.split(",").map(function(s) { return s.trim(); });
+        var matchesCampo = selectedCampos.some(function(c) {
+            return rowCampoItems.indexOf(c) !== -1;
+        });
+        if (!matchesCampo) {
+            return false;
+        }
+    }
     
     if (showOnlyRichiestiDocumenti) {
         var hasRichiestaDocumenti = row.getAttribute("data-richiesta-documenti") === "1";
@@ -2790,7 +2843,82 @@ function shouldRowBeVisible(row) {
     return true;
 }
 
+function updateSubcategoryFilters() {
+    var subcategoryDiv = document.getElementById("subcategory-filters");
+    if (!subcategoryDiv) return;
+
+    // Collect checked types
+    var selectedTypes = [];
+    document.querySelectorAll("input[id^=type_]:checked").forEach(function(cb) {
+        selectedTypes.push(cb.id.replace("type_", ""));
+    });
+
+    if (selectedTypes.length === 0) {
+        subcategoryDiv.style.display = "none";
+        subcategoryDiv.innerHTML = "";
+        return;
+    }
+
+    // Preserve currently checked campo values so we can restore them after redraw
+    var prevChecked = {};
+    document.querySelectorAll("input[id^=campo_]").forEach(function(cb) {
+        prevChecked[cb.id] = cb.checked;
+    });
+
+    // Collect unique subcategories for the selected types from all rows
+    var camposByType = {};
+    selectedTypes.forEach(function(t) { camposByType[t] = []; });
+
+    document.querySelectorAll(".supplier-row").forEach(function(row) {
+        var rowType = row.getAttribute("data-type") || "";
+        if (selectedTypes.indexOf(rowType) === -1) return;
+        var rowCampo = row.getAttribute("data-campo") || "";
+        if (!rowCampo) return;
+        rowCampo.split(",").forEach(function(c) {
+            c = c.trim();
+            if (c && camposByType[rowType].indexOf(c) === -1) {
+                camposByType[rowType].push(c);
+            }
+        });
+    });
+
+    // Check if any type has subcategories
+    var hasAnyCampo = selectedTypes.some(function(t) { return camposByType[t].length > 0; });
+    if (!hasAnyCampo) {
+        subcategoryDiv.style.display = "none";
+        subcategoryDiv.innerHTML = "";
+        return;
+    }
+
+    // Build HTML
+    var html = '<strong>Filtra per Sottocategoria (Campo Utente):</strong><br><br>';
+    selectedTypes.forEach(function(tipo) {
+        var campos = camposByType[tipo];
+        if (campos.length === 0) return;
+        html += '<span style="font-size:11px; font-weight:bold; color:#2e7d32; margin-right:8px;">' + tipo + ':</span>';
+        campos.forEach(function(campo) {
+            var safeId = "campo_" + encodeURIComponent(campo);
+            html += '<label style="display:inline-block; margin:2px; cursor:pointer;">';
+            html += '<input type="checkbox" id="' + safeId + '" onchange="updateFilters()" style="margin-right:4px;">';
+            html += '<span style="background:#4caf50; color:white; padding:3px 7px; border-radius:8px; font-size:11px;">' + campo + '</span>';
+            html += '</label> ';
+        });
+        html += '<br>';
+    });
+
+    subcategoryDiv.innerHTML = html;
+    subcategoryDiv.style.display = "block";
+
+    // Restore previously checked state
+    Object.keys(prevChecked).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.checked = prevChecked[id];
+    });
+}
+
 function updateFilters() {
+    updateSubcategoryFilters();
+
     var rows = document.querySelectorAll(".supplier-row");
     var visibleCount = 0;
     
@@ -2818,6 +2946,12 @@ function clearAllFilters() {
     allCheckboxes.forEach(function(checkbox) {
         checkbox.checked = false;
     });
+    
+    var subcategoryFilters = document.getElementById("subcategory-filters");
+    if (subcategoryFilters) {
+        subcategoryFilters.style.display = "none";
+        subcategoryFilters.innerHTML = "";
+    }
     
     var searchInput = document.getElementById("searchInput");
     if (searchInput) {
@@ -2847,6 +2981,12 @@ function updateActiveFiltersDisplay(visibleCount) {
     typeCheckboxes.forEach(function(checkbox) {
         selectedTypes.push(checkbox.id.replace("type_", ""));
     });
+
+    var selectedCampos = [];
+    var campoCheckboxes = document.querySelectorAll("input[id^=campo_]:checked");
+    campoCheckboxes.forEach(function(checkbox) {
+        selectedCampos.push(decodeURIComponent(checkbox.id.replace("campo_", "")));
+    });
     
     var richiestiDocumentiFilter = document.getElementById("filter_richiesti_documenti");
     var showOnlyRichiestiDocumenti = richiestiDocumentiFilter && richiestiDocumentiFilter.checked;
@@ -2864,6 +3004,10 @@ function updateActiveFiltersDisplay(visibleCount) {
     
     if (selectedTypes.length > 0) {
         filters.push("Tipi: " + selectedTypes.join(", "));
+    }
+    
+    if (selectedCampos.length > 0) {
+        filters.push("Sottocategorie: " + selectedCampos.join(", "));
     }
     
     if (showOnlyRichiestiDocumenti) {
@@ -3232,6 +3376,23 @@ function toggleDocumentChangesAccordion() {
         arrow.style.transform = 'rotate(0deg)';
     }
 }
+
+function openNoteModal(note, supplier) {
+    document.getElementById('noteModalContent').textContent = note;
+    document.getElementById('noteModalSupplier').textContent = supplier;
+    document.getElementById('noteModal').style.display = 'flex';
+}
+function closeNoteModal() {
+    document.getElementById('noteModal').style.display = 'none';
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var noteModal = document.getElementById('noteModal');
+    if (noteModal) {
+        noteModal.addEventListener('click', function(e) {
+            if (e.target === this) closeNoteModal();
+        });
+    }
+});
 </script>
 
 <style>
@@ -3241,6 +3402,21 @@ function toggleDocumentChangesAccordion() {
     100% { opacity: 1; }
 }
 </style>
+
+<!-- Modal Nota Completa -->
+<div id="noteModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; justify-content:center; align-items:center;">
+    <div style="background:white; border-radius:8px; padding:25px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:2px solid #ffc107; padding-bottom:10px;">
+            <h3 style="margin:0; color:#333;">📄 Nota Richiesta Documenti</h3>
+            <span onclick="closeNoteModal()" style="cursor:pointer; font-size:24px; color:#666; font-weight:bold;">&times;</span>
+        </div>
+        <p style="margin-bottom:10px;"><strong>Fornitore:</strong> <span id="noteModalSupplier"></span></p>
+        <div id="noteModalContent" style="background:#f8f9fa; padding:15px; border-radius:4px; border-left:3px solid #ffc107; white-space:pre-wrap; word-wrap:break-word; font-size:13px; line-height:1.6;"></div>
+        <div style="text-align:right; margin-top:15px;">
+            <button onclick="closeNoteModal()" style="padding:8px 20px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">Chiudi</button>
+        </div>
+    </div>
+</div>
 
 <?php
 ?>
