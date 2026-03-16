@@ -156,9 +156,9 @@ function createCantieriTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_attrezzi_assegnazioni);
     
-    // 📄 NUOVA TABELLA: RICHIESTE DOCUMENTI
-    $table_document_requests = $wpdb->prefix . 'document_requests';
-    $sql_document_requests = "CREATE TABLE IF NOT EXISTS $table_document_requests (
+    // 📄 TABELLA RICHIESTE DOCUMENTI HSE (separata dall'albo fornitori)
+    $table_hse_document_requests = $wpdb->prefix . 'hse_document_requests';
+    $sql_hse_document_requests = "CREATE TABLE IF NOT EXISTS $table_hse_document_requests (
         id int(11) NOT NULL AUTO_INCREMENT,
         user_id int(11) NOT NULL,
         richiesta_note text NOT NULL,
@@ -168,9 +168,9 @@ function createCantieriTablesIfNotExists() {
         UNIQUE KEY unique_user_id (user_id),
         KEY richiesto_da (richiesto_da)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
-    $wpdb->query($sql_document_requests);
+    $wpdb->query($sql_hse_document_requests);
     
-    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni, $table_document_requests");
+    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni, $table_hse_document_requests");
 }
 
 // Esegui creazione tabelle
@@ -1434,15 +1434,15 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
     }
 }
 
-// ================== GESTIONE RICHIESTE DOCUMENTI ==================
+// ================== GESTIONE RICHIESTE DOCUMENTI HSE ==================
 
-if (isset($_POST['document_action'])) {
-    $action = sanitize_text_field($_POST['document_action']);
+if (isset($_POST['hse_document_action'])) {
+    $action = sanitize_text_field($_POST['hse_document_action']);
     $user_id = intval($_POST['user_id']);
     $current_user_id = get_current_user_id();
     
     // Debug logging per POST
-    error_log("=== DOCUMENT ACTION RECEIVED ===");
+    error_log("=== HSE DOCUMENT ACTION RECEIVED ===");
     error_log("Action: " . $action);
     error_log("User ID: " . $user_id);
     error_log("Current User ID: " . $current_user_id);
@@ -1456,26 +1456,26 @@ if (isset($_POST['document_action'])) {
                 global $wpdb;
                 
                 // Debug logging
-                error_log("=== DOCUMENT REQUEST DEBUG ===");
+                error_log("=== HSE DOCUMENT REQUEST DEBUG ===");
                 error_log("User ID: " . $user_id);
                 error_log("Current User ID: " . $current_user_id);
                 error_log("Richiesta Note: " . $richiesta_note);
-                error_log("Table name: " . $wpdb->prefix . 'document_requests');
+                error_log("Table name: " . $wpdb->prefix . 'hse_document_requests');
                 
                 // Verifica se la tabella esiste
                 $table_exists = $wpdb->get_var($wpdb->prepare(
                     "SHOW TABLES LIKE %s", 
-                    $wpdb->prefix . 'document_requests'
+                    $wpdb->prefix . 'hse_document_requests'
                 ));
                 
                 if (!$table_exists) {
-                    error_log("ERRORE: Tabella document_requests non esiste!");
+                    error_log("ERRORE: Tabella hse_document_requests non esiste!");
                     createCantieriTablesIfNotExists(); // Ricrea le tabelle
                 }
                 
-                // Inserisci o aggiorna la richiesta documenti
+                // Inserisci o aggiorna la richiesta documenti HSE
                 $result = $wpdb->replace(
-                    $wpdb->prefix . 'document_requests',
+                    $wpdb->prefix . 'hse_document_requests',
                     array(
                         'user_id' => $user_id,
                         'richiesta_note' => $richiesta_note,
@@ -1576,12 +1576,12 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
             global $wpdb;
             
             // Debug logging per cancellazione
-            error_log("=== DOCUMENT REQUEST CANCEL DEBUG ===");
+            error_log("=== HSE DOCUMENT REQUEST CANCEL DEBUG ===");
             error_log("User ID to delete: " . $user_id);
-            error_log("Table name: " . $wpdb->prefix . 'document_requests');
+            error_log("Table name: " . $wpdb->prefix . 'hse_document_requests');
             
             $result = $wpdb->delete(
-                $wpdb->prefix . 'document_requests',
+                $wpdb->prefix . 'hse_document_requests',
                 array('user_id' => $user_id),
                 array('%d')
             );
@@ -1603,14 +1603,14 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
                 $success_info = [
                     'action_type' => 'cancel_request',
                     'user_name' => $rag_soc,
-                    'message' => 'Richiesta documenti cancellata'
+                    'message' => 'Richiesta documenti HSE cancellata'
                 ];
             }
             break;
     }
     
     if ($success) {
-        $redirect_url = remove_query_arg(['document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
+        $redirect_url = remove_query_arg(['hse_document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
         $redirect_url = add_query_arg([
             'msg' => 'success',
             'action_type' => $success_info['action_type'],
@@ -1636,7 +1636,7 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
     } else {
         // Gestione errore - redirect con messaggio di errore
         if (isset($error_message)) {
-            $redirect_url = remove_query_arg(['document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
+            $redirect_url = remove_query_arg(['hse_document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
             $redirect_url = add_query_arg([
                 'msg' => 'error',
                 'error_message' => rawurlencode($error_message)
@@ -2084,7 +2084,7 @@ foreach ($richieste as $richiesta) {
     // 📄 NUOVO: Richiesta documenti
     global $wpdb;
     $document_request = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}document_requests WHERE user_id = %d",
+        "SELECT * FROM {$wpdb->prefix}hse_document_requests WHERE user_id = %d",
         $user_id
     ), ARRAY_A);
     
@@ -3414,7 +3414,7 @@ echo '</div>';
 // Body modal richieste
 echo '<form id="document-request-form" method="POST" style="padding: 20px;">';
 echo '<input type="hidden" id="document-user-id" name="user_id" value="">';
-echo '<input type="hidden" name="document_action" value="request_documents">';
+echo '<input type="hidden" name="hse_document_action" value="request_documents">';
 
 echo '<div style="margin-bottom: 15px;">';
 echo '<label style="display: block; font-weight: bold; margin-bottom: 8px;">📝 Descrizione richiesta:</label>';
@@ -6848,7 +6848,7 @@ function cancelDocumentRequest(userId, aziendaName) {
         
         const actionInput = document.createElement('input');
         actionInput.type = 'hidden';
-        actionInput.name = 'document_action';
+        actionInput.name = 'hse_document_action';
         actionInput.value = 'cancel_request';
         
         const userIdInput = document.createElement('input');
