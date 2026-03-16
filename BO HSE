@@ -1661,6 +1661,25 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
     }
 }
 
+// ================== DISMISS HSE NOTIFICATION ==================
+if (isset($_POST['hse_dismiss_notification'])) {
+    if (!current_user_can('manage_options')) {
+        wp_die('Accesso non autorizzato.');
+    }
+    $dismiss_user_id = intval($_POST['dismiss_user_id']);
+    if ($dismiss_user_id > 0) {
+        delete_user_meta($dismiss_user_id, 'hse_recent_changes');
+    }
+    $redirect_url = remove_query_arg(['msg', 'action_type'], $_SERVER['REQUEST_URI']);
+    if (!headers_sent()) {
+        header("Location: " . esc_url_raw($redirect_url), true, 302);
+        exit();
+    } else {
+        echo '<script>window.location.href = ' . json_encode($redirect_url) . ';</script>';
+        exit();
+    }
+}
+
 // ================== OUTPUT HTML ESTESO ==================
 
 echo '<div style="margin: 20px; font-family: Arial, sans-serif;">';
@@ -1789,6 +1808,11 @@ if (!empty($recent_hse_updates)) {
         echo '</div>';
         echo '</div>';
         echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', $update['timestamp']) . '</span>';
+        echo '<form method="POST" style="display:inline; margin-left: 8px;" onsubmit="return confirm(' . htmlspecialchars(json_encode('Confermi la cancellazione della notifica per ' . $update['rag_soc'] . '?'), ENT_QUOTES) . ');">';
+        echo '<input type="hidden" name="hse_dismiss_notification" value="1">';
+        echo '<input type="hidden" name="dismiss_user_id" value="' . intval($update['user_id']) . '">';
+        echo '<button type="submit" style="background: #dc3545; color: white; border: none; padding: 2px 8px; border-radius: 10px; font-size: 10px; cursor: pointer;" title="Cancella notifica manualmente">🗑️ Cancella</button>';
+        echo '</form>';
         echo '</div>';
         
         echo '<div style="margin-top: 10px;">';
