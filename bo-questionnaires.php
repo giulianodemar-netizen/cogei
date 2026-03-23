@@ -2954,24 +2954,51 @@ function boq_renderRatingsTab() {
     
     $results = $wpdb->get_results($query, ARRAY_A);
     
-    // Calculate average score for each supplier using correct formula
+    // Calculate average score for each supplier reading directly from cogei_questionnaire_scores
     foreach ($results as &$result) {
         $assignment_ids = array_unique(array_filter(explode(',', $result['assignment_ids']), function($id) {
             return !empty($id) && is_numeric($id);
         }));
-        
+
+        if (empty($assignment_ids)) {
+            $result['avg_score'] = 0;
+            $result['score_count'] = 0;
+            $result['individual_scores'] = [];
+            continue;
+        }
+
+        // Read scores DIRECTLY from the database table to avoid any calculation issues
+        $placeholders = implode(',', array_fill(0, count($assignment_ids), '%d'));
+        $score_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT assignment_id, final_score FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id IN ($placeholders)",
+                ...$assignment_ids
+            ),
+            ARRAY_A
+        );
+
         $scores = [];
-        foreach ($assignment_ids as $assignment_id) {
-            $score = boq_getScore(intval($assignment_id));
-            // Accept any numeric score, including 0
-            if ($score !== false && $score !== null) {
-                $scores[] = floatval($score);
+        foreach ($score_rows as $row) {
+            // Use is_numeric to properly handle all numeric values including 0 and 100
+            if (is_numeric($row['final_score'])) {
+                $scores[] = floatval($row['final_score']);
             }
         }
-        
+
+        // For assignments without a saved score, try to calculate it
+        $scored_ids = array_flip(array_column($score_rows, 'assignment_id'));
+        foreach ($assignment_ids as $assignment_id) {
+            if (!isset($scored_ids[$assignment_id])) {
+                $score = boq_calculateAndSaveScore(intval($assignment_id));
+                if (is_numeric($score)) {
+                    $scores[] = floatval($score);
+                }
+            }
+        }
+
         $result['avg_score'] = !empty($scores) ? (array_sum($scores) / count($scores)) : 0;
         $result['score_count'] = count($scores);
-        $result['individual_scores'] = $scores; // For debugging
+        $result['individual_scores'] = $scores;
     }
     
     // Filter out suppliers with no completed questionnaires (keep those with score 0)
