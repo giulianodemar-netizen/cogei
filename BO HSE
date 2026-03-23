@@ -156,9 +156,9 @@ function createCantieriTablesIfNotExists() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
     $wpdb->query($sql_cantiere_attrezzi_assegnazioni);
     
-    // 📄 NUOVA TABELLA: RICHIESTE DOCUMENTI
-    $table_document_requests = $wpdb->prefix . 'document_requests';
-    $sql_document_requests = "CREATE TABLE IF NOT EXISTS $table_document_requests (
+    // 📄 TABELLA RICHIESTE DOCUMENTI HSE (separata dall'albo fornitori)
+    $table_hse_document_requests = $wpdb->prefix . 'hse_document_requests';
+    $sql_hse_document_requests = "CREATE TABLE IF NOT EXISTS $table_hse_document_requests (
         id int(11) NOT NULL AUTO_INCREMENT,
         user_id int(11) NOT NULL,
         richiesta_note text NOT NULL,
@@ -168,9 +168,9 @@ function createCantieriTablesIfNotExists() {
         UNIQUE KEY unique_user_id (user_id),
         KEY richiesto_da (richiesto_da)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
-    $wpdb->query($sql_document_requests);
+    $wpdb->query($sql_hse_document_requests);
     
-    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni, $table_document_requests");
+    error_log("Tabelle cantieri create/verificate: $table_cantieri, $table_cantieri_aziende, $table_cantiere_operai, $table_cantiere_pos, $table_cantiere_automezzi, $table_cantiere_attrezzi, $table_cantiere_automezzi_assegnazioni, $table_cantiere_attrezzi_assegnazioni, $table_hse_document_requests");
 }
 
 // Esegui creazione tabelle
@@ -574,7 +574,8 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
         'Stato Richiesta HSE',
         'Accesso al Cantiere',
         'Cantieri Assegnati',
-        'Data Creazione'
+        'Data Creazione',
+        'Stato Albo Fornitori'
     ];
     
     function escapeCsvField($field) {
@@ -620,7 +621,8 @@ if ((isset($_GET['csv_export']) && $_GET['csv_export'] === '1') ||
             $stato_hse['label'],
             $accesso_cantiere['label'],
             $cantieri_text ?: 'Nessuno',
-            $richiesta['data_creazione']
+            $richiesta['data_creazione'],
+            boh_hse_getAlboFornitoriStatus($richiesta['user_id'])['label']
         ];
         
         $csv_content .= implode(',', array_map('escapeCsvField', $row)) . "\n";
@@ -1179,6 +1181,97 @@ function calculateComplianceStatus($personale) {
     ];
 }
 
+/**
+ * Restituisce lo stato del fornitore nell'Albo Fornitori (identica logica di BO ALBO FORNITORI).
+ * Restituisce un array ['status' => string, 'color' => string, 'label' => string].
+ */
+function boh_hse_getAlboFornitoriStatus($user_id) {
+    $supplier_statuses = [
+        'Attivo'                    => ['color' => '#28a745', 'label' => 'Attivo'],
+        'Disattivo'                 => ['color' => '#dc3545', 'label' => 'Disattivo'],
+        'Solo_Registrato'           => ['color' => '#ffc107', 'label' => 'Solo Registrato'],
+        'Scaduto'                   => ['color' => '#fd7e14', 'label' => 'Documenti Scaduti'],
+        'Disattivo_In_Attesa'       => ['color' => '#6f42c1', 'label' => 'Disattivo + In Attesa'],
+        'Solo_Registrato_In_Attesa' => ['color' => '#20c997', 'label' => 'Registrato + In Attesa'],
+        'Richiesti_nuovi_documenti' => ['color' => '#e83e8c', 'label' => 'Richiesti Documenti'],
+        'Richiesti_Documenti'       => ['color' => '#e83e8c', 'label' => 'Richiesti Documenti'],
+    ];
+
+    // Se lo stato è forzato manualmente, usalo direttamente
+    $forced_status = get_user_meta($user_id, 'forced_supplier_status', true);
+    if (!empty($forced_status)) {
+        $status = $forced_status;
+        $config = $supplier_statuses[$status] ?? ['color' => '#6c757d', 'label' => $status];
+        return ['status' => $status, 'color' => $config['color'], 'label' => $config['label']];
+    }
+
+    // Calcolo dinamico dello stato (stessa logica di determineSupplierStatus in BO ALBO FORNITORI)
+    $tipo = get_user_meta($user_id, 'user_registration_tip_ut_rad', true);
+
+    $documenti_fondamentali = [
+        'user_registration_scad_CCIAA',
+        'user_registration_scad_wit',
+        'user_registration_scad_durc',
+        'user_registration_scadenza_altre_scadenze',
+    ];
+
+    if ($tipo === 'Lavoro' || $tipo === 'Servizi' || $tipo === 'Subappalto' || $tipo === 'Noli' || $tipo === 'Nolo') {
+        $documenti_fondamentali[] = 'user_registration_scad_rct_rco';
+    } elseif ($tipo === 'Forniture') {
+        $documenti_fondamentali[] = 'user_registration_scad_rct_rco_forni';
+    }
+
+    $documenti_caricati = 0;
+    $documenti_totali   = count($documenti_fondamentali);
+    $has_expired        = false;
+    $has_any_document   = false;
+    $has_expired_15     = false;
+
+    foreach ($documenti_fondamentali as $field) {
+        $date = get_user_meta($user_id, $field, true);
+        if (!empty($date)) {
+            $documenti_caricati++;
+            $has_any_document = true;
+            $converted_date = str_replace('/', '-', $date);
+            try {
+                $now         = new DateTime('now');
+                $expiry_date = new DateTime($converted_date . ' 23:59:59');
+                $interval    = $now->diff($expiry_date);
+                $days        = (int)$interval->format('%r%a');
+                if ($days < 0) {
+                    $has_expired = true;
+                    if ($days <= -15) {
+                        $has_expired_15 = true;
+                    }
+                }
+            } catch (Exception $e) {}
+        }
+    }
+
+    if ($has_expired_15) {
+        $stato_base = 'Disattivo';
+    } elseif ($documenti_caricati === $documenti_totali && !$has_expired) {
+        $stato_base = 'Attivo';
+    } elseif ($has_expired) {
+        $stato_base = 'Scaduto';
+    } else {
+        $stato_base = 'Solo_Registrato';
+    }
+
+    $is_waiting_integration = ($documenti_caricati > 0 && $documenti_caricati < $documenti_totali);
+
+    if ($stato_base === 'Disattivo' && $is_waiting_integration) {
+        $status = 'Disattivo_In_Attesa';
+    } elseif ($stato_base === 'Solo_Registrato' && $is_waiting_integration) {
+        $status = 'Solo_Registrato_In_Attesa';
+    } else {
+        $status = $stato_base;
+    }
+
+    $config = $supplier_statuses[$status] ?? ['color' => '#6c757d', 'label' => $status];
+    return ['status' => $status, 'color' => $config['color'], 'label' => $config['label']];
+}
+
 function sendCantiereEmail($user_id, $action) {
     global $inviamail;
     
@@ -1341,15 +1434,15 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
     }
 }
 
-// ================== GESTIONE RICHIESTE DOCUMENTI ==================
+// ================== GESTIONE RICHIESTE DOCUMENTI HSE ==================
 
-if (isset($_POST['document_action'])) {
-    $action = sanitize_text_field($_POST['document_action']);
+if (isset($_POST['hse_document_action'])) {
+    $action = sanitize_text_field($_POST['hse_document_action']);
     $user_id = intval($_POST['user_id']);
     $current_user_id = get_current_user_id();
     
     // Debug logging per POST
-    error_log("=== DOCUMENT ACTION RECEIVED ===");
+    error_log("=== HSE DOCUMENT ACTION RECEIVED ===");
     error_log("Action: " . $action);
     error_log("User ID: " . $user_id);
     error_log("Current User ID: " . $current_user_id);
@@ -1363,26 +1456,26 @@ if (isset($_POST['document_action'])) {
                 global $wpdb;
                 
                 // Debug logging
-                error_log("=== DOCUMENT REQUEST DEBUG ===");
+                error_log("=== HSE DOCUMENT REQUEST DEBUG ===");
                 error_log("User ID: " . $user_id);
                 error_log("Current User ID: " . $current_user_id);
                 error_log("Richiesta Note: " . $richiesta_note);
-                error_log("Table name: " . $wpdb->prefix . 'document_requests');
+                error_log("Table name: " . $wpdb->prefix . 'hse_document_requests');
                 
                 // Verifica se la tabella esiste
                 $table_exists = $wpdb->get_var($wpdb->prepare(
                     "SHOW TABLES LIKE %s", 
-                    $wpdb->prefix . 'document_requests'
+                    $wpdb->prefix . 'hse_document_requests'
                 ));
                 
                 if (!$table_exists) {
-                    error_log("ERRORE: Tabella document_requests non esiste!");
+                    error_log("ERRORE: Tabella hse_document_requests non esiste!");
                     createCantieriTablesIfNotExists(); // Ricrea le tabelle
                 }
                 
-                // Inserisci o aggiorna la richiesta documenti
+                // Inserisci o aggiorna la richiesta documenti HSE
                 $result = $wpdb->replace(
-                    $wpdb->prefix . 'document_requests',
+                    $wpdb->prefix . 'hse_document_requests',
                     array(
                         'user_id' => $user_id,
                         'richiesta_note' => $richiesta_note,
@@ -1483,12 +1576,12 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
             global $wpdb;
             
             // Debug logging per cancellazione
-            error_log("=== DOCUMENT REQUEST CANCEL DEBUG ===");
+            error_log("=== HSE DOCUMENT REQUEST CANCEL DEBUG ===");
             error_log("User ID to delete: " . $user_id);
-            error_log("Table name: " . $wpdb->prefix . 'document_requests');
+            error_log("Table name: " . $wpdb->prefix . 'hse_document_requests');
             
             $result = $wpdb->delete(
-                $wpdb->prefix . 'document_requests',
+                $wpdb->prefix . 'hse_document_requests',
                 array('user_id' => $user_id),
                 array('%d')
             );
@@ -1510,14 +1603,14 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
                 $success_info = [
                     'action_type' => 'cancel_request',
                     'user_name' => $rag_soc,
-                    'message' => 'Richiesta documenti cancellata'
+                    'message' => 'Richiesta documenti HSE cancellata'
                 ];
             }
             break;
     }
     
     if ($success) {
-        $redirect_url = remove_query_arg(['document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
+        $redirect_url = remove_query_arg(['hse_document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
         $redirect_url = add_query_arg([
             'msg' => 'success',
             'action_type' => $success_info['action_type'],
@@ -1543,7 +1636,7 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
     } else {
         // Gestione errore - redirect con messaggio di errore
         if (isset($error_message)) {
-            $redirect_url = remove_query_arg(['document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
+            $redirect_url = remove_query_arg(['hse_document_action', 'user_id', 'richiesta_note', 'msg', 'action_type', 'message', 'user_name'], $_SERVER['REQUEST_URI']);
             $redirect_url = add_query_arg([
                 'msg' => 'error',
                 'error_message' => rawurlencode($error_message)
@@ -1565,6 +1658,25 @@ Ti preghiamo di caricare i documenti richiesti nel tuo pannello cantieri.<br><br
                 exit();
             }
         }
+    }
+}
+
+// ================== DISMISS HSE NOTIFICATION ==================
+if (isset($_POST['hse_dismiss_notification'])) {
+    if (!current_user_can('manage_options')) {
+        wp_die('Accesso non autorizzato.');
+    }
+    $dismiss_user_id = intval($_POST['dismiss_user_id']);
+    if ($dismiss_user_id > 0) {
+        delete_user_meta($dismiss_user_id, 'hse_recent_changes');
+    }
+    $redirect_url = remove_query_arg(['msg', 'action_type'], $_SERVER['REQUEST_URI']);
+    if (!headers_sent()) {
+        header("Location: " . esc_url_raw($redirect_url), true, 302);
+        exit();
+    } else {
+        echo '<script>window.location.href = ' . json_encode($redirect_url) . ';</script>';
+        exit();
     }
 }
 
@@ -1696,6 +1808,11 @@ if (!empty($recent_hse_updates)) {
         echo '</div>';
         echo '</div>';
         echo '<span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px;">🕒 ' . date('d/m/Y H:i', $update['timestamp']) . '</span>';
+        echo '<form method="POST" style="display:inline; margin-left: 8px;" onsubmit="return confirm(' . htmlspecialchars(json_encode('Confermi la cancellazione della notifica per ' . $update['rag_soc'] . '?'), ENT_QUOTES) . ');">';
+        echo '<input type="hidden" name="hse_dismiss_notification" value="1">';
+        echo '<input type="hidden" name="dismiss_user_id" value="' . intval($update['user_id']) . '">';
+        echo '<button type="submit" style="background: #dc3545; color: white; border: none; padding: 2px 8px; border-radius: 10px; font-size: 10px; cursor: pointer;" title="Cancella notifica manualmente">🗑️ Cancella</button>';
+        echo '</form>';
         echo '</div>';
         
         echo '<div style="margin-top: 10px;">';
@@ -1944,6 +2061,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 Assegnazioni Operai</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">📄 Nota richiesta documenti</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Azioni</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🏢 STATO ALBO FORNITORI</th>';
 echo '</tr>';
 
 $richieste = getCantiereRequests();
@@ -1990,7 +2108,7 @@ foreach ($richieste as $richiesta) {
     // 📄 NUOVO: Richiesta documenti
     global $wpdb;
     $document_request = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}document_requests WHERE user_id = %d",
+        "SELECT * FROM {$wpdb->prefix}hse_document_requests WHERE user_id = %d",
         $user_id
     ), ARRAY_A);
     
@@ -2289,11 +2407,18 @@ foreach ($richieste as $richiesta) {
     }
     
     echo '</td>';
+    
+    // 🏢 STATO ALBO FORNITORI
+    $albo_status = boh_hse_getAlboFornitoriStatus($user_id);
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    echo '<span style="background: ' . $albo_status['color'] . '; color: white; padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: bold; white-space: nowrap;">' . htmlspecialchars($albo_status['label']) . '</span>';
+    echo '</td>';
+    
     echo '</tr>';
     
     // 🚀 RIGA DETTAGLI PERSONALE MIGLIORATA (CON ASSEGNAZIONI CANTIERI)
     echo '<tr id="personale-details-' . $richiesta['id'] . '" style="display: none; background: #f8f9fa;">';
-    echo '<td colspan="16" style="padding: 15px; border: 1px solid #ddd;">';
+    echo '<td colspan="17" style="padding: 15px; border: 1px solid #ddd;">';
     echo '<h4 style="margin: 0 0 10px 0; color: #0066a2;">👥 Dettaglio Personale - Richiesta #' . $richiesta['id'] . '</h4>';
     
     if (!empty($personale)) {
@@ -3313,7 +3438,7 @@ echo '</div>';
 // Body modal richieste
 echo '<form id="document-request-form" method="POST" style="padding: 20px;">';
 echo '<input type="hidden" id="document-user-id" name="user_id" value="">';
-echo '<input type="hidden" name="document_action" value="request_documents">';
+echo '<input type="hidden" name="hse_document_action" value="request_documents">';
 
 echo '<div style="margin-bottom: 15px;">';
 echo '<label style="display: block; font-weight: bold; margin-bottom: 8px;">📝 Descrizione richiesta:</label>';
@@ -6128,7 +6253,8 @@ function generateClientSideCSV() {
     var headers = [
         'ID Richiesta', 'Ragione Sociale', 'Email', 'P.IVA', 'DVR', 'RCT', 
         'Personale', 'Stato Richiesta HSE', 
-        'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai'
+        'Accesso al Cantiere', 'Cantieri Assegnati', 'Assegnazioni Operai',
+        'Stato Albo Fornitori'
     ];
     
     var csvContent = "\uFEFF";
@@ -6161,6 +6287,14 @@ function generateClientSideCSV() {
         // 🚀 NUOVO: Assegnazioni operai (colonna 14)
         var operaiText = cells[13].textContent.trim().replace(/\s+/g, ' ');
         rowData.push('"' + operaiText.replace(/"/g, '""') + '"');
+        
+        // 🏢 Stato Albo Fornitori (ultima colonna)
+        if (cells.length > 15) {
+            var alboText = cells[15].textContent.trim().replace(/\s+/g, ' ');
+            rowData.push('"' + alboText.replace(/"/g, '""') + '"');
+        } else {
+            rowData.push('""');
+        }
         
         csvContent += rowData.join(',') + '\n';
         exportedRows++;
@@ -6738,7 +6872,7 @@ function cancelDocumentRequest(userId, aziendaName) {
         
         const actionInput = document.createElement('input');
         actionInput.type = 'hidden';
-        actionInput.name = 'document_action';
+        actionInput.name = 'hse_document_action';
         actionInput.value = 'cancel_request';
         
         const userIdInput = document.createElement('input');

@@ -95,9 +95,14 @@ class HseMailLogger {
             foreach ($params['documenti'] as $doc) {
                 if (is_array($doc)) {
                     $nome = $doc['nome'] ?? 'N/A';
-                    $scadenza = $doc['scadenza'] ?? 'N/A';
-                    $giorni = isset($doc['giorni']) ? $doc['giorni'] : 'N/A';
-                    $log_entry .= "  - {$nome}: scadenza {$scadenza} (giorni: {$giorni})\n";
+                    // If 'valore' key present (used by admin update notifications), show value directly
+                    if (isset($doc['valore'])) {
+                        $log_entry .= "  - {$nome}: {$doc['valore']}\n";
+                    } else {
+                        $scadenza = $doc['scadenza'] ?? 'N/A';
+                        $giorni = isset($doc['giorni']) ? $doc['giorni'] : 'N/A';
+                        $log_entry .= "  - {$nome}: scadenza {$scadenza} (giorni: {$giorni})\n";
+                    }
                 } else {
                     $log_entry .= "  - {$doc}\n";
                 }

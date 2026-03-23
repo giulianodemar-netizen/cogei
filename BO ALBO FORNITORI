@@ -1619,7 +1619,9 @@ echo '<div style="margin-bottom: 20px; border-bottom: 2px solid #0066a2;">';
 echo '<button onclick="switchTab(\'fornitori\')" id="tab-fornitori" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'fornitori' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'fornitori' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📋 Fornitori</button>';
 echo '<button onclick="switchTab(\'registrazione\')" id="tab-registrazione" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'registrazione' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'registrazione' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📝 Utenti in Registrazione</button>';
 echo '<button onclick="switchTab(\'log\')" id="tab-log" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'log' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'log' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">📧 Log Email</button>';
-echo '<button onclick="switchTab(\'disattivazioni\')" id="tab-disattivazioni" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'disattivazioni' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'disattivazioni' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">🔴 Log Disattivazioni</button>';
+echo '<button onclick="switchTab(\'disattivazioni\')" id="tab-disattivazioni" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'disattivazioni' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'disattivazioni' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">🔴 Log Disattivazioni</button>';
+echo '<button onclick="switchTab(\'pannello-hse\')" id="tab-pannello-hse" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'pannello-hse' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'pannello-hse' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0; margin-right: 5px;">🛡️ Pannello HSE</button>';
+echo '<button onclick="switchTab(\'pannello-questionario\')" id="tab-pannello-questionario" class="tab-button" style="padding: 10px 20px; border: none; background: ' . ($current_tab === 'pannello-questionario' ? '#0066a2' : '#f0f0f0') . '; color: ' . ($current_tab === 'pannello-questionario' ? 'white' : '#333') . '; cursor: pointer; font-weight: bold; border-radius: 5px 5px 0 0;">📋 Pannello Questionario</button>';
 echo '</div>';
 
 // Tab Content Container
@@ -2611,6 +2613,34 @@ if (file_exists($disattivazioni_log)) {
 
 echo '</div>'; // End tab-disattivazioni-content
 
+// ================== PANNELLO HSE TAB ==================
+echo '<div id="tab-pannello-hse-content" style="display: ' . ($current_tab === 'pannello-hse' ? 'block' : 'none') . ';">';
+echo '<div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">';
+echo '<div style="background: linear-gradient(135deg, #0066a2, #004d7a); color: white; padding: 20px 25px;">';
+echo '<h3 style="margin: 0; font-size: 20px;">🛡️ Pannello HSE</h3>';
+echo '<p style="margin: 6px 0 0 0; opacity: 0.85; font-size: 14px;">Gestione della documentazione HSE dei fornitori</p>';
+echo '</div>';
+echo '<div style="padding: 30px; text-align: center;">';
+echo '<p style="font-size: 15px; color: #555; margin-bottom: 25px;">Clicca il pulsante per aprire il Pannello HSE in una nuova scheda.</p>';
+echo '<a href="https://www.cogei.net/pannello-hse/" target="_blank" style="display: inline-block; background: #0066a2; color: white; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 15px;">🔗 Apri Pannello HSE</a>';
+echo '</div>';
+echo '</div>';
+echo '</div>'; // End tab-pannello-hse-content
+
+// ================== PANNELLO QUESTIONARIO TAB ==================
+echo '<div id="tab-pannello-questionario-content" style="display: ' . ($current_tab === 'pannello-questionario' ? 'block' : 'none') . ';">';
+echo '<div style="background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">';
+echo '<div style="background: linear-gradient(135deg, #17a2b8, #138496); color: white; padding: 20px 25px;">';
+echo '<h3 style="margin: 0; font-size: 20px;">📋 Pannello Questionario</h3>';
+echo '<p style="margin: 6px 0 0 0; opacity: 0.85; font-size: 14px;">Gestione del questionario fornitori</p>';
+echo '</div>';
+echo '<div style="padding: 30px; text-align: center;">';
+echo '<p style="font-size: 15px; color: #555; margin-bottom: 25px;">Clicca il pulsante per aprire il Pannello Questionario in una nuova scheda.</p>';
+echo '<a href="https://www.cogei.net/pannello-questionario/" target="_blank" style="display: inline-block; background: #17a2b8; color: white; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 15px;">🔗 Apri Pannello Questionario</a>';
+echo '</div>';
+echo '</div>';
+echo '</div>'; // End tab-pannello-questionario-content
+
 // Document Request Modal
 echo '<div id="document-request-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">';
 echo '<div style="background-color: #fefefe; margin: 5% auto; padding: 0; border: none; border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">';
@@ -3207,6 +3237,8 @@ function switchTab(tabName) {
     document.getElementById('tab-registrazione-content').style.display = 'none';
     document.getElementById('tab-log-content').style.display = 'none';
     document.getElementById('tab-disattivazioni-content').style.display = 'none';
+    document.getElementById('tab-pannello-hse-content').style.display = 'none';
+    document.getElementById('tab-pannello-questionario-content').style.display = 'none';
     
     // Remove active styling from all buttons
     var buttons = document.querySelectorAll('.tab-button');
@@ -3251,6 +3283,24 @@ function switchTab(tabName) {
         // Update URL without reload
         var url = new URL(window.location);
         url.searchParams.set('tab', 'disattivazioni');
+        window.history.pushState({}, '', url);
+    } else if (tabName === 'pannello-hse') {
+        document.getElementById('tab-pannello-hse-content').style.display = 'block';
+        document.getElementById('tab-pannello-hse').style.background = '#0066a2';
+        document.getElementById('tab-pannello-hse').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'pannello-hse');
+        window.history.pushState({}, '', url);
+    } else if (tabName === 'pannello-questionario') {
+        document.getElementById('tab-pannello-questionario-content').style.display = 'block';
+        document.getElementById('tab-pannello-questionario').style.background = '#0066a2';
+        document.getElementById('tab-pannello-questionario').style.color = 'white';
+        
+        // Update URL without reload
+        var url = new URL(window.location);
+        url.searchParams.set('tab', 'pannello-questionario');
         window.history.pushState({}, '', url);
     }
 }
