@@ -433,42 +433,6 @@ try {
                 ];
             }
             
-            // RSPP
-            if (!empty($operaio['rspp_file'])) {
-                $documenti[] = [
-                    'name' => 'RSPP',
-                    'type' => 'ruolo_sicurezza',
-                    'url' => $operaio['rspp_file'],
-                    'uploaded_at' => null,
-                    'expires_at' => $operaio['rspp_data_scadenza'] ?? null,
-                    'emission_date' => $operaio['rspp_data_nomina'] ?? null
-                ];
-            }
-            
-            // RLS
-            if (!empty($operaio['rls_file'])) {
-                $documenti[] = [
-                    'name' => 'RLS',
-                    'type' => 'ruolo_sicurezza',
-                    'url' => $operaio['rls_file'],
-                    'uploaded_at' => null,
-                    'expires_at' => $operaio['rls_data_scadenza'] ?? null,
-                    'emission_date' => $operaio['rls_data_nomina'] ?? null
-                ];
-            }
-            
-            // ASPP
-            if (!empty($operaio['aspp_file'])) {
-                $documenti[] = [
-                    'name' => 'ASPP',
-                    'type' => 'ruolo_sicurezza',
-                    'url' => $operaio['aspp_file'],
-                    'uploaded_at' => null,
-                    'expires_at' => $operaio['aspp_data_scadenza'] ?? null,
-                    'emission_date' => $operaio['aspp_data_nomina'] ?? null
-                ];
-            }
-            
             // Formazione PLE
             if (!empty($operaio['formazione_ple_file'])) {
                 $documenti[] = [

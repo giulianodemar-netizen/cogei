@@ -2052,6 +2052,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Email</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DVR</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 RSPP/RLS/ASPP</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Mezzi Meccanici</th>';
@@ -2157,6 +2158,37 @@ foreach ($richieste as $richiesta) {
     }
     
     echo '</div>'; // Close debug wrapper
+    echo '</td>';
+    
+    // RSPP/RLS/ASPP at company level
+    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
+    $rspp_rls_links = [];
+    if (!empty($richiesta['rspp_file'])) {
+        $rspp_label = '👷 RSPP';
+        if (!empty($richiesta['rspp_data_scadenza'])) {
+            $rspp_label .= ' (Sc: ' . date('d/m/Y', strtotime($richiesta['rspp_data_scadenza'])) . ')';
+        }
+        $rspp_rls_links[] = '<a href="' . esc_url($richiesta['rspp_file']) . '" target="_blank" style="color: #28a745; font-weight: bold; display: block;">' . $rspp_label . '</a>';
+    }
+    if (!empty($richiesta['rls_file'])) {
+        $rls_label = '👷 RLS';
+        if (!empty($richiesta['rls_data_scadenza'])) {
+            $rls_label .= ' (Sc: ' . date('d/m/Y', strtotime($richiesta['rls_data_scadenza'])) . ')';
+        }
+        $rspp_rls_links[] = '<a href="' . esc_url($richiesta['rls_file']) . '" target="_blank" style="color: #28a745; font-weight: bold; display: block;">' . $rls_label . '</a>';
+    }
+    if (!empty($richiesta['aspp_file'])) {
+        $aspp_label = '👷 ASPP';
+        if (!empty($richiesta['aspp_data_scadenza'])) {
+            $aspp_label .= ' (Sc: ' . date('d/m/Y', strtotime($richiesta['aspp_data_scadenza'])) . ')';
+        }
+        $rspp_rls_links[] = '<a href="' . esc_url($richiesta['aspp_file']) . '" target="_blank" style="color: #28a745; font-weight: bold; display: block;">' . $aspp_label . '</a>';
+    }
+    if (!empty($rspp_rls_links)) {
+        echo implode('', $rspp_rls_links);
+    } else {
+        echo '<span style="color: #dc3545;">✗</span>';
+    }
     echo '</td>';
     
     // File RCT (da user meta)
@@ -2512,51 +2544,6 @@ foreach ($richieste as $richiesta) {
                 $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $gen_spec_text . '</a>';
             }
             
-            if (!empty($persona['rspp_file'])) {
-                $rspp_text = '👷 RSPP';
-                if (!empty($persona['rspp_data_nomina']) || !empty($persona['rspp_data_scadenza'])) {
-                    $rspp_text .= ' (';
-                    if (!empty($persona['rspp_data_nomina'])) {
-                        $rspp_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['rspp_data_nomina']));
-                    }
-                    if (!empty($persona['rspp_data_scadenza'])) {
-                        $rspp_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['rspp_data_scadenza']));
-                    }
-                    $rspp_text .= ')';
-                }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rspp_text . '</a>';
-            }
-            
-            if (!empty($persona['rls_file'])) {
-                $rls_text = '👷 RLS';
-                if (!empty($persona['rls_data_nomina']) || !empty($persona['rls_data_scadenza'])) {
-                    $rls_text .= ' (';
-                    if (!empty($persona['rls_data_nomina'])) {
-                        $rls_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['rls_data_nomina']));
-                    }
-                    if (!empty($persona['rls_data_scadenza'])) {
-                        $rls_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['rls_data_scadenza']));
-                    }
-                    $rls_text .= ')';
-                }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rls_text . '</a>';
-            }
-            
-            if (!empty($persona['aspp_file'])) {
-                $aspp_text = '👷 ASPP';
-                if (!empty($persona['aspp_data_nomina']) || !empty($persona['aspp_data_scadenza'])) {
-                    $aspp_text .= ' (';
-                    if (!empty($persona['aspp_data_nomina'])) {
-                        $aspp_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['aspp_data_nomina']));
-                    }
-                    if (!empty($persona['aspp_data_scadenza'])) {
-                        $aspp_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['aspp_data_scadenza']));
-                    }
-                    $aspp_text .= ')';
-                }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $aspp_text . '</a>';
-            }
-            
             if (!empty($persona['formazione_ple_file'])) {
                 $ple_text = '🏗️ PLE';
                 if (!empty($persona['formazione_ple_data_emissione']) || !empty($persona['formazione_ple_data_scadenza'])) {
@@ -2818,9 +2805,6 @@ foreach ($richieste as $richiesta) {
         echo 'formazione_primo_soccorso: ' . (!empty($persona['formazione_primo_soccorso_file']) ? 'true' : 'false') . ',';
         echo 'formazione_preposti: ' . (!empty($persona['formazione_preposti_file']) ? 'true' : 'false') . ',';
         echo 'formazione_generale_specifica: ' . (!empty($persona['formazione_generale_specifica_file']) ? 'true' : 'false') . ',';
-        echo 'rspp: ' . (!empty($persona['rspp_file']) ? 'true' : 'false') . ',';
-        echo 'rls: ' . (!empty($persona['rls_file']) ? 'true' : 'false') . ',';
-        echo 'aspp: ' . (!empty($persona['aspp_file']) ? 'true' : 'false') . ',';
         echo 'formazione_ple: ' . (!empty($persona['formazione_ple_file']) ? 'true' : 'false') . ',';
         echo 'formazione_carrelli: ' . (!empty($persona['formazione_carrelli_file']) ? 'true' : 'false') . ',';
         echo 'formazione_lavori_quota: ' . (!empty($persona['formazione_lavori_quota_file']) ? 'true' : 'false') . ',';
@@ -2895,9 +2879,6 @@ foreach ($richieste as $richiesta) {
                 
                 // 📚 Aggiungi nuovi campi formazione implementati
                 echo 'formazione_generale_specifica: ' . (!empty($operaio['formazione_generale_specifica_file']) ? 'true' : 'false') . ',';
-                echo 'rspp: ' . (!empty($operaio['rspp_file']) ? 'true' : 'false') . ',';
-                echo 'rls: ' . (!empty($operaio['rls_file']) ? 'true' : 'false') . ',';
-                echo 'aspp: ' . (!empty($operaio['aspp_file']) ? 'true' : 'false') . ',';
                 echo 'formazione_ple: ' . (!empty($operaio['formazione_ple_file']) ? 'true' : 'false') . ',';
                 echo 'formazione_carrelli: ' . (!empty($operaio['formazione_carrelli_file']) ? 'true' : 'false') . ',';
                 
