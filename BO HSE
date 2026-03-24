@@ -292,7 +292,8 @@ function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
                a.scadenza_assicurazione,
                a.file_assicurazione,
                a.scadenza_verifiche_periodiche,
-               a.file_verifiche_periodiche
+               a.file_verifiche_periodiche,
+               a.verifiche_periodiche_json
         FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
         JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
         WHERE aa.cantiere_id = %d AND aa.user_id = %d
@@ -2230,7 +2231,7 @@ foreach ($richieste as $richiesta) {
         foreach ($automezzi_grouped as $automezzo) {
             $tipologia_icon = '🚗';
             if (!empty($automezzo['tipologia'])) {
-                $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜'];
+                $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜', 'CARRELLO_ELEVATORE' => '🏎️'];
                 $tipologia_icon = $tipologia_icons[$automezzo['tipologia']] ?? '🚗';
             }
             
@@ -2239,7 +2240,7 @@ foreach ($richieste as $richiesta) {
             echo '<strong>' . $tipologia_icon . ' ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
             echo '<span style="font-size: 9px; color: #6c757d;">🏷️ ' . htmlspecialchars($automezzo['targa']) . '</span>';
             if (!empty($automezzo['tipologia']) && $automezzo['tipologia'] !== 'AUTO') {
-                $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra'];
+                $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra', 'CARRELLO_ELEVATORE' => 'Carrello Elevatore'];
                 echo ' <span style="font-size: 8px; background: #17a2b8; color: white; padding: 1px 4px; border-radius: 3px;">' . ($tipologia_labels[$automezzo['tipologia']] ?? $automezzo['tipologia']) . '</span>';
             }
             echo '<br>';
@@ -2261,7 +2262,7 @@ foreach ($richieste as $richiesta) {
             if (!in_array($automezzo['id'], $automezzi_assegnati_ids)) {
                 $tipologia_icon = '🚗';
                 if (!empty($automezzo['tipologia'])) {
-                    $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜'];
+                    $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜', 'CARRELLO_ELEVATORE' => '🏎️'];
                     $tipologia_icon = $tipologia_icons[$automezzo['tipologia']] ?? '🚗';
                 }
                 
@@ -2270,7 +2271,7 @@ foreach ($richieste as $richiesta) {
                 echo '<strong>' . $tipologia_icon . ' ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
                 echo '<span style="font-size: 9px; color: #6c757d;">🏷️ ' . htmlspecialchars($automezzo['targa']) . '</span>';
                 if (!empty($automezzo['tipologia']) && $automezzo['tipologia'] !== 'AUTO') {
-                    $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra'];
+                    $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra', 'CARRELLO_ELEVATORE' => 'Carrello Elevatore'];
                     echo ' <span style="font-size: 8px; background: #17a2b8; color: white; padding: 1px 4px; border-radius: 3px;">' . ($tipologia_labels[$automezzo['tipologia']] ?? $automezzo['tipologia']) . '</span>';
                 }
                 echo '</div>';
@@ -2946,7 +2947,8 @@ foreach ($all_richieste_for_mezzi as $richiesta) {
         echo 'scadenza_assicurazione: "' . addslashes($mezzo['scadenza_assicurazione'] ?? '') . '",';
         echo 'file_assicurazione: "' . addslashes($mezzo['file_assicurazione'] ?? '') . '",';
         echo 'scadenza_verifiche_periodiche: "' . addslashes($mezzo['scadenza_verifiche_periodiche'] ?? '') . '",';
-        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '"';
+        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '",';
+        echo 'verifiche_periodiche_json: ' . (!empty($mezzo['verifiche_periodiche_json']) ? json_encode(json_decode($mezzo['verifiche_periodiche_json'], true) ?: []) : '[]');
         echo '},';
     }
 }
@@ -4856,7 +4858,10 @@ function loadCantiereWorkers(cantiereId, userId) {
                             'AUTOCARRO': '🚚',
                             'AUTOCARRO CON GRU': '🏗️',
                             'PLE': '⬆️',
-                            'MEZZI MOVIMENTI TERRA': '🚜'
+                            'MEZZI MOVIMENTI TERRA': '🚜',
+                            'AUTOCARRO_GRU': '🏗️',
+                            'MEZZI_TERRA': '🚜',
+                            'CARRELLO_ELEVATORE': '🏎️'
                         };
                         const icona = iconeTipologia[automezzo.tipologia] || '🚗';
                         const tipologia = automezzo.tipologia || 'AUTO';
@@ -5237,7 +5242,8 @@ function generateRealCantiereDetailsContent(data) {
                         'AUTOCARRO': '🚚 Autocarro',
                         'AUTOCARRO_GRU': '🏗️ Autocarro con Gru',
                         'PLE': '⬆️ PLE',
-                        'MEZZI_TERRA': '🚜 Mezzi Movimenti Terra'
+                        'MEZZI_TERRA': '🚜 Mezzi Movimenti Terra',
+                        'CARRELLO_ELEVATORE': '🏎️ Carrello Elevatore'
                     };
                     
                     const tipologiaLabel = tipologiaLabels[mezzo.tipologia] || '🚗 ' + mezzo.tipologia;
@@ -5945,7 +5951,8 @@ async function generateCantierePDF(data) {
                         'AUTOCARRO': 'Autocarro',
                         'AUTOCARRO_GRU': 'Autocarro con Gru',
                         'PLE': 'PLE',
-                        'MEZZI_TERRA': 'Mezzi Movimenti Terra'
+                        'MEZZI_TERRA': 'Mezzi Movimenti Terra',
+                        'CARRELLO_ELEVATORE': 'Carrello Elevatore'
                     };
                     const tipologia = tipologiaLabels[mezzo.tipologia] || mezzo.tipologia;
                     
@@ -8106,7 +8113,8 @@ echo '        "AUTO": "🚗 Auto",';
 echo '        "AUTOCARRO": "🚚 Autocarro",';
 echo '        "AUTOCARRO_GRU": "🏗️ Autocarro con Gru",';
 echo '        "PLE": "⬆️ PLE",';
-echo '        "MEZZI_TERRA": "🚜 Mezzi Movimenti Terra"';
+echo '        "MEZZI_TERRA": "🚜 Mezzi Movimenti Terra",';
+echo '        "CARRELLO_ELEVATORE": "🏎️ Carrello Elevatore"';
 echo '    };';
 echo '    ';
 echo '    const needsVerifiche = ["AUTOCARRO_GRU", "PLE", "MEZZI_TERRA"].includes(mezzoData.tipologia);';
@@ -8154,18 +8162,22 @@ echo '        </div>';
 echo '    `;';
 echo '    ';
 echo '    if (needsVerifiche) {';
+echo '        const verificheList = (mezzoData.verifiche_periodiche_json && mezzoData.verifiche_periodiche_json.length > 0) ? mezzoData.verifiche_periodiche_json : (mezzoData.scadenza_verifiche_periodiche ? [{scadenza: mezzoData.scadenza_verifiche_periodiche, file: mezzoData.file_verifiche_periodiche}] : []);';
 echo '        content += `';
 echo '            <div class="summary-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; margin-bottom: 20px;">';
-echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
+echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie (${verificheList.length || 0})</h5>';
 echo '                <div style="display: grid; gap: 14px;">';
-echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong style="font-size: 15px;">📅 Scadenza Verifiche Periodiche:</strong><br>';
-echo '                        <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
-echo '                    </div>';
-echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong style="font-size: 15px;">📄 File Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
-echo '                    </div>';
+echo '                    ${verificheList.length > 0 ? verificheList.map((v, idx) => `';
+echo '                    <div style="border: 1px solid #ffc107; border-radius: 6px; padding: 10px;">`;
+echo '                        <strong style="font-size: 14px; color: #856404;">Verifica ${idx + 1}</strong><br>';
+echo '                        <div style="margin-top: 6px; padding: 8px; background: ${v.scadenza ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${v.scadenza ? "#28a745" : "#dc3545"};">';
+echo '                            <strong>📅 Scadenza:</strong> ${v.scadenza ? new Date(v.scadenza).toLocaleDateString("it-IT") : "<span style=\"color:#721c24\">Non impostata</span>"}';
+echo '                        </div>';
+echo '                        <div style="margin-top: 6px; padding: 8px; background: ${v.file ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${v.file ? "#28a745" : "#dc3545"};">';
+echo '                            <strong>📄 File:</strong> ${v.file ? `<a href="${v.file}" target="_blank" style="color:#155724;font-weight:600;">Visualizza</a>` : "<span style=\"color:#721c24\">Non caricato</span>"}';
+echo '                        </div>';
+echo '                    </div>`;
+echo '                    `).join("") : `<div style="color: #856404; font-style: italic;">Nessuna verifica registrata</div>`}';
 echo '                </div>';
 echo '            </div>';
 echo '        `;';

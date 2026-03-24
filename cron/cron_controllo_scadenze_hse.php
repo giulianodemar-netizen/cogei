@@ -166,6 +166,30 @@ function getHseExpiringDocuments($user_id) {
                 }
             }
         }
+        
+        // Check additional verifiche from JSON (skip index 0, already covered by scadenza_verifiche_periodiche)
+        if (!empty($mezzo['verifiche_periodiche_json'])) {
+            $verifiche_extra = json_decode($mezzo['verifiche_periodiche_json'], true) ?: [];
+            $is_first_verifica = true;
+            foreach ($verifiche_extra as $vIdx => $verifica) {
+                if ($is_first_verifica) {
+                    $is_first_verifica = false;
+                    continue; // Skip first entry, already covered by scadenza_verifiche_periodiche
+                }
+                if (!empty($verifica['scadenza'])) {
+                    $giorni = calculateDaysToExpiry($verifica['scadenza']);
+                    if ($giorni !== null) {
+                        $expiring_docs[] = [
+                            'nome' => 'Verifica periodica ' . ($vIdx + 1) . ' - ' . $descrizione,
+                            'scadenza' => $verifica['scadenza'],
+                            'giorni' => $giorni,
+                            'tipo' => 'mezzo',
+                            'id' => $mezzo['id']
+                        ];
+                    }
+                }
+            }
+        }
     }
     
     // 3. Revisioni attrezzi

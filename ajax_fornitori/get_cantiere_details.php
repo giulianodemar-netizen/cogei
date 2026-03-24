@@ -222,6 +222,7 @@ function getAutomezziAssegnatiCantiereAjax($cantiere_id, $user_id = null) {
                a.file_assicurazione,
                a.scadenza_verifiche_periodiche,
                a.file_verifiche_periodiche,
+               a.verifiche_periodiche_json,
                a.data_creazione as automezzo_data_creazione,
                a.data_aggiornamento as automezzo_data_aggiornamento,
                u.user_email, um.meta_value as rag_soc
@@ -583,8 +584,21 @@ try {
                 ];
             }
             
-            // File Verifiche Periodiche
-            if (!empty($automezzo['file_verifiche_periodiche'])) {
+            // File Verifiche Periodiche - use JSON if available, otherwise legacy field
+            if (!empty($automezzo['verifiche_periodiche_json'])) {
+                $verifiche_entries = json_decode($automezzo['verifiche_periodiche_json'], true) ?: [];
+                foreach ($verifiche_entries as $v_idx => $verifica_entry) {
+                    if (!empty($verifica_entry['file'])) {
+                        $documenti_automezzo[] = [
+                            'name' => 'Verifiche Periodiche ' . ($v_idx + 1),
+                            'type' => 'verifica_periodica',
+                            'url' => $verifica_entry['file'],
+                            'uploaded_at' => null,
+                            'expires_at' => $verifica_entry['scadenza'] ?? null
+                        ];
+                    }
+                }
+            } elseif (!empty($automezzo['file_verifiche_periodiche'])) {
                 $documenti_automezzo[] = [
                     'name' => 'Verifiche Periodiche',
                     'type' => 'verifica_periodica',
@@ -602,6 +616,9 @@ try {
                 'scadenza_revisione' => $automezzo['scadenza_revisione'] ?? null,
                 'scadenza_assicurazione' => $automezzo['scadenza_assicurazione'] ?? null,
                 'scadenza_verifiche_periodiche' => $automezzo['scadenza_verifiche_periodiche'] ?? null,
+                'verifiche_periodiche_json' => !empty($automezzo['verifiche_periodiche_json'])
+                    ? (json_decode($automezzo['verifiche_periodiche_json'], true) ?: [])
+                    : [],
                 'data_creazione' => $automezzo['automezzo_data_creazione'] ?? null,
                 'data_aggiornamento' => $automezzo['automezzo_data_aggiornamento'] ?? null,
                 'data_assegnazione' => $automezzo['data_assegnazione'] ?: '',

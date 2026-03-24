@@ -88,7 +88,8 @@ function hse_createCantiereTablesIfNotExists() {
         'scadenza_assicurazione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_assicurazione DATE AFTER scadenza_revisione",
         'file_assicurazione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_assicurazione TEXT AFTER scadenza_assicurazione",
         'scadenza_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_verifiche_periodiche DATE AFTER file_assicurazione",
-        'file_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_verifiche_periodiche TEXT AFTER scadenza_verifiche_periodiche"
+        'file_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_verifiche_periodiche TEXT AFTER scadenza_verifiche_periodiche",
+        'verifiche_periodiche_json' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN verifiche_periodiche_json TEXT AFTER file_verifiche_periodiche"
     );
     
     foreach ($columns_to_add as $column => $sql) {
@@ -111,6 +112,7 @@ function hse_createCantiereTablesIfNotExists() {
         file_assicurazione text,
         scadenza_verifiche_periodiche date,
         file_verifiche_periodiche text,
+        verifiche_periodiche_json text,
         user_id int(11) NOT NULL,
         data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
         data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1244,11 +1246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         $hse_file_assicurazione = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_assicurazione_' . $i], $hse_current_user_id, 'mezzo_assicurazione_' . $i);
                     }
                     
-                    // Gestione upload file verifiche periodiche
-                    $hse_file_verifiche = '';
-                    if (!empty($_FILES['hse_automezzi_file_verifiche_' . $i]['name'])) {
-                        $hse_file_verifiche = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_verifiche_' . $i], $hse_current_user_id, 'mezzo_verifiche_' . $i);
-                    }
+                    // Gestione upload file verifiche periodiche (ora gestita nel loop di salvataggio)
                     
                     $hse_automezzi_data[] = array(
                         'tipologia' => $hse_tipologia,
@@ -1258,8 +1256,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         'scadenza_revisione' => sanitize_text_field($_POST['hse_automezzi_scadenza_revisione'][$i] ?? ''),
                         'scadenza_assicurazione' => sanitize_text_field($_POST['hse_automezzi_scadenza_assicurazione'][$i] ?? ''),
                         'file_assicurazione' => $hse_file_assicurazione,
-                        'scadenza_verifiche_periodiche' => sanitize_text_field($_POST['hse_automezzi_scadenza_verifiche'][$i] ?? ''),
-                        'file_verifiche_periodiche' => $hse_file_verifiche
                     );
                 }
             }
@@ -1639,9 +1635,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             'targa' => strtoupper($hse_automezzi_data[$i]['targa']),
                             'scadenza_revisione' => $hse_automezzi_data[$i]['scadenza_revisione'] ?: null,
                             'scadenza_assicurazione' => $hse_automezzi_data[$i]['scadenza_assicurazione'] ?: null,
-                            'scadenza_verifiche_periodiche' => $hse_automezzi_data[$i]['scadenza_verifiche_periodiche'] ?: null,
                             'user_id' => $hse_current_user_id
                         );
+                        
+                        // Process multiple verifiche periodiche
+                        $hse_verifiche_json = [];
+                        $hse_existing_verifiche = [];
+                        if ($i < $hse_existing_automezzi_count && !empty($hse_existing_automezzi[$i]['verifiche_periodiche_json'])) {
+                            $hse_existing_verifiche = json_decode($hse_existing_automezzi[$i]['verifiche_periodiche_json'], true) ?: [];
+                        }
+                        if (isset($_POST['hse_automezzi_scadenza_verifiche'][$i]) && is_array($_POST['hse_automezzi_scadenza_verifiche'][$i])) {
+                            $hse_scadenze = $_POST['hse_automezzi_scadenza_verifiche'][$i];
+                            $hse_files_verifiche = $_FILES['hse_automezzi_file_verifiche'] ?? [];
+                            foreach ($hse_scadenze as $vIdx => $hse_scadenza_v) {
+                                $hse_verifica_entry = ['scadenza' => sanitize_text_field($hse_scadenza_v)];
+                                if (isset($hse_existing_verifiche[$vIdx]['file']) && !empty($hse_existing_verifiche[$vIdx]['file'])) {
+                                    $hse_verifica_entry['file'] = $hse_existing_verifiche[$vIdx]['file'];
+                                }
+                                if (!empty($hse_files_verifiche['name'][$i][$vIdx])) {
+                                    $hse_verifica_file_data = [
+                                        'name' => $hse_files_verifiche['name'][$i][$vIdx],
+                                        'type' => $hse_files_verifiche['type'][$i][$vIdx],
+                                        'tmp_name' => $hse_files_verifiche['tmp_name'][$i][$vIdx],
+                                        'error' => $hse_files_verifiche['error'][$i][$vIdx],
+                                        'size' => $hse_files_verifiche['size'][$i][$vIdx],
+                                    ];
+                                    $hse_uploaded = hse_uploadFileToWordPress($hse_verifica_file_data, $hse_current_user_id, 'verifica_' . $i . '_' . $vIdx);
+                                    if ($hse_uploaded) {
+                                        $hse_verifica_entry['file'] = $hse_uploaded;
+                                    }
+                                }
+                                if (!empty($hse_verifica_entry['scadenza']) || !empty($hse_verifica_entry['file'])) {
+                                    $hse_verifiche_json[] = $hse_verifica_entry;
+                                }
+                            }
+                        }
+                        if (!empty($hse_verifiche_json[0])) {
+                            $hse_automezzo_data['scadenza_verifiche_periodiche'] = $hse_verifiche_json[0]['scadenza'] ?: null;
+                            if (!empty($hse_verifiche_json[0]['file'])) {
+                                $hse_automezzo_data['file_verifiche_periodiche'] = $hse_verifiche_json[0]['file'];
+                            }
+                        }
+                        if (!empty($hse_verifiche_json)) {
+                            $hse_automezzo_data['verifiche_periodiche_json'] = json_encode($hse_verifiche_json);
+                        }
                         
                         // 🚛 NUOVO: Aggiungi file solo se sono stati caricati (altrimenti preserva esistenti)
                         if ($i < $hse_existing_automezzi_count) {
@@ -1651,9 +1688,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             }
                             if (!empty($hse_automezzi_data[$i]['file_assicurazione'])) {
                                 $hse_automezzo_data['file_assicurazione'] = $hse_automezzi_data[$i]['file_assicurazione'];
-                            }
-                            if (!empty($hse_automezzi_data[$i]['file_verifiche_periodiche'])) {
-                                $hse_automezzo_data['file_verifiche_periodiche'] = $hse_automezzi_data[$i]['file_verifiche_periodiche'];
                             }
                             
                             $wpdb->update(
@@ -1665,7 +1699,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             // INSERT: aggiungi tutti i file
                             $hse_automezzo_data['file_targa'] = $hse_automezzi_data[$i]['file_targa'] ?: '';
                             $hse_automezzo_data['file_assicurazione'] = $hse_automezzi_data[$i]['file_assicurazione'] ?: '';
-                            $hse_automezzo_data['file_verifiche_periodiche'] = $hse_automezzi_data[$i]['file_verifiche_periodiche'] ?: '';
                             
                             $wpdb->insert($wpdb->prefix . 'cantiere_automezzi', $hse_automezzo_data);
                         }
@@ -3803,7 +3836,8 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
             'AUTOCARRO' => '🚚 Autocarro',
             'AUTOCARRO_GRU' => '🏗️ Autocarro con Gru',
             'PLE' => '⬆️ PLE',
-            'MEZZI_TERRA' => '🚜 Mezzi Movimenti Terra'
+            'MEZZI_TERRA' => '🚜 Mezzi Movimenti Terra',
+            'CARRELLO_ELEVATORE' => '🏎️ Carrello Elevatore'
         ];
         foreach ($tipologie as $value => $label) {
             $selected = ($hse_tipologia === $value) ? 'selected' : '';
@@ -3870,24 +3904,44 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
         echo '<div class="hse_verifiche_periodiche_section" style="' . $verifiche_style . ' background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">';
         echo '<h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">⚠️ Verifiche Periodiche (obbligatorie per questo tipo di mezzo)</h6>';
         
-        echo '<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">';
-        
-        echo '<div class="hse_automezzo_scadenza_verifiche_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📅 Scadenza Verifiche:</label>';
-        echo '<input type="date" name="hse_automezzi_scadenza_verifiche[]" value="' . esc_attr($hse_automezzo['scadenza_verifiche_periodiche'] ?? '') . '" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">';
-        echo '</div>';
-        
-        echo '<div class="hse_automezzo_file_verifiche_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📄 File Verifiche:</label>';
+        echo '<div class="hse_verifiche_container" id="hse_verifiche_container_' . $index . '">';
+        echo '<div class="hse_verifica_entry" data-index="0">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica 1:</label>';
+        echo '<input type="date" name="hse_automezzi_scadenza_verifiche[' . $index . '][]" value="' . esc_attr($hse_automezzo['scadenza_verifiche_periodiche'] ?? '') . '" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica 1:</label>';
         if (!empty($hse_automezzo['file_verifiche_periodiche'])) {
             echo '<div style="margin-bottom: 5px; padding: 6px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
             echo '<a href="' . esc_url($hse_automezzo['file_verifiche_periodiche']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
             echo '</div>';
         }
-        echo '<input type="file" name="hse_automezzi_file_verifiche_' . $index . '" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; font-size: 11px;">';
+        echo '<input type="file" name="hse_automezzi_file_verifiche[' . $index . '][]" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">';
         echo '</div>';
         
-        echo '</div>'; // Fine grid verifiche
+        // Mostra verifiche extra dal JSON
+        $hse_verifiche_extra = [];
+        if (!empty($hse_automezzo['verifiche_periodiche_json'])) {
+            $hse_verifiche_extra = json_decode($hse_automezzo['verifiche_periodiche_json'], true) ?: [];
+            array_shift($hse_verifiche_extra); // Skip prima voce (già mostrata sopra)
+        }
+        foreach ($hse_verifiche_extra as $vIdx => $hse_verifica_extra_item) {
+            $vNum = $vIdx + 2;
+            echo '<div class="hse_verifica_entry" data-index="' . ($vIdx + 1) . '">';
+            echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica ' . $vNum . ':</label>';
+            echo '<input type="date" name="hse_automezzi_scadenza_verifiche[' . $index . '][]" value="' . esc_attr($hse_verifica_extra_item['scadenza'] ?? '') . '" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">';
+            echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica ' . $vNum . ':</label>';
+            if (!empty($hse_verifica_extra_item['file'])) {
+                echo '<div style="margin-bottom: 5px; padding: 6px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
+                echo '<a href="' . esc_url($hse_verifica_extra_item['file']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
+                echo '</div>';
+            }
+            echo '<input type="file" name="hse_automezzi_file_verifiche[' . $index . '][]" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">';
+            echo '<button type="button" onclick="this.closest(\'.hse_verifica_entry\').remove()" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️ Rimuovi</button>';
+            echo '</div>';
+        }
+        
+        echo '</div>'; // end container
+        echo '<button type="button" onclick="hse_addVerificaPeriodica(' . $index . ')" style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px;">➕ Aggiungi Verifica</button>';
+        
         echo '</div>'; // Fine sezione verifiche
         
         echo '</div>'; // Fine hse_automezzo_data
@@ -5016,6 +5070,7 @@ function hse_addAutomezzo() {
                         <option value="AUTOCARRO_GRU">🏗️ Autocarro con Gru</option>
                         <option value="PLE">⬆️ PLE</option>
                         <option value="MEZZI_TERRA">🚜 Mezzi Movimenti Terra</option>
+                        <option value="CARRELLO_ELEVATORE">🏎️ Carrello Elevatore</option>
                     </select>
                 </div>
                 <div class="hse_automezzo_descrizione_field">
@@ -5057,16 +5112,15 @@ function hse_addAutomezzo() {
             <!-- Quinta riga: Verifiche Periodiche (nascosta di default) -->
             <div class="hse_verifiche_periodiche_section" style="display: none; background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">
                 <h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">⚠️ Verifiche Periodiche (obbligatorie per questo tipo di mezzo)</h6>
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
-                    <div class="hse_automezzo_scadenza_verifiche_field">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📅 Scadenza Verifiche:</label>
-                        <input type="date" name="hse_automezzi_scadenza_verifiche[]" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">
-                    </div>
-                    <div class="hse_automezzo_file_verifiche_field">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📄 File Verifiche:</label>
-                        <input type="file" name="hse_automezzi_file_verifiche_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; font-size: 11px;">
+                <div class="hse_verifiche_container" id="hse_verifiche_container_${newIndex}">
+                    <div class="hse_verifica_entry" data-index="0">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica 1:</label>
+                        <input type="date" name="hse_automezzi_scadenza_verifiche[${newIndex}][]" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica 1:</label>
+                        <input type="file" name="hse_automezzi_file_verifiche[${newIndex}][]" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">
                     </div>
                 </div>
+                <button type="button" onclick="hse_addVerificaPeriodica(${newIndex})" style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px;">➕ Aggiungi Verifica</button>
             </div>
         </div>
         
@@ -5161,6 +5215,23 @@ function hse_removeAutomezzoRow(button) {
     }, 300);
     
     hse_showToast('🗑️ Automezzo rimosso', 'info');
+}
+
+function hse_addVerificaPeriodica(mezzoIndex) {
+    var container = document.getElementById('hse_verifiche_container_' + mezzoIndex);
+    if (!container) return;
+    var entries = container.querySelectorAll('.hse_verifica_entry');
+    var newIndex = entries.length;
+    var vNum = newIndex + 1;
+    var div = document.createElement('div');
+    div.className = 'hse_verifica_entry';
+    div.setAttribute('data-index', newIndex);
+    div.innerHTML = '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica ' + vNum + ':</label>' +
+        '<input type="date" name="hse_automezzi_scadenza_verifiche[' + mezzoIndex + '][]" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">' +
+        '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica ' + vNum + ':</label>' +
+        '<input type="file" name="hse_automezzi_file_verifiche[' + mezzoIndex + '][]" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">' +
+        '<button type="button" onclick="this.closest(\'.hse_verifica_entry\').remove()" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️ Rimuovi</button>';
+    container.appendChild(div);
 }
 
 function hse_removeLastAutomezzo() {
