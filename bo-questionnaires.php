@@ -2940,18 +2940,20 @@ function boq_ajax_get_questionnaire_details() {
 function boq_renderRatingsTab() {
     global $wpdb;
     
-    // Get all completed assignments grouped by supplier
+    // Get all suppliers with saved scores, grouped by supplier.
+    // Querying from cogei_questionnaire_scores ensures every supplier with a persisted
+    // score is included, regardless of the assignment status value in cogei_assignments.
     $query = "
-        SELECT 
+        SELECT
             a.target_user_id as user_id,
-            COUNT(DISTINCT a.id) as total_questionnaires,
-            COUNT(DISTINCT CASE WHEN a.status = 'completed' THEN a.id END) as completed_questionnaires,
-            GROUP_CONCAT(a.id ORDER BY a.id) as assignment_ids
-        FROM {$wpdb->prefix}cogei_assignments a
-        WHERE a.status = 'completed'
+            COUNT(DISTINCT qs.assignment_id) as completed_questionnaires,
+            GROUP_CONCAT(DISTINCT qs.assignment_id ORDER BY qs.assignment_id) as assignment_ids
+        FROM {$wpdb->prefix}cogei_questionnaire_scores qs
+        INNER JOIN {$wpdb->prefix}cogei_assignments a ON a.id = qs.assignment_id
+        WHERE a.target_user_id > 0
         GROUP BY a.target_user_id
     ";
-    
+
     $results = $wpdb->get_results($query, ARRAY_A);
     
     // Calculate average score for each supplier reading directly from cogei_questionnaire_scores
@@ -3000,8 +3002,9 @@ function boq_renderRatingsTab() {
         $result['score_count'] = count($scores);
         $result['individual_scores'] = $scores;
     }
+    unset($result); // Release the reference from the foreach loop
     
-    // Filter out suppliers with no completed questionnaires (keep those with score 0)
+    // Filter out suppliers with no scores
     $results = array_filter($results, function($r) { 
         return $r['completed_questionnaires'] > 0; 
     });
