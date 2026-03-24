@@ -2173,8 +2173,15 @@ foreach ($richieste as $richiesta) {
         $tag_open  = $has_file ? '<a href="' . esc_url($file) . '" target="_blank" style="text-decoration:none;">' : '<span>';
         $tag_close = $has_file ? '</a>' : '</span>';
 
-        $ts_nomina   = (!empty($data_nomina)   && strtotime($data_nomina)   !== false) ? strtotime($data_nomina)   : null;
-        $ts_scadenza = (!empty($data_scadenza) && strtotime($data_scadenza) !== false) ? strtotime($data_scadenza) : null;
+        // strtotime('0000-00-00') returns a large negative number (not false) on many PHP builds,
+        // which renders as year -0001. Guard against it with: non-empty, not a zero-date, and ts > 86400.
+        $hse_parse_ts = function($d) {
+            if (empty($d) || $d === '0000-00-00' || $d === '0000-00-00 00:00:00') return null;
+            $ts = strtotime($d);
+            return ($ts !== false && $ts > 86400) ? $ts : null;
+        };
+        $ts_nomina   = $hse_parse_ts($data_nomina);
+        $ts_scadenza = $hse_parse_ts($data_scadenza);
 
         echo $tag_open;
         echo '<div style="background:' . $bg . '; border-left: 3px solid ' . $border . '; border-radius: 4px; padding: 5px 7px;">';
