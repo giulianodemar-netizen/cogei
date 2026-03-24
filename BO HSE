@@ -2804,7 +2804,23 @@ foreach ($richieste as $richiesta) {
     echo 'azienda_nome: "' . addslashes($rag_soc ?: $user->display_name) . '",';
     echo 'dvr_file: "' . addslashes($richiesta['dvr_file']) . '",';
     echo 'dvr_data_emissione: "' . addslashes($richiesta['dvr_data_emissione']) . '",';
-    
+
+    // RSPP / RLS / ASPP (company-level)
+    $hse_js_parse_date = function($d) {
+        if (empty($d) || $d === '0000-00-00' || $d === '0000-00-00 00:00:00') return '';
+        $ts = strtotime($d);
+        return ($ts !== false && $ts > 86400) ? date('d/m/Y', $ts) : '';
+    };
+    echo 'rspp_file: "' . addslashes($richiesta['rspp_file'] ?? '') . '",';
+    echo 'rspp_data_nomina: "' . addslashes($hse_js_parse_date($richiesta['rspp_data_nomina'] ?? '')) . '",';
+    echo 'rspp_data_scadenza: "' . addslashes($hse_js_parse_date($richiesta['rspp_data_scadenza'] ?? '')) . '",';
+    echo 'rls_file: "' . addslashes($richiesta['rls_file'] ?? '') . '",';
+    echo 'rls_data_nomina: "' . addslashes($hse_js_parse_date($richiesta['rls_data_nomina'] ?? '')) . '",';
+    echo 'rls_data_scadenza: "' . addslashes($hse_js_parse_date($richiesta['rls_data_scadenza'] ?? '')) . '",';
+    echo 'aspp_file: "' . addslashes($richiesta['aspp_file'] ?? '') . '",';
+    echo 'aspp_data_nomina: "' . addslashes($hse_js_parse_date($richiesta['aspp_data_nomina'] ?? '')) . '",';
+    echo 'aspp_data_scadenza: "' . addslashes($hse_js_parse_date($richiesta['aspp_data_scadenza'] ?? '')) . '",';
+
     // RCT da user meta
     $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
     $rct_scadenza = get_user_meta($user_id, 'user_registration_scad_rct_rco', true);
@@ -4599,6 +4615,30 @@ function loadStatusDetails(richiestaId) {
                     </div>
                 </div>
             </div>
+
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #17a2b8;">👷 RSPP / RLS / ASPP</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; font-size: 12px;">
+                    ${['rspp','rls','aspp'].map(role => {
+                        const labels = {rspp: '👷 RSPP', rls: '🛡️ RLS', aspp: '👷 ASPP'};
+                        const file     = richiestaData[role + '_file']     || '';
+                        const nomina   = richiestaData[role + '_data_nomina']   || '';
+                        const scadenza = richiestaData[role + '_data_scadenza'] || '';
+                        const hasFile  = file.length > 0;
+                        const bg       = hasFile ? 'linear-gradient(135deg,#d4edda 0%,#c3e6cb 100%)' : '#f0f0f0';
+                        const border   = hasFile ? '#28a745' : '#adb5bd';
+                        const color    = hasFile ? '#155724' : '#6c757d';
+                        const inner = `
+                            <div style="font-weight:bold;font-size:11px;color:${color};margin-bottom:3px;">${labels[role]}${hasFile ? ' ✓' : ' —'}</div>
+                            ${nomina   ? `<div style="font-size:10px;color:${color};">📅 ${nomina}</div>`   : ''}
+                            ${scadenza ? `<div style="font-size:10px;color:${color};">⏰ Sc: ${scadenza}</div>` : ''}
+                        `;
+                        return hasFile
+                            ? `<a href="${file}" target="_blank" style="text-decoration:none;"><div style="background:${bg};border-left:3px solid ${border};border-radius:4px;padding:6px 8px;">${inner}</div></a>`
+                            : `<div style="background:${bg};border-left:3px solid ${border};border-radius:4px;padding:6px 8px;">${inner}</div>`;
+                    }).join('')}
+                </div>
+            </div>
             
             ${elementi_completati < elementi_totali ? `
             <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 5px solid #ffc107; margin-bottom: 15px;">
@@ -4631,9 +4671,6 @@ function loadStatusDetails(richiestaId) {
                         
                         // Formazioni Specifiche e Nomine
                         if (operaio.formazione_generale_specifica) { competenze.push('Form. Gen. e Spec.'); icons += '🎓'; }
-                        if (operaio.rspp) { competenze.push('RSPP'); icons += '👷'; }
-                        if (operaio.rls) { competenze.push('RLS'); icons += '👷'; }
-                        if (operaio.aspp) { competenze.push('ASPP'); icons += '👷'; }
                         if (operaio.formazione_ple) { competenze.push('PLE'); icons += '🏗️'; }
                         if (operaio.formazione_carrelli) { competenze.push('Carrelli'); icons += '🚜'; }
                         
@@ -4642,18 +4679,12 @@ function loadStatusDetails(richiestaId) {
                         if (operaio.formazione_dpi_terza) { competenze.push('DPI 3° Cat.'); icons += '🦺'; }
                         if (operaio.formazione_ambienti_confinati) { competenze.push('Amb. Confinati'); icons += '🕳️'; }
                         
-                        // Check if RSPP or RLS are present (obbligatori)
-                        const hasRSPP = operaio.rspp;
-                        const hasRLS = operaio.rls;
-                        const borderColor = (hasRSPP && hasRLS) ? '#28a745' : '#ffc107';
-                        
                         return `
-                        <div style="background: white; border: 2px solid ${borderColor}; border-radius: 4px; padding: 8px;">
+                        <div style="background: white; border: 2px solid #28a745; border-radius: 4px; padding: 8px;">
                             <div style="font-weight: bold; color: #333; margin-bottom: 4px;">${operaio.nome} ${operaio.cognome}</div>
                             <div style="font-size: 10px; color: #666; margin-bottom: 4px;">
                                 📅 Nato: ${operaio.data_nascita || 'N/A'}
                             </div>
-                            ${(!hasRSPP || !hasRLS) ? `<div style="background: #fff3cd; color: #856404; font-size: 9px; padding: 3px 5px; border-radius: 3px; margin-bottom: 4px;">⚠️ Mancano: ${!hasRSPP ? 'RSPP' : ''} ${!hasRLS ? 'RLS' : ''}</div>` : ''}
                             <div style="font-size: 14px; margin: 4px 0;">${icons || '⚠️'}</div>
                             <div style="font-size: 9px; color: #666; line-height: 1.3;">
                                 ${competenze.length > 0 ? competenze.join(', ') : 'Nessuna formazione'}
