@@ -2940,41 +2940,71 @@ function boq_ajax_get_questionnaire_details() {
 function boq_renderRatingsTab() {
     global $wpdb;
     
-    // Get all completed assignments grouped by supplier
+    // Get all suppliers with saved scores, grouped by supplier.
+    // Querying from cogei_questionnaire_scores ensures every supplier with a persisted
+    // score is included, regardless of the assignment status value in cogei_assignments.
     $query = "
-        SELECT 
+        SELECT
             a.target_user_id as user_id,
-            COUNT(DISTINCT a.id) as total_questionnaires,
-            COUNT(DISTINCT CASE WHEN a.status = 'completed' THEN a.id END) as completed_questionnaires,
-            GROUP_CONCAT(a.id ORDER BY a.id) as assignment_ids
-        FROM {$wpdb->prefix}cogei_assignments a
-        WHERE a.status = 'completed'
+            COUNT(DISTINCT qs.assignment_id) as completed_questionnaires,
+            GROUP_CONCAT(DISTINCT qs.assignment_id ORDER BY qs.assignment_id) as assignment_ids
+        FROM {$wpdb->prefix}cogei_questionnaire_scores qs
+        INNER JOIN {$wpdb->prefix}cogei_assignments a ON a.id = qs.assignment_id
+        WHERE a.target_user_id > 0
         GROUP BY a.target_user_id
     ";
-    
+
     $results = $wpdb->get_results($query, ARRAY_A);
     
-    // Calculate average score for each supplier using correct formula
+    // Calculate average score for each supplier reading directly from cogei_questionnaire_scores
     foreach ($results as &$result) {
         $assignment_ids = array_unique(array_filter(explode(',', $result['assignment_ids']), function($id) {
             return !empty($id) && is_numeric($id);
         }));
-        
+
+        if (empty($assignment_ids)) {
+            $result['avg_score'] = 0;
+            $result['score_count'] = 0;
+            $result['individual_scores'] = [];
+            continue;
+        }
+
+        // Read scores DIRECTLY from the database table to avoid any calculation issues
+        $placeholders = implode(',', array_fill(0, count($assignment_ids), '%d'));
+        $score_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT assignment_id, final_score FROM {$wpdb->prefix}cogei_questionnaire_scores WHERE assignment_id IN ($placeholders)",
+                ...$assignment_ids
+            ),
+            ARRAY_A
+        );
+
         $scores = [];
-        foreach ($assignment_ids as $assignment_id) {
-            $score = boq_getScore(intval($assignment_id));
-            // Accept any numeric score, including 0
-            if ($score !== false && $score !== null) {
-                $scores[] = floatval($score);
+        foreach ($score_rows as $row) {
+            // Use is_numeric to properly handle all numeric values including 0 and 100
+            if (is_numeric($row['final_score'])) {
+                $scores[] = floatval($row['final_score']);
             }
         }
-        
+
+        // For assignments without a saved score, try to calculate it
+        $scored_ids = array_flip(array_column($score_rows, 'assignment_id'));
+        foreach ($assignment_ids as $assignment_id) {
+            if (!isset($scored_ids[$assignment_id])) {
+                $score = boq_calculateAndSaveScore(intval($assignment_id));
+                if (is_numeric($score)) {
+                    $scores[] = floatval($score);
+                }
+            }
+        }
+
         $result['avg_score'] = !empty($scores) ? (array_sum($scores) / count($scores)) : 0;
         $result['score_count'] = count($scores);
-        $result['individual_scores'] = $scores; // For debugging
+        $result['individual_scores'] = $scores;
     }
+    unset($result); // Release the reference from the foreach loop
     
-    // Filter out suppliers with no completed questionnaires (keep those with score 0)
+    // Filter out suppliers with no scores
     $results = array_filter($results, function($r) { 
         return $r['completed_questionnaires'] > 0; 
     });
