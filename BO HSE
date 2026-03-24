@@ -8149,7 +8149,7 @@ echo '            <div class="summary-card" style="background: linear-gradient(1
 echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie (${verificheList.length || 0})</h5>';
 echo '                <div style="display: grid; gap: 14px;">';
 echo '                    ${verificheList.length > 0 ? verificheList.map((v, idx) => `';
-echo '                    <div style="border: 1px solid #ffc107; border-radius: 6px; padding: 10px;">`;
+echo '                    <div style="border: 1px solid #ffc107; border-radius: 6px; padding: 10px;">';
 echo '                        <strong style="font-size: 14px; color: #856404;">Verifica ${idx + 1}</strong><br>';
 echo '                        <div style="margin-top: 6px; padding: 8px; background: ${v.scadenza ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${v.scadenza ? "#28a745" : "#dc3545"};">';
 echo '                            <strong>📅 Scadenza:</strong> ${v.scadenza ? new Date(v.scadenza).toLocaleDateString("it-IT") : "<span style=\"color:#721c24\">Non impostata</span>"}';
@@ -8157,7 +8157,7 @@ echo '                        </div>';
 echo '                        <div style="margin-top: 6px; padding: 8px; background: ${v.file ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${v.file ? "#28a745" : "#dc3545"};">';
 echo '                            <strong>📄 File:</strong> ${v.file ? `<a href="${v.file}" target="_blank" style="color:#155724;font-weight:600;">Visualizza</a>` : "<span style=\"color:#721c24\">Non caricato</span>"}';
 echo '                        </div>';
-echo '                    </div>`;
+echo '                    </div>`';
 echo '                    `).join("") : `<div style="color: #856404; font-style: italic;">Nessuna verifica registrata</div>`}';
 echo '                </div>';
 echo '            </div>';
