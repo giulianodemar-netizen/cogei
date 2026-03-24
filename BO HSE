@@ -2160,35 +2160,58 @@ foreach ($richieste as $richiesta) {
     echo '</div>'; // Close debug wrapper
     echo '</td>';
     
-    // RSPP/RLS/ASPP at company level
-    echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
-    $rspp_rls_links = [];
-    if (!empty($richiesta['rspp_file'])) {
-        $rspp_label = '👷 RSPP';
-        if (!empty($richiesta['rspp_data_scadenza'])) {
-            $rspp_label .= ' (Sc: ' . date('d/m/Y', strtotime($richiesta['rspp_data_scadenza'])) . ')';
+    // RSPP/RLS/ASPP at company level — card-style blocks, all three always shown
+    echo '<td style="padding: 6px; border: 1px solid #ddd; vertical-align: top; min-width: 160px;">';
+    echo '<div style="display: flex; flex-direction: column; gap: 5px;">';
+
+    // Helper: render one block
+    $hse_render_doc_block = function($label, $icon, $file, $data_nomina, $data_scadenza) {
+        $has_file = !empty($file);
+        $bg    = $has_file ? 'linear-gradient(135deg,#d4edda 0%,#c3e6cb 100%)' : '#f8f9fa';
+        $border= $has_file ? '#28a745' : '#adb5bd';
+        $color = $has_file ? '#155724' : '#6c757d';
+        $tag_open  = $has_file ? '<a href="' . esc_url($file) . '" target="_blank" style="text-decoration:none;">' : '<span>';
+        $tag_close = $has_file ? '</a>' : '</span>';
+
+        $ts_nomina   = (!empty($data_nomina)   && strtotime($data_nomina)   !== false) ? strtotime($data_nomina)   : null;
+        $ts_scadenza = (!empty($data_scadenza) && strtotime($data_scadenza) !== false) ? strtotime($data_scadenza) : null;
+
+        echo $tag_open;
+        echo '<div style="background:' . $bg . '; border-left: 3px solid ' . $border . '; border-radius: 4px; padding: 5px 7px;">';
+        echo '<div style="font-weight: bold; font-size: 11px; color: ' . $color . '; margin-bottom: 2px;">' . $icon . ' ' . $label . ($has_file ? ' ✓' : ' —') . '</div>';
+        if ($ts_nomina !== null) {
+            echo '<div style="font-size: 10px; color: ' . $color . ';">📅 ' . date('d/m/Y', $ts_nomina) . '</div>';
         }
-        $rspp_rls_links[] = '<a href="' . esc_url($richiesta['rspp_file']) . '" target="_blank" style="color: #28a745; font-weight: bold; display: block;">' . $rspp_label . '</a>';
-    }
-    if (!empty($richiesta['rls_file'])) {
-        $rls_label = '👷 RLS';
-        if (!empty($richiesta['rls_data_scadenza'])) {
-            $rls_label .= ' (Sc: ' . date('d/m/Y', strtotime($richiesta['rls_data_scadenza'])) . ')';
+        if ($ts_scadenza !== null) {
+            $now = time();
+            $diff_days = ($ts_scadenza - $now) / 86400;
+            $sc_color = ($diff_days < 0) ? '#dc3545' : (($diff_days < 30) ? '#fd7e14' : $color);
+            echo '<div style="font-size: 10px; color: ' . $sc_color . ';">⏰ Sc: ' . date('d/m/Y', $ts_scadenza) . '</div>';
         }
-        $rspp_rls_links[] = '<a href="' . esc_url($richiesta['rls_file']) . '" target="_blank" style="color: #28a745; font-weight: bold; display: block;">' . $rls_label . '</a>';
-    }
-    if (!empty($richiesta['aspp_file'])) {
-        $aspp_label = '👷 ASPP';
-        if (!empty($richiesta['aspp_data_scadenza'])) {
-            $aspp_label .= ' (Sc: ' . date('d/m/Y', strtotime($richiesta['aspp_data_scadenza'])) . ')';
-        }
-        $rspp_rls_links[] = '<a href="' . esc_url($richiesta['aspp_file']) . '" target="_blank" style="color: #28a745; font-weight: bold; display: block;">' . $aspp_label . '</a>';
-    }
-    if (!empty($rspp_rls_links)) {
-        echo implode('', $rspp_rls_links);
-    } else {
-        echo '<span style="color: #dc3545;">✗</span>';
-    }
+        echo '</div>';
+        echo $tag_close;
+    };
+
+    $hse_render_doc_block(
+        'RSPP', '👷',
+        $richiesta['rspp_file'] ?? '',
+        $richiesta['rspp_data_nomina'] ?? '',
+        $richiesta['rspp_data_scadenza'] ?? ''
+    );
+    $hse_render_doc_block(
+        'RLS', '🛡️',
+        $richiesta['rls_file'] ?? '',
+        $richiesta['rls_data_nomina'] ?? '',
+        $richiesta['rls_data_scadenza'] ?? ''
+    );
+    $hse_render_doc_block(
+        'ASPP', '👷',
+        $richiesta['aspp_file'] ?? '',
+        $richiesta['aspp_data_nomina'] ?? '',
+        $richiesta['aspp_data_scadenza'] ?? ''
+    );
+
+    echo '</div>';
     echo '</td>';
     
     // File RCT (da user meta)
