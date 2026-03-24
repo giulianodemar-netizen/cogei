@@ -2728,19 +2728,19 @@ echo '</div>';
 echo '<div class="hse_form_group hse_rspp_group" style="margin-bottom: 20px;">';
 echo '<label class="hse_rspp_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">👷 RSPP - Responsabile Servizio Prevenzione e Protezione</label>';
 echo '<div style="background: rgba(102, 16, 242, 0.05); padding: 12px; border-radius: 6px; margin-top: 5px; border-left: 3px solid #6610f2;">';
-if (!empty($hse_existing_request_dvr['rspp_file'])) {
+if (!empty($hse_existing_data['rspp_file'])) {
     echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
     echo '<div style="display: flex; align-items: center; gap: 6px;">';
     echo '<span style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
     echo '<div style="flex: 1;">';
     echo '<div style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">👷 RSPP caricato</div>';
-    if (!empty($hse_existing_request_dvr['rspp_data_nomina'])) {
-        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_request_dvr['rspp_data_nomina'])) . '</div>';
+    if (!empty($hse_existing_data['rspp_data_nomina'])) {
+        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_data['rspp_data_nomina'])) . '</div>';
     }
-    if (!empty($hse_existing_request_dvr['rspp_data_scadenza'])) {
-        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_request_dvr['rspp_data_scadenza'])) . '</div>';
+    if (!empty($hse_existing_data['rspp_data_scadenza'])) {
+        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_data['rspp_data_scadenza'])) . '</div>';
     }
-    echo '<a href="' . esc_url($hse_existing_request_dvr['rspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
+    echo '<a href="' . esc_url($hse_existing_data['rspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
     echo '</div>';
     echo '</div>';
     echo '</div>';
@@ -2750,12 +2750,12 @@ echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📄 File RSPP:</label>';
 echo '<input type="file" name="hse_rspp_file" accept=".pdf" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
 echo '</div>';
-$hse_rspp_nomina_val = !empty($hse_existing_request_dvr['rspp_data_nomina']) ? $hse_existing_request_dvr['rspp_data_nomina'] : '';
+$hse_rspp_nomina_val = !empty($hse_existing_data['rspp_data_nomina']) ? $hse_existing_data['rspp_data_nomina'] : '';
 echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
 echo '<input type="date" name="hse_rspp_nomina" id="hse_rspp_nomina" value="' . esc_attr($hse_rspp_nomina_val) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_rspp_scadenza\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
 echo '</div>';
-$hse_rspp_scadenza_val = !empty($hse_existing_request_dvr['rspp_data_scadenza']) ? $hse_existing_request_dvr['rspp_data_scadenza'] : '';
+$hse_rspp_scadenza_val = !empty($hse_existing_data['rspp_data_scadenza']) ? $hse_existing_data['rspp_data_scadenza'] : '';
 echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
 echo '<input type="date" name="hse_rspp_scadenza" id="hse_rspp_scadenza" value="' . esc_attr($hse_rspp_scadenza_val) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
@@ -2768,19 +2768,19 @@ echo '</div>';
 echo '<div class="hse_form_group hse_rls_group" style="margin-bottom: 20px;">';
 echo '<label class="hse_rls_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">👷 RLS - Rappresentante Lavoratori per la Sicurezza</label>';
 echo '<div style="background: rgba(102, 16, 242, 0.05); padding: 12px; border-radius: 6px; margin-top: 5px; border-left: 3px solid #6610f2;">';
-if (!empty($hse_existing_request_dvr['rls_file'])) {
+if (!empty($hse_existing_data['rls_file'])) {
     echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
     echo '<div style="display: flex; align-items: center; gap: 6px;">';
     echo '<span style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
     echo '<div style="flex: 1;">';
     echo '<div style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">👷 RLS caricato</div>';
-    if (!empty($hse_existing_request_dvr['rls_data_nomina'])) {
-        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_request_dvr['rls_data_nomina'])) . '</div>';
+    if (!empty($hse_existing_data['rls_data_nomina'])) {
+        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_data['rls_data_nomina'])) . '</div>';
     }
-    if (!empty($hse_existing_request_dvr['rls_data_scadenza'])) {
-        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_request_dvr['rls_data_scadenza'])) . '</div>';
+    if (!empty($hse_existing_data['rls_data_scadenza'])) {
+        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_data['rls_data_scadenza'])) . '</div>';
     }
-    echo '<a href="' . esc_url($hse_existing_request_dvr['rls_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
+    echo '<a href="' . esc_url($hse_existing_data['rls_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
     echo '</div>';
     echo '</div>';
     echo '</div>';
@@ -2790,12 +2790,12 @@ echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📄 File RLS:</label>';
 echo '<input type="file" name="hse_rls_file" accept=".pdf" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
 echo '</div>';
-$hse_rls_nomina_val = !empty($hse_existing_request_dvr['rls_data_nomina']) ? $hse_existing_request_dvr['rls_data_nomina'] : '';
+$hse_rls_nomina_val = !empty($hse_existing_data['rls_data_nomina']) ? $hse_existing_data['rls_data_nomina'] : '';
 echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
 echo '<input type="date" name="hse_rls_nomina" id="hse_rls_nomina" value="' . esc_attr($hse_rls_nomina_val) . '" onchange="hse_calculateExpiryDate(this, 1, document.getElementById(\'hse_rls_scadenza\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
 echo '</div>';
-$hse_rls_scadenza_val = !empty($hse_existing_request_dvr['rls_data_scadenza']) ? $hse_existing_request_dvr['rls_data_scadenza'] : '';
+$hse_rls_scadenza_val = !empty($hse_existing_data['rls_data_scadenza']) ? $hse_existing_data['rls_data_scadenza'] : '';
 echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 1 anno):</label>';
 echo '<input type="date" name="hse_rls_scadenza" id="hse_rls_scadenza" value="' . esc_attr($hse_rls_scadenza_val) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
@@ -2808,19 +2808,19 @@ echo '</div>';
 echo '<div class="hse_form_group hse_aspp_group" style="margin-bottom: 20px;">';
 echo '<label class="hse_aspp_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">👷 ASPP - Addetto Servizio Prevenzione e Protezione (opzionale)</label>';
 echo '<div style="background: rgba(102, 16, 242, 0.05); padding: 12px; border-radius: 6px; margin-top: 5px; border-left: 3px solid #6610f2;">';
-if (!empty($hse_existing_request_dvr['aspp_file'])) {
+if (!empty($hse_existing_data['aspp_file'])) {
     echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
     echo '<div style="display: flex; align-items: center; gap: 6px;">';
     echo '<span style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
     echo '<div style="flex: 1;">';
     echo '<div style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">👷 ASPP caricato</div>';
-    if (!empty($hse_existing_request_dvr['aspp_data_nomina'])) {
-        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_request_dvr['aspp_data_nomina'])) . '</div>';
+    if (!empty($hse_existing_data['aspp_data_nomina'])) {
+        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_data['aspp_data_nomina'])) . '</div>';
     }
-    if (!empty($hse_existing_request_dvr['aspp_data_scadenza'])) {
-        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_request_dvr['aspp_data_scadenza'])) . '</div>';
+    if (!empty($hse_existing_data['aspp_data_scadenza'])) {
+        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_data['aspp_data_scadenza'])) . '</div>';
     }
-    echo '<a href="' . esc_url($hse_existing_request_dvr['aspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
+    echo '<a href="' . esc_url($hse_existing_data['aspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
     echo '</div>';
     echo '</div>';
     echo '</div>';
@@ -2830,12 +2830,12 @@ echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📄 File ASPP:</label>';
 echo '<input type="file" name="hse_aspp_file" accept=".pdf" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
 echo '</div>';
-$hse_aspp_nomina_val = !empty($hse_existing_request_dvr['aspp_data_nomina']) ? $hse_existing_request_dvr['aspp_data_nomina'] : '';
+$hse_aspp_nomina_val = !empty($hse_existing_data['aspp_data_nomina']) ? $hse_existing_data['aspp_data_nomina'] : '';
 echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
 echo '<input type="date" name="hse_aspp_nomina" id="hse_aspp_nomina" value="' . esc_attr($hse_aspp_nomina_val) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_aspp_scadenza\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
 echo '</div>';
-$hse_aspp_scadenza_val = !empty($hse_existing_request_dvr['aspp_data_scadenza']) ? $hse_existing_request_dvr['aspp_data_scadenza'] : '';
+$hse_aspp_scadenza_val = !empty($hse_existing_data['aspp_data_scadenza']) ? $hse_existing_data['aspp_data_scadenza'] : '';
 echo '<div>';
 echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
 echo '<input type="date" name="hse_aspp_scadenza" id="hse_aspp_scadenza" value="' . esc_attr($hse_aspp_scadenza_val) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
