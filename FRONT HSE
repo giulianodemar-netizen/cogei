@@ -64,8 +64,14 @@ function hse_createCantiereTablesIfNotExists() {
         formazione_primo_soccorso_file varchar(255),
         formazione_preposti_file varchar(255),
         formazione_lavori_quota_file varchar(255),
+        formazione_lavori_quota_data_emissione date,
+        formazione_lavori_quota_data_scadenza date,
         formazione_dpi_terza_categoria_file varchar(255),
         formazione_ambienti_confinati_file varchar(255),
+        formazione_ambienti_confinati_data_emissione date,
+        formazione_ambienti_confinati_data_scadenza date,
+        verbale_consegna_dpi_file varchar(255),
+        verbale_consegna_dpi_terza_categoria_file varchar(255),
         PRIMARY KEY (id),
         KEY richiesta_id (richiesta_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
@@ -280,6 +286,31 @@ function hse_migrateCantiereDatabase() {
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_file'");
     if (empty($columns)) {
         $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_file varchar(255) AFTER formazione_dpi_terza_categoria_file");
+    }
+
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_lavori_quota_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_lavori_quota_data_emissione date AFTER formazione_lavori_quota_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_lavori_quota_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_lavori_quota_data_scadenza date AFTER formazione_lavori_quota_data_emissione");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_data_emissione date AFTER formazione_ambienti_confinati_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_data_scadenza date AFTER formazione_ambienti_confinati_data_emissione");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'verbale_consegna_dpi_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN verbale_consegna_dpi_file varchar(255) AFTER formazione_ambienti_confinati_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'verbale_consegna_dpi_terza_categoria_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN verbale_consegna_dpi_terza_categoria_file varchar(255) AFTER verbale_consegna_dpi_file");
     }
     
     // 📋 NUOVE COLONNE: Date emissione e scadenza per formazioni esistenti
@@ -1497,6 +1528,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_lavori_quota_file'])) {
                             $hse_persona_data['formazione_lavori_quota_file'] = $hse_existing_personale[$i]['formazione_lavori_quota_file'];
                         }
+                        if (isset($_POST['hse_formazione_lavori_quota_emissione_' . $i])) {
+                            $hse_persona_data['formazione_lavori_quota_data_emissione'] = sanitize_text_field($_POST['hse_formazione_lavori_quota_emissione_' . $i]);
+                        }
+                        if (isset($_POST['hse_formazione_lavori_quota_scadenza_' . $i])) {
+                            $hse_persona_data['formazione_lavori_quota_data_scadenza'] = sanitize_text_field($_POST['hse_formazione_lavori_quota_scadenza_' . $i]);
+                        }
                         
                         if (!empty($_FILES['hse_formazione_dpi_terza_categoria_' . $i]['name'])) {
                             $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_dpi_terza_categoria_' . $i], $hse_current_user_id, 'formazione_dpi_terza_categoria_' . $i);
@@ -1514,6 +1551,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             }
                         } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_ambienti_confinati_file'])) {
                             $hse_persona_data['formazione_ambienti_confinati_file'] = $hse_existing_personale[$i]['formazione_ambienti_confinati_file'];
+                        }
+                        if (isset($_POST['hse_formazione_ambienti_confinati_emissione_' . $i])) {
+                            $hse_persona_data['formazione_ambienti_confinati_data_emissione'] = sanitize_text_field($_POST['hse_formazione_ambienti_confinati_emissione_' . $i]);
+                        }
+                        if (isset($_POST['hse_formazione_ambienti_confinati_scadenza_' . $i])) {
+                            $hse_persona_data['formazione_ambienti_confinati_data_scadenza'] = sanitize_text_field($_POST['hse_formazione_ambienti_confinati_scadenza_' . $i]);
+                        }
+                        
+                        if (!empty($_FILES['hse_verbale_consegna_dpi_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_verbale_consegna_dpi_' . $i], $hse_current_user_id, 'verbale_consegna_dpi_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['verbale_consegna_dpi_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['verbale_consegna_dpi_file'])) {
+                            $hse_persona_data['verbale_consegna_dpi_file'] = $hse_existing_personale[$i]['verbale_consegna_dpi_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_verbale_consegna_dpi_terza_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_verbale_consegna_dpi_terza_' . $i], $hse_current_user_id, 'verbale_consegna_dpi_terza_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['verbale_consegna_dpi_terza_categoria_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['verbale_consegna_dpi_terza_categoria_file'])) {
+                            $hse_persona_data['verbale_consegna_dpi_terza_categoria_file'] = $hse_existing_personale[$i]['verbale_consegna_dpi_terza_categoria_file'];
                         }
                         
                         // Upload file UNILAV
@@ -3309,6 +3370,12 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         } else {
             echo '<input type="file" name="hse_formazione_lavori_quota_' . $index . '" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
+        $hse_lavori_quota_emissione_value = !empty($hse_persona['formazione_lavori_quota_data_emissione']) ? $hse_persona['formazione_lavori_quota_data_emissione'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+        echo '<input type="date" name="hse_formazione_lavori_quota_emissione_' . $index . '" id="hse_formazione_lavori_quota_emissione_' . $index . '" value="' . esc_attr($hse_lavori_quota_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_lavori_quota_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+        $hse_lavori_quota_scadenza_value = !empty($hse_persona['formazione_lavori_quota_data_scadenza']) ? $hse_persona['formazione_lavori_quota_data_scadenza'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<input type="date" name="hse_formazione_lavori_quota_scadenza_' . $index . '" id="hse_formazione_lavori_quota_scadenza_' . $index . '" value="' . esc_attr($hse_lavori_quota_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '</div>';
         
         // Formazione DPI 3° categoria
@@ -3350,6 +3417,54 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '</div>';
         } else {
             echo '<input type="file" name="hse_formazione_ambienti_confinati_' . $index . '" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        $hse_ambienti_confinati_emissione_value = !empty($hse_persona['formazione_ambienti_confinati_data_emissione']) ? $hse_persona['formazione_ambienti_confinati_data_emissione'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+        echo '<input type="date" name="hse_formazione_ambienti_confinati_emissione_' . $index . '" id="hse_formazione_ambienti_confinati_emissione_' . $index . '" value="' . esc_attr($hse_ambienti_confinati_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_ambienti_confinati_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+        $hse_ambienti_confinati_scadenza_value = !empty($hse_persona['formazione_ambienti_confinati_data_scadenza']) ? $hse_persona['formazione_ambienti_confinati_data_scadenza'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<input type="date" name="hse_formazione_ambienti_confinati_scadenza_' . $index . '" id="hse_formazione_ambienti_confinati_scadenza_' . $index . '" value="' . esc_attr($hse_ambienti_confinati_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+        echo '</div>';
+        
+        // Verbale Consegna DPI
+        echo '<div class="hse_verbale_consegna_dpi_field">';
+        echo '<label class="hse_verbale_consegna_dpi_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI:</label>';
+        if (!empty($hse_persona['verbale_consegna_dpi_file'])) {
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
+            echo '<div style="flex: 1;">';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">📋 Verbale DPI Caricato</div>';
+            echo '<div style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['verbale_consegna_dpi_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['verbale_consegna_dpi_file']) . '\', \'verbale_consegna_dpi_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_verbale_consegna_dpi_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        echo '</div>';
+        
+        // Verbale Consegna DPI 3a Categoria
+        echo '<div class="hse_verbale_consegna_dpi_terza_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI 3a Categoria:</label>';
+        if (!empty($hse_persona['verbale_consegna_dpi_terza_categoria_file'])) {
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
+            echo '<div style="flex: 1;">';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">📋 Verbale DPI 3a Cat. Caricato</div>';
+            echo '<div style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['verbale_consegna_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['verbale_consegna_dpi_terza_categoria_file']) . '\', \'verbale_consegna_dpi_terza_categoria_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_verbale_consegna_dpi_terza_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
         echo '</div>';
         
@@ -3563,6 +3678,10 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div class="hse_lavori_quota_field">';
     echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
     echo '<input type="file" name="hse_formazione_lavori_quota_0" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+    echo '<input type="date" name="hse_formazione_lavori_quota_emissione_0" id="hse_formazione_lavori_quota_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_lavori_quota_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<input type="date" name="hse_formazione_lavori_quota_scadenza_0" id="hse_formazione_lavori_quota_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '</div>';
     
     echo '<div class="hse_dpi_terza_categoria_field">';
@@ -3573,6 +3692,20 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div class="hse_ambienti_confinati_field">';
     echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
     echo '<input type="file" name="hse_formazione_ambienti_confinati_0" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+    echo '<input type="date" name="hse_formazione_ambienti_confinati_emissione_0" id="hse_formazione_ambienti_confinati_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_ambienti_confinati_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<input type="date" name="hse_formazione_ambienti_confinati_scadenza_0" id="hse_formazione_ambienti_confinati_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+    echo '</div>';
+    
+    echo '<div class="hse_verbale_consegna_dpi_field">';
+    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI:</label>';
+    echo '<input type="file" name="hse_verbale_consegna_dpi_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_verbale_consegna_dpi_terza_field">';
+    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI 3a Categoria:</label>';
+    echo '<input type="file" name="hse_verbale_consegna_dpi_terza_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
     echo '</div>';
     
     echo '</div>'; // Fine hse_ulteriori_formazione_grid
@@ -6085,7 +6218,11 @@ function hse_addPersona() {
                 <div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                     <div class="hse_lavori_quota_field">
                         <label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>
-                        <input type="file" name="hse_formazione_lavori_quota_${hse_newIndex}" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="file" name="hse_formazione_lavori_quota_${hse_newIndex}" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_lavori_quota_emissione_${hse_newIndex}" id="hse_formazione_lavori_quota_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_lavori_quota_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_lavori_quota_scadenza_${hse_newIndex}" id="hse_formazione_lavori_quota_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_dpi_terza_categoria_field">
                         <label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>
@@ -6093,7 +6230,19 @@ function hse_addPersona() {
                     </div>
                     <div class="hse_ambienti_confinati_field">
                         <label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>
-                        <input type="file" name="hse_formazione_ambienti_confinati_${hse_newIndex}" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="file" name="hse_formazione_ambienti_confinati_${hse_newIndex}" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_ambienti_confinati_emissione_${hse_newIndex}" id="hse_formazione_ambienti_confinati_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_ambienti_confinati_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_ambienti_confinati_scadenza_${hse_newIndex}" id="hse_formazione_ambienti_confinati_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_verbale_consegna_dpi_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI:</label>
+                        <input type="file" name="hse_verbale_consegna_dpi_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_verbale_consegna_dpi_terza_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI 3a Categoria:</label>
+                        <input type="file" name="hse_verbale_consegna_dpi_terza_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </div>
                 </div>
                 <small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>
