@@ -5251,7 +5251,12 @@ function hse_toggleVerificheFields(selectElement) {
         
         if (verificheFileInput) {
             if (needsVerifiche) {
-                verificheFileInput.setAttribute('required', 'required');
+                // Only mark required if no file is already uploaded for this entry
+                const vEntry = verificheFileInput.closest('.hse_verifica_entry');
+                const hasExistingFile = vEntry && vEntry.querySelector('a[href]') !== null;
+                if (!hasExistingFile) {
+                    verificheFileInput.setAttribute('required', 'required');
+                }
             } else {
                 verificheFileInput.removeAttribute('required');
             }
