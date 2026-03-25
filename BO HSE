@@ -8219,7 +8219,7 @@ echo '                        <div style="margin-top: 6px; padding: 8px; backgro
 echo '                            <strong>📄 File:</strong> ${v.file ? `<a href="${v.file}" target="_blank" style="color:#155724;font-weight:600;">Visualizza</a>` : "<span style=\"color:#721c24\">Non caricato</span>"}';
 echo '                        </div>';
 echo '                    </div>`';
-echo '                    `).join("") : `<div style="color: #856404; font-style: italic;">Nessuna verifica registrata</div>`}';
+echo '                    ).join("") : `<div style="color: #856404; font-style: italic;">Nessuna verifica registrata</div>`}';
 echo '                </div>';
 echo '            </div>';
 echo '        `;';
