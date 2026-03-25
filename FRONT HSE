@@ -1814,6 +1814,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
+                    // Track RSPP / RLS / ASPP changes (company-level documents)
+                    $rspp_rls_aspp_defs = [
+                        ['rspp', 'RSPP', 'hse_rspp_file',  'hse_rspp_nomina',  'rspp_data_nomina',  'hse_rspp_scadenza',  'rspp_data_scadenza'],
+                        ['rls',  'RLS',  'hse_rls_file',   'hse_rls_nomina',   'rls_data_nomina',   'hse_rls_scadenza',   'rls_data_scadenza'],
+                        ['aspp', 'ASPP', 'hse_aspp_file',  'hse_aspp_nomina',  'aspp_data_nomina',  'hse_aspp_scadenza',  'aspp_data_scadenza'],
+                    ];
+                    foreach ($rspp_rls_aspp_defs as [$key, $label, $file_input, $nomina_input, $nomina_db, $scadenza_input, $scadenza_db]) {
+                        // File upload
+                        if (!empty($_FILES[$file_input]['name'])) {
+                            $tracked_changes[] = [
+                                'type'     => 'file',
+                                'field'    => $label . ' - Nomina',
+                                'filename' => sanitize_file_name($_FILES[$file_input]['name']),
+                                'new_value' => 'File caricato/aggiornato',
+                            ];
+                        }
+                        // Data nomina
+                        if (isset($_POST[$nomina_input]) && $hse_existing_request_dvr) {
+                            $old_val = $hse_existing_request_dvr[$nomina_db] ?? '';
+                            $new_val = sanitize_text_field($_POST[$nomina_input]);
+                            if ($old_val != $new_val && !empty($new_val)) {
+                                $tracked_changes[] = [
+                                    'type'      => 'update',
+                                    'field'     => $label . ' - Data Nomina',
+                                    'old_value' => $old_val ?: 'Non impostata',
+                                    'new_value' => $new_val,
+                                ];
+                            }
+                        }
+                        // Data scadenza
+                        if (isset($_POST[$scadenza_input]) && $hse_existing_request_dvr) {
+                            $old_val = $hse_existing_request_dvr[$scadenza_db] ?? '';
+                            $new_val = sanitize_text_field($_POST[$scadenza_input]);
+                            if ($old_val != $new_val && !empty($new_val)) {
+                                $tracked_changes[] = [
+                                    'type'      => 'update',
+                                    'field'     => $label . ' - Data Scadenza',
+                                    'old_value' => $old_val ?: 'Non impostata',
+                                    'new_value' => $new_val,
+                                ];
+                            }
+                        }
+                    }
+
                     // Track new vehicles
                     $new_vehicles_count = max(0, $hse_new_automezzi_count - count($hse_existing_automezzi));
                     if ($new_vehicles_count > 0) {
@@ -1882,6 +1926,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                     'new_value' => $new_verifiche
                                 ];
                             }
+                            // Check verifiche periodiche JSON (multiple entries)
+                            $old_vp_json = $old_mezzo['verifiche_periodiche_json'] ?? '';
+                            $new_vp_json = $new_mezzo['verifiche_periodiche_json'] ?? '';
+                            if ($old_vp_json != $new_vp_json && !empty($new_vp_json) && $new_vp_json !== '[]') {
+                                $vp_list = json_decode($new_vp_json, true) ?: [];
+                                $vp_count = count($vp_list);
+                                $tracked_changes[] = [
+                                    'type'      => 'update',
+                                    'field'     => 'Verifiche Periodiche (multiple) - ' . $mezzo_desc,
+                                    'old_value' => $old_vp_json ? (count(json_decode($old_vp_json, true) ?: []) . ' verifiche') : 'Non impostate',
+                                    'new_value' => $vp_count . ' verifiche registrate',
+                                ];
+                            }
                         }
                     }
                     
@@ -1925,6 +1982,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             ['formazione_generale_specifica_data_scadenza',   'Formazione Generale e Specifica',  'hse_formazione_generale_specifica_scadenza'],
                             ['formazione_ple_data_scadenza',                  'Formazione PLE',                   'hse_formazione_ple_scadenza'],
                             ['formazione_carrelli_data_scadenza',             'Formazione Carrelli',              'hse_formazione_carrelli_scadenza'],
+                            ['formazione_lavori_quota_data_emissione',        'Formazione Lavori in Quota - Emissione',    'hse_formazione_lavori_quota_emissione'],
+                            ['formazione_lavori_quota_data_scadenza',         'Formazione Lavori in Quota - Scadenza',     'hse_formazione_lavori_quota_scadenza'],
+                            ['formazione_ambienti_confinati_data_emissione',  'Formazione Ambienti Confinati - Emissione', 'hse_formazione_ambienti_confinati_emissione'],
+                            ['formazione_ambienti_confinati_data_scadenza',   'Formazione Ambienti Confinati - Scadenza',  'hse_formazione_ambienti_confinati_scadenza'],
                         ];
                         
                         foreach ($formazione_fields as [$db_field, $label, $post_key_prefix]) {
@@ -1956,6 +2017,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             'hse_formazione_lavori_quota_' . $i          => 'Formazione Lavori in Quota File',
                             'hse_formazione_dpi_terza_categoria_' . $i   => 'Formazione DPI Terza Categoria File',
                             'hse_formazione_ambienti_confinati_' . $i    => 'Formazione Ambienti Confinati File',
+                            'hse_verbale_consegna_dpi_' . $i             => 'Verbale Consegna DPI File',
+                            'hse_verbale_consegna_dpi_terza_' . $i       => 'Verbale Consegna DPI 3a Categoria File',
                         ];
                         
                         foreach ($file_fields as $file_key => $label) {
