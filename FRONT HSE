@@ -869,14 +869,17 @@ function hse_validateAutomezziData($automezzi_data) {
             $errors[] = "Descrizione automezzo $automezzo_num è obbligatoria";
         }
         
-        if (empty($automezzo['targa'])) {
+        if (empty($automezzo['targa']) && ($automezzo['tipologia'] ?? '') !== 'CARRELLO_ELEVATORE') {
             $errors[] = "Targa automezzo $automezzo_num è obbligatoria";
         }
         // NOTA: Validazione formato targa rimossa - accettati tutti i formati
     }
     
-    // Controlla targhe duplicate
-    $targhe = array_map(function($a) { return strtoupper(trim($a['targa'])); }, $automezzi_data);
+    // Controlla targhe duplicate (escludi CARRELLO_ELEVATORE con targa vuota)
+    $targhe = array_filter(array_map(function($a) {
+        $t = strtoupper(trim($a['targa']));
+        return ($t !== '') ? $t : null;
+    }, $automezzi_data));
     $targhe_unique = array_unique($targhe);
     
     if (count($targhe) !== count($targhe_unique)) {
@@ -3895,7 +3898,7 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
         echo '</div>'; // Fine terza riga
         
         // Quarta riga: File Assicurazione
-        echo '<div style="margin-bottom: 15px;">';
+        echo '<div class="hse_automezzo_file_assicurazione_field" style="margin-bottom: 15px;">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📋 File Assicurazione *:</label>';
         if (!empty($hse_automezzo['file_assicurazione'])) {
             echo '<div style="margin-bottom: 5px; padding: 8px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
@@ -5110,7 +5113,7 @@ function hse_addAutomezzo() {
             </div>
             
             <!-- Quarta riga: File Assicurazione -->
-            <div style="margin-bottom: 15px;">
+            <div class="hse_automezzo_file_assicurazione_field" style="margin-bottom: 15px;">
                 <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📋 File Assicurazione *:</label>
                 <input type="file" name="hse_automezzi_file_assicurazione_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;" required>
             </div>
@@ -5169,6 +5172,7 @@ function hse_toggleVerificheFields(selectElement) {
     
     const tipologia = selectElement.value;
     const needsVerifiche = ['AUTOCARRO_GRU', 'PLE', 'MEZZI_TERRA'].includes(tipologia);
+    const isCarrello = (tipologia === 'CARRELLO_ELEVATORE');
     
     if (verificheSection) {
         verificheSection.style.display = needsVerifiche ? 'block' : 'none';
@@ -5190,6 +5194,32 @@ function hse_toggleVerificheFields(selectElement) {
             }
         }
     }
+
+    // Campi facoltativi per Carrello Elevatore: targa, file targa, assicurazione, file assicurazione
+    const optionalForCarrello = [
+        'hse_automezzo_targa_field',
+        'hse_automezzo_file_targa_field',
+        'hse_automezzo_scadenza_assicurazione_field',
+        'hse_automezzo_file_assicurazione_field'
+    ];
+    optionalForCarrello.forEach(function(cls) {
+        const div = row.querySelector('.' + cls);
+        if (!div) return;
+        const label = div.querySelector('label');
+        const inputs = div.querySelectorAll('input');
+        if (isCarrello) {
+            if (label) label.innerHTML = label.innerHTML.replace(' *:', ' (opz.):');
+            inputs.forEach(function(inp) { inp.removeAttribute('required'); });
+        } else {
+            if (label) label.innerHTML = label.innerHTML.replace(' (opz.):', ' *:');
+            inputs.forEach(function(inp) {
+                // File inputs on existing rows (with an already-uploaded file indicator) stay optional
+                if (inp.type !== 'file') {
+                    inp.setAttribute('required', 'required');
+                }
+            });
+        }
+    });
 }
 
 function hse_removeAutomezzoRow(button) {
@@ -6858,6 +6888,11 @@ document.addEventListener("DOMContentLoaded", function() {
     hse_updatePersonaleCount();
     
     hse_setupPersonaTitleUpdate();
+
+    // Inizializza toggle campi targa/assicurazione per i mezzi già renderizzati
+    document.querySelectorAll('.hse_mezzo_tipologia_select').forEach(function(sel) {
+        hse_toggleVerificheFields(sel);
+    });
     
     setTimeout(() => {
         hse_restoreAccordionStates();
