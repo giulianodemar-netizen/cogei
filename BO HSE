@@ -3234,7 +3234,7 @@ echo '<div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; borde
 echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #856404;">🏢 Filtra per Tipologia Azienda</label>';
 echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">';
 
-$company_types = ['Lavoro', 'Subappalto', 'Nolo', 'Servizi', 'Forniture'];
+$company_types = ['Lavoro', 'Subappalto', 'Nolo', 'Noli', 'Servizi', 'Forniture'];
 foreach ($company_types as $tipo) {
     $tipo_id = 'filter-tipo-' . strtolower($tipo);
     echo '<label style="display: flex; align-items: center; cursor: pointer; font-size: 12px; padding: 4px 8px; background: rgba(255, 255, 255, 0.7); border-radius: 4px; transition: all 0.2s ease;">';
