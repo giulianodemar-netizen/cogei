@@ -3234,7 +3234,7 @@ echo '<div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; borde
 echo '<label style="display: block; font-weight: bold; margin-bottom: 8px; color: #856404;">🏢 Filtra per Tipologia Azienda</label>';
 echo '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">';
 
-$company_types = ['Lavoro', 'Subappalto', 'Nolo', 'Noli', 'Servizi', 'Forniture'];
+$company_types = ['Lavoro', 'Subappalto', 'Nolo', 'Servizi', 'Forniture'];
 foreach ($company_types as $tipo) {
     $tipo_id = 'filter-tipo-' . strtolower($tipo);
     echo '<label style="display: flex; align-items: center; cursor: pointer; font-size: 12px; padding: 4px 8px; background: rgba(255, 255, 255, 0.7); border-radius: 4px; transition: all 0.2s ease;">';
@@ -4164,6 +4164,10 @@ function applyAllFilters() {
             selectedTypes.push(tipo.charAt(0).toUpperCase() + tipo.slice(1)); // Capitalize first letter
         }
     });
+    // "Nolo" checkbox covers both "Nolo" and "Noli" stored values
+    if (selectedTypes.includes('Nolo') && !selectedTypes.includes('Noli')) {
+        selectedTypes.push('Noli');
+    }
     
     console.log('🏢 Filtro tipologie attive:', selectedTypes);
     console.log('🔍 Filtro abilitate:', soloAttive ? 'ATTIVO' : 'DISATTIVO');
@@ -4307,6 +4311,10 @@ function searchAssignments() {
             selectedTypes.push(tipo.charAt(0).toUpperCase() + tipo.slice(1));
         }
     });
+    // "Nolo" checkbox covers both "Nolo" and "Noli" stored values
+    if (selectedTypes.includes('Nolo') && !selectedTypes.includes('Noli')) {
+        selectedTypes.push('Noli');
+    }
     
     const cantiereId = document.getElementById('modal-cantiere-id').value;
     const allCantieri = <?php 
