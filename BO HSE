@@ -3193,7 +3193,7 @@ echo '</div>'; // Fine container principale
 
 // ================== MODAL ASSEGNAZIONE (MODIFICATO) ==================
 echo '<div id="assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">';
-echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
+echo '<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto;">';
 
 // Header modal
 echo '<div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
@@ -3908,8 +3908,6 @@ function showAssignmentModal(cantiereId, cantiereNome) {
     toggleFiltroAttive();
     
     document.getElementById('assignment-modal').style.display = 'block';
-    document.body.style.overflow = 'hidden';
-    window.scrollTo(0, 0);
     
     console.log('🔗 Apertura modal assegnazioni per cantiere:', cantiereNome);
 }
@@ -4459,7 +4457,6 @@ function updateSubmitButtonCounter() {
 // 🆕 NUOVA FUNZIONE: Chiudi modal assegnazioni
 function closeAssignmentModal() {
     document.getElementById('assignment-modal').style.display = 'none';
-    document.body.style.overflow = '';
     
     // Reset form
     const form = document.getElementById('assignment-form');
@@ -7880,6 +7877,27 @@ label:has(input[name="user_ids[]"]:checked) {
 
     .azienda-option div[style*="font-size: 11px"] {
         color: #cbd5e0 !important;
+    }
+
+    .azienda-option:hover,
+    .azienda-option[data-attiva="1"]:hover,
+    .azienda-option[data-attiva="0"]:hover {
+        background: #4a5e72 !important;
+    }
+
+    .azienda-option:hover strong,
+    .azienda-option[data-attiva="1"]:hover strong {
+        color: #c6f6d5 !important;
+    }
+
+    .azienda-option[data-attiva="0"]:hover strong {
+        color: #e2e8f0 !important;
+    }
+
+    .azienda-option:hover div[style*="font-size: 11px"],
+    .azienda-option[data-attiva="1"]:hover div[style*="font-size: 11px"],
+    .azienda-option[data-attiva="0"]:hover div[style*="font-size: 11px"] {
+        color: #e2e8f0 !important;
     }
 }
 
