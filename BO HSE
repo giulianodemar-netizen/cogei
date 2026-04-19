@@ -3908,6 +3908,8 @@ function showAssignmentModal(cantiereId, cantiereNome) {
     toggleFiltroAttive();
     
     document.getElementById('assignment-modal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
     
     console.log('🔗 Apertura modal assegnazioni per cantiere:', cantiereNome);
 }
@@ -4457,6 +4459,7 @@ function updateSubmitButtonCounter() {
 // 🆕 NUOVA FUNZIONE: Chiudi modal assegnazioni
 function closeAssignmentModal() {
     document.getElementById('assignment-modal').style.display = 'none';
+    document.body.style.overflow = '';
     
     // Reset form
     const form = document.getElementById('assignment-form');
@@ -7862,9 +7865,21 @@ label:has(input[name="user_ids[]"]:checked) {
     }
     
     .azienda-option {
-        background: #2d3748 !important;
-        color: #e2e8f0;
+        background: #3a4a5c !important;
+        color: #e2e8f0 !important;
         border-color: #4a5568 !important;
+    }
+
+    .azienda-option strong {
+        color: #a8d5b5 !important;
+    }
+
+    .azienda-option[data-attiva="0"] strong {
+        color: #a0aec0 !important;
+    }
+
+    .azienda-option div[style*="font-size: 11px"] {
+        color: #cbd5e0 !important;
     }
 }
 
