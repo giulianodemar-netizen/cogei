@@ -45,6 +45,8 @@ if (!defined('ABSPATH')) {
     if (!empty(trim($wp_output))) {
         error_log("get_cantiere_details.php - Output WordPress catturato: " . substr($wp_output, 0, 200));
     }
+    // Riavvia buffering per catturare eventuale output residuo
+    ob_start();
     
     if (!$wp_loaded) {
         // Se non trova WordPress, restituisce errore specifico
