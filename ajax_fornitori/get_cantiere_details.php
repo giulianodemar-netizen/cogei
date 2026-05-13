@@ -5,20 +5,30 @@
  * Posizione: https://cogei.provasiti.it/cogei/ajax_fornitori/get_cantiere_details.php
  */
 
+// Cattura e scarta qualsiasi output anticipato (plugin, WordPress, ecc.)
+// Stesso pattern usato da tutti gli altri file AJAX funzionanti (es. elimina_operaio.php)
+while (ob_get_level()) {
+    ob_end_clean();
+}
+ob_start();
+
+// Non caricare i temi: non servono per una risposta AJAX
+define('WP_USE_THEMES', false);
+
 // IMPORTANT: Aumenta memoria e timeout
 ini_set('memory_limit', '512M');
 ini_set('max_execution_time', 60);
 
-// Sicurezza e setup WordPress MIGLIORATO
+// Sicurezza e setup WordPress
 if (!defined('ABSPATH')) {
     // Prova diversi percorsi per wp-load.php
     $possible_paths = [
-        dirname(dirname(dirname(__FILE__))) . '/wp-load.php',  // 3 livelli sopra
-        dirname(dirname(__FILE__)) . '/wp-load.php',           // 2 livelli sopra  
-        dirname(__FILE__) . '/../wp-load.php',                 // 1 livello sopra
+        dirname(dirname(__FILE__)) . '/wp-load.php',           // 1 livello sopra (cogei/wp-load.php)
+        dirname(__FILE__) . '/../wp-load.php',                 // 1 livello sopra (alternativo)
+        dirname(dirname(dirname(__FILE__))) . '/wp-load.php',  // 2 livelli sopra
         dirname(__FILE__) . '/../../wp-load.php',              // 2 livelli sopra (alternativo)
-        $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php',            // Root del server
-        $_SERVER['DOCUMENT_ROOT'] . '/cogei/wp-load.php'       // Root + cartella cogei
+        $_SERVER['DOCUMENT_ROOT'] . '/cogei/wp-load.php',      // Root + cartella cogei
+        $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'             // Root del server
     ];
     
     $wp_loaded = false;
@@ -28,6 +38,12 @@ if (!defined('ABSPATH')) {
             $wp_loaded = true;
             break;
         }
+    }
+    
+    // Scarta output generato da WordPress e plugin durante il caricamento
+    $wp_output = ob_get_clean();
+    if (!empty(trim($wp_output))) {
+        error_log("get_cantiere_details.php - Output WordPress catturato: " . substr($wp_output, 0, 200));
     }
     
     if (!$wp_loaded) {

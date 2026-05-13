@@ -5041,7 +5041,7 @@ function fetchCantiereDetailsFromServer(cantiereId) {
     })
     .catch(error => {
         console.error('❌ Errore AJAX:', error);
-        displayCantiereDetailsError(error.message);
+        displayCantiereDetailsError(error.message, cantiereId);
     });
 }
 
@@ -5071,18 +5071,18 @@ function displayCantiereDetailsContent(data) {
     document.getElementById('cantiere-details-content').style.display = 'block';
 }
 
-function displayCantiereDetailsError(errorMessage) {
+function displayCantiereDetailsError(errorMessage, cantiereId) {
     const contentDiv = document.getElementById('cantiere-details-content');
     
     contentDiv.innerHTML = `
         <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 6px; text-align: center; border-left: 5px solid #dc3545;">
             <div style="font-size: 18px; margin-bottom: 10px;">❌ Errore nel caricamento</div>
             <div style="font-size: 14px; margin-bottom: 15px;">${errorMessage}</div>
-            <button onclick="loadCantiereDetailsData(${document.getElementById('modal-cantiere-id')?.value || 'null'})" 
+            <button onclick="loadCantiereDetailsData(${cantiereId || 0})" 
                     style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
                 🔄 Riprova
             </button>
-            <button onclick="generateFallbackCantiereDetails(${document.getElementById('modal-cantiere-id')?.value || 'null'})" 
+            <button onclick="generateFallbackCantiereDetails(${cantiereId || 0})" 
                     style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
                 📋 Mostra Demo
             </button>
