@@ -3807,6 +3807,7 @@ echo '</div>'; // End content-log-disattivazioni
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 const cantiereDetailsNonce = <?php echo json_encode(wp_create_nonce('cogei_cantiere_details_nonce')); ?>;
+const cantiereDetailsAjaxUrl = <?php echo json_encode(site_url('/ajax_fornitori/get_cantiere_details.php')); ?>;
 // TAB MANAGEMENT
 function showTab(tabName) {
     // Nascondi tutti i contenuti
@@ -5004,7 +5005,7 @@ function loadCantiereDetailsData(cantiereId) {
 
 function fetchCantiereDetailsFromServer(cantiereId) {
     // Chiama il vero endpoint AJAX
-    const ajaxUrl = '/cogei/ajax_fornitori/get_cantiere_details.php';
+    const ajaxUrl = cantiereDetailsAjaxUrl;
     
     // Prepara i dati da inviare
     const formData = new FormData();
@@ -6251,7 +6252,7 @@ function loadImageAsBase64(url) {
 function testAjaxConnection() {
     console.log('🔧 Test connessione AJAX endpoint...');
     
-    const ajaxUrl = '/cogei/ajax_fornitori/get_cantiere_details.php';
+    const ajaxUrl = cantiereDetailsAjaxUrl;
     
     fetch(ajaxUrl, {
         method: 'POST',
