@@ -72,12 +72,13 @@ if ($cantiere_id <= 0) {
 
 // ================== CONTROLLI PERMESSI ==================
 
-// Verifica che l'utente sia autenticato
-if (!is_user_logged_in()) {
+// Verifica nonce WordPress (garantisce autenticazione + protezione CSRF)
+$nonce = isset($_POST['nonce']) ? sanitize_text_field($_POST['nonce']) : '';
+if (!wp_verify_nonce($nonce, 'cogei_cantiere_details_nonce')) {
     http_response_code(401);
     die(json_encode([
         'error' => 'Accesso non autorizzato',
-        'message' => 'È necessario essere autenticati per accedere a questo endpoint'
+        'message' => 'Nonce non valido o sessione scaduta. Ricaricare la pagina e riprovare.'
     ]));
 }
 
@@ -85,15 +86,12 @@ $current_user_id = get_current_user_id();
 $current_user = wp_get_current_user();
 
 // Verifica ruoli utente - Solo amministratori possono vedere tutti i dettagli
-// TODO: Implementare logica di permessi più granulare se necessario
 $allowed_roles = ['administrator', 'bo_admin', 'hse_manager'];
 $user_roles = (array) $current_user->roles;
 $has_permission = !empty(array_intersect($allowed_roles, $user_roles));
 
 if (!$has_permission) {
-    // Log tentativo di accesso non autorizzato
     error_log("AJAX Cantiere Details - Accesso negato per user ID {$current_user_id} (ruoli: " . implode(', ', $user_roles) . ")");
-    
     http_response_code(403);
     die(json_encode([
         'error' => 'Accesso non autorizzato',
