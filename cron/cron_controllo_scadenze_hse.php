@@ -109,9 +109,6 @@ function getHseExpiringDocuments($user_id) {
         'formazione_primo_soccorso_data_scadenza' => 'Formazione Primo Soccorso',
         'formazione_preposti_data_scadenza' => 'Formazione Preposti',
         'formazione_generale_specifica_data_scadenza' => 'Formazione Generale e Specifica',
-        'rspp_data_scadenza' => 'RSPP',
-        'rls_data_scadenza' => 'RLS',
-        'aspp_data_scadenza' => 'ASPP',
         'formazione_ple_data_scadenza' => 'Formazione PLE',
         'formazione_carrelli_data_scadenza' => 'Formazione Carrelli',
         'idoneita_sanitaria_scadenza' => 'Idoneità Sanitaria',
@@ -130,6 +127,34 @@ function getHseExpiringDocuments($user_id) {
                         'giorni' => $giorni,
                         'tipo' => 'personale',
                         'id' => $persona['id']
+                    ];
+                }
+            }
+        }
+    }
+    
+    // 1b. RSPP/RLS/ASPP at company level (from cantiere_richieste)
+    $richieste = $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d
+    ", $user_id), ARRAY_A);
+    
+    $company_rspp_rls_fields = [
+        'rspp_data_scadenza' => 'RSPP (aziendale)',
+        'rls_data_scadenza' => 'RLS (aziendale)',
+        'aspp_data_scadenza' => 'ASPP (aziendale)'
+    ];
+    
+    foreach ($richieste as $richiesta) {
+        foreach ($company_rspp_rls_fields as $field => $label) {
+            if (!empty($richiesta[$field])) {
+                $giorni = calculateDaysToExpiry($richiesta[$field]);
+                if ($giorni !== null) {
+                    $expiring_docs[] = [
+                        'nome' => $label,
+                        'scadenza' => $richiesta[$field],
+                        'giorni' => $giorni,
+                        'tipo' => 'richiesta',
+                        'id' => $richiesta['id']
                     ];
                 }
             }
@@ -163,6 +188,30 @@ function getHseExpiringDocuments($user_id) {
                         'tipo' => 'mezzo',
                         'id' => $mezzo['id']
                     ];
+                }
+            }
+        }
+        
+        // Check additional verifiche from JSON (skip index 0, already covered by scadenza_verifiche_periodiche)
+        if (!empty($mezzo['verifiche_periodiche_json'])) {
+            $verifiche_extra = json_decode($mezzo['verifiche_periodiche_json'], true) ?: [];
+            $is_first_verifica = true;
+            foreach ($verifiche_extra as $vIdx => $verifica) {
+                if ($is_first_verifica) {
+                    $is_first_verifica = false;
+                    continue; // Skip first entry, already covered by scadenza_verifiche_periodiche
+                }
+                if (!empty($verifica['scadenza'])) {
+                    $giorni = calculateDaysToExpiry($verifica['scadenza']);
+                    if ($giorni !== null) {
+                        $expiring_docs[] = [
+                            'nome' => 'Verifica periodica ' . ($vIdx + 1) . ' - ' . $descrizione,
+                            'scadenza' => $verifica['scadenza'],
+                            'giorni' => $giorni,
+                            'tipo' => 'mezzo',
+                            'id' => $mezzo['id']
+                        ];
+                    }
                 }
             }
         }

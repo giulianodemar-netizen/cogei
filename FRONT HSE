@@ -31,6 +31,15 @@ function hse_createCantiereTablesIfNotExists() {
         user_id int(11) NOT NULL,
         dvr_file varchar(255),
         dvr_data_emissione date,
+        rspp_file varchar(255),
+        rspp_data_nomina date,
+        rspp_data_scadenza date,
+        rls_file varchar(255),
+        rls_data_nomina date,
+        rls_data_scadenza date,
+        aspp_file varchar(255),
+        aspp_data_nomina date,
+        aspp_data_scadenza date,
         rct_file varchar(255),
         numero_personale int(11) DEFAULT 0,
         parte_b_completata tinyint(1) DEFAULT 0,
@@ -64,8 +73,14 @@ function hse_createCantiereTablesIfNotExists() {
         formazione_primo_soccorso_file varchar(255),
         formazione_preposti_file varchar(255),
         formazione_lavori_quota_file varchar(255),
+        formazione_lavori_quota_data_emissione date,
+        formazione_lavori_quota_data_scadenza date,
         formazione_dpi_terza_categoria_file varchar(255),
         formazione_ambienti_confinati_file varchar(255),
+        formazione_ambienti_confinati_data_emissione date,
+        formazione_ambienti_confinati_data_scadenza date,
+        verbale_consegna_dpi_file varchar(255),
+        verbale_consegna_dpi_terza_categoria_file varchar(255),
         PRIMARY KEY (id),
         KEY richiesta_id (richiesta_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
@@ -82,7 +97,8 @@ function hse_createCantiereTablesIfNotExists() {
         'scadenza_assicurazione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_assicurazione DATE AFTER scadenza_revisione",
         'file_assicurazione' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_assicurazione TEXT AFTER scadenza_assicurazione",
         'scadenza_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN scadenza_verifiche_periodiche DATE AFTER file_assicurazione",
-        'file_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_verifiche_periodiche TEXT AFTER scadenza_verifiche_periodiche"
+        'file_verifiche_periodiche' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN file_verifiche_periodiche TEXT AFTER scadenza_verifiche_periodiche",
+        'verifiche_periodiche_json' => "ALTER TABLE $table_cantiere_automezzi ADD COLUMN verifiche_periodiche_json TEXT AFTER file_verifiche_periodiche"
     );
     
     foreach ($columns_to_add as $column => $sql) {
@@ -105,6 +121,7 @@ function hse_createCantiereTablesIfNotExists() {
         file_assicurazione text,
         scadenza_verifiche_periodiche date,
         file_verifiche_periodiche text,
+        verifiche_periodiche_json text,
         user_id int(11) NOT NULL,
         data_creazione datetime DEFAULT CURRENT_TIMESTAMP,
         data_aggiornamento datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -246,6 +263,44 @@ function hse_migrateCantiereDatabase() {
         $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN dvr_data_emissione date AFTER dvr_file");
     }
     
+    // RSPP/RLS/ASPP at company level
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'rspp_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN rspp_file varchar(255) AFTER dvr_data_emissione");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'rspp_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN rspp_data_nomina date AFTER rspp_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'rspp_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN rspp_data_scadenza date AFTER rspp_data_nomina");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'rls_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN rls_file varchar(255) AFTER rspp_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'rls_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN rls_data_nomina date AFTER rls_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'rls_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN rls_data_scadenza date AFTER rls_data_nomina");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'aspp_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN aspp_file varchar(255) AFTER rls_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'aspp_data_nomina'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN aspp_data_nomina date AFTER aspp_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_richieste LIKE 'aspp_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_richieste ADD COLUMN aspp_data_scadenza date AFTER aspp_data_nomina");
+    }
+    
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'unilav_data_emissione'");
     if (empty($columns)) {
         $wpdb->query("ALTER TABLE $table_personale ADD COLUMN unilav_data_emissione date AFTER data_nascita");
@@ -280,6 +335,31 @@ function hse_migrateCantiereDatabase() {
     $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_file'");
     if (empty($columns)) {
         $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_file varchar(255) AFTER formazione_dpi_terza_categoria_file");
+    }
+
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_lavori_quota_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_lavori_quota_data_emissione date AFTER formazione_lavori_quota_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_lavori_quota_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_lavori_quota_data_scadenza date AFTER formazione_lavori_quota_data_emissione");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_data_emissione'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_data_emissione date AFTER formazione_ambienti_confinati_file");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'formazione_ambienti_confinati_data_scadenza'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN formazione_ambienti_confinati_data_scadenza date AFTER formazione_ambienti_confinati_data_emissione");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'verbale_consegna_dpi_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN verbale_consegna_dpi_file varchar(255) AFTER formazione_ambienti_confinati_data_scadenza");
+    }
+    $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_personale LIKE 'verbale_consegna_dpi_terza_categoria_file'");
+    if (empty($columns)) {
+        $wpdb->query("ALTER TABLE $table_personale ADD COLUMN verbale_consegna_dpi_terza_categoria_file varchar(255) AFTER verbale_consegna_dpi_file");
     }
     
     // 📋 NUOVE COLONNE: Date emissione e scadenza per formazioni esistenti
@@ -789,14 +869,17 @@ function hse_validateAutomezziData($automezzi_data) {
             $errors[] = "Descrizione automezzo $automezzo_num è obbligatoria";
         }
         
-        if (empty($automezzo['targa'])) {
+        if (empty($automezzo['targa']) && ($automezzo['tipologia'] ?? '') !== 'CARRELLO_ELEVATORE') {
             $errors[] = "Targa automezzo $automezzo_num è obbligatoria";
         }
         // NOTA: Validazione formato targa rimossa - accettati tutti i formati
     }
     
-    // Controlla targhe duplicate
-    $targhe = array_map(function($a) { return strtoupper(trim($a['targa'])); }, $automezzi_data);
+    // Controlla targhe duplicate (escludi CARRELLO_ELEVATORE con targa vuota)
+    $targhe = array_filter(array_map(function($a) {
+        $t = strtoupper(trim($a['targa']));
+        return ($t !== '') ? $t : null;
+    }, $automezzi_data));
     $targhe_unique = array_unique($targhe);
     
     if (count($targhe) !== count($targhe_unique)) {
@@ -1213,11 +1296,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         $hse_file_assicurazione = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_assicurazione_' . $i], $hse_current_user_id, 'mezzo_assicurazione_' . $i);
                     }
                     
-                    // Gestione upload file verifiche periodiche
-                    $hse_file_verifiche = '';
-                    if (!empty($_FILES['hse_automezzi_file_verifiche_' . $i]['name'])) {
-                        $hse_file_verifiche = hse_uploadFileToWordPress($_FILES['hse_automezzi_file_verifiche_' . $i], $hse_current_user_id, 'mezzo_verifiche_' . $i);
-                    }
+                    // Gestione upload file verifiche periodiche (ora gestita nel loop di salvataggio)
                     
                     $hse_automezzi_data[] = array(
                         'tipologia' => $hse_tipologia,
@@ -1227,8 +1306,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         'scadenza_revisione' => sanitize_text_field($_POST['hse_automezzi_scadenza_revisione'][$i] ?? ''),
                         'scadenza_assicurazione' => sanitize_text_field($_POST['hse_automezzi_scadenza_assicurazione'][$i] ?? ''),
                         'file_assicurazione' => $hse_file_assicurazione,
-                        'scadenza_verifiche_periodiche' => sanitize_text_field($_POST['hse_automezzi_scadenza_verifiche'][$i] ?? ''),
-                        'file_verifiche_periodiche' => $hse_file_verifiche
                     );
                 }
             }
@@ -1251,7 +1328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
             
             // 📋 VALIDAZIONE DVR OBBLIGATORIO: Verifica se esiste file già caricato
             $hse_existing_request_dvr = $wpdb->get_row($wpdb->prepare(
-                "SELECT dvr_file, dvr_data_emissione FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d",
+                "SELECT dvr_file, dvr_data_emissione, rspp_file, rspp_data_nomina, rspp_data_scadenza, rls_file, rls_data_nomina, rls_data_scadenza, aspp_file, aspp_data_nomina, aspp_data_scadenza FROM {$wpdb->prefix}cantiere_richieste WHERE user_id = %d",
                 $hse_current_user_id
             ), ARRAY_A);
             
@@ -1308,6 +1385,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                     
                     if ($hse_dvr_file) $hse_richiesta_data['dvr_file'] = $hse_dvr_file;
                     if ($hse_dvr_data_emissione) $hse_richiesta_data['dvr_data_emissione'] = $hse_dvr_data_emissione;
+                    
+                    // RSPP at company level
+                    if (!empty($_FILES['hse_rspp_file']['name'])) {
+                        $hse_rspp_file_uploaded = hse_uploadFileToWordPress($_FILES['hse_rspp_file'], $hse_current_user_id, 'rspp');
+                        if ($hse_rspp_file_uploaded) $hse_richiesta_data['rspp_file'] = $hse_rspp_file_uploaded;
+                    }
+                    if (isset($_POST['hse_rspp_nomina'])) $hse_richiesta_data['rspp_data_nomina'] = sanitize_text_field($_POST['hse_rspp_nomina']);
+                    if (isset($_POST['hse_rspp_scadenza'])) $hse_richiesta_data['rspp_data_scadenza'] = sanitize_text_field($_POST['hse_rspp_scadenza']);
+                    
+                    // RLS at company level
+                    if (!empty($_FILES['hse_rls_file']['name'])) {
+                        $hse_rls_file_uploaded = hse_uploadFileToWordPress($_FILES['hse_rls_file'], $hse_current_user_id, 'rls');
+                        if ($hse_rls_file_uploaded) $hse_richiesta_data['rls_file'] = $hse_rls_file_uploaded;
+                    }
+                    if (isset($_POST['hse_rls_nomina'])) $hse_richiesta_data['rls_data_nomina'] = sanitize_text_field($_POST['hse_rls_nomina']);
+                    if (isset($_POST['hse_rls_scadenza'])) $hse_richiesta_data['rls_data_scadenza'] = sanitize_text_field($_POST['hse_rls_scadenza']);
+                    
+                    // ASPP at company level (optional)
+                    if (!empty($_FILES['hse_aspp_file']['name'])) {
+                        $hse_aspp_file_uploaded = hse_uploadFileToWordPress($_FILES['hse_aspp_file'], $hse_current_user_id, 'aspp');
+                        if ($hse_aspp_file_uploaded) $hse_richiesta_data['aspp_file'] = $hse_aspp_file_uploaded;
+                    }
+                    if (isset($_POST['hse_aspp_nomina'])) $hse_richiesta_data['aspp_data_nomina'] = sanitize_text_field($_POST['hse_aspp_nomina']);
+                    if (isset($_POST['hse_aspp_scadenza'])) $hse_richiesta_data['aspp_data_scadenza'] = sanitize_text_field($_POST['hse_aspp_scadenza']);
                     
                     if ($hse_existing_request) {
                         $wpdb->update(
@@ -1408,54 +1509,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             $hse_persona_data['formazione_generale_specifica_data_scadenza'] = sanitize_text_field($_POST['hse_formazione_generale_specifica_scadenza_' . $i]);
                         }
                         
-                        // 👷 RSPP
-                        if (!empty($_FILES['hse_rspp_' . $i]['name'])) {
-                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_rspp_' . $i], $hse_current_user_id, 'rspp_' . $i);
-                            if ($hse_formazione_file) {
-                                $hse_persona_data['rspp_file'] = $hse_formazione_file;
-                            }
-                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['rspp_file'])) {
-                            $hse_persona_data['rspp_file'] = $hse_existing_personale[$i]['rspp_file'];
-                        }
-                        if (isset($_POST['hse_rspp_nomina_' . $i])) {
-                            $hse_persona_data['rspp_data_nomina'] = sanitize_text_field($_POST['hse_rspp_nomina_' . $i]);
-                        }
-                        if (isset($_POST['hse_rspp_scadenza_' . $i])) {
-                            $hse_persona_data['rspp_data_scadenza'] = sanitize_text_field($_POST['hse_rspp_scadenza_' . $i]);
-                        }
-                        
-                        // 👷 RLS
-                        if (!empty($_FILES['hse_rls_' . $i]['name'])) {
-                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_rls_' . $i], $hse_current_user_id, 'rls_' . $i);
-                            if ($hse_formazione_file) {
-                                $hse_persona_data['rls_file'] = $hse_formazione_file;
-                            }
-                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['rls_file'])) {
-                            $hse_persona_data['rls_file'] = $hse_existing_personale[$i]['rls_file'];
-                        }
-                        if (isset($_POST['hse_rls_nomina_' . $i])) {
-                            $hse_persona_data['rls_data_nomina'] = sanitize_text_field($_POST['hse_rls_nomina_' . $i]);
-                        }
-                        if (isset($_POST['hse_rls_scadenza_' . $i])) {
-                            $hse_persona_data['rls_data_scadenza'] = sanitize_text_field($_POST['hse_rls_scadenza_' . $i]);
-                        }
-                        
-                        // 👷 ASPP
-                        if (!empty($_FILES['hse_aspp_' . $i]['name'])) {
-                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_aspp_' . $i], $hse_current_user_id, 'aspp_' . $i);
-                            if ($hse_formazione_file) {
-                                $hse_persona_data['aspp_file'] = $hse_formazione_file;
-                            }
-                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['aspp_file'])) {
-                            $hse_persona_data['aspp_file'] = $hse_existing_personale[$i]['aspp_file'];
-                        }
-                        if (isset($_POST['hse_aspp_nomina_' . $i])) {
-                            $hse_persona_data['aspp_data_nomina'] = sanitize_text_field($_POST['hse_aspp_nomina_' . $i]);
-                        }
-                        if (isset($_POST['hse_aspp_scadenza_' . $i])) {
-                            $hse_persona_data['aspp_data_scadenza'] = sanitize_text_field($_POST['hse_aspp_scadenza_' . $i]);
-                        }
-                        
                         // 🏗️ Formazione PLE
                         if (!empty($_FILES['hse_formazione_ple_' . $i]['name'])) {
                             $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_ple_' . $i], $hse_current_user_id, 'formazione_ple_' . $i);
@@ -1497,6 +1550,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_lavori_quota_file'])) {
                             $hse_persona_data['formazione_lavori_quota_file'] = $hse_existing_personale[$i]['formazione_lavori_quota_file'];
                         }
+                        if (isset($_POST['hse_formazione_lavori_quota_emissione_' . $i])) {
+                            $hse_persona_data['formazione_lavori_quota_data_emissione'] = sanitize_text_field($_POST['hse_formazione_lavori_quota_emissione_' . $i]);
+                        }
+                        if (isset($_POST['hse_formazione_lavori_quota_scadenza_' . $i])) {
+                            $hse_persona_data['formazione_lavori_quota_data_scadenza'] = sanitize_text_field($_POST['hse_formazione_lavori_quota_scadenza_' . $i]);
+                        }
                         
                         if (!empty($_FILES['hse_formazione_dpi_terza_categoria_' . $i]['name'])) {
                             $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_formazione_dpi_terza_categoria_' . $i], $hse_current_user_id, 'formazione_dpi_terza_categoria_' . $i);
@@ -1514,6 +1573,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             }
                         } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['formazione_ambienti_confinati_file'])) {
                             $hse_persona_data['formazione_ambienti_confinati_file'] = $hse_existing_personale[$i]['formazione_ambienti_confinati_file'];
+                        }
+                        if (isset($_POST['hse_formazione_ambienti_confinati_emissione_' . $i])) {
+                            $hse_persona_data['formazione_ambienti_confinati_data_emissione'] = sanitize_text_field($_POST['hse_formazione_ambienti_confinati_emissione_' . $i]);
+                        }
+                        if (isset($_POST['hse_formazione_ambienti_confinati_scadenza_' . $i])) {
+                            $hse_persona_data['formazione_ambienti_confinati_data_scadenza'] = sanitize_text_field($_POST['hse_formazione_ambienti_confinati_scadenza_' . $i]);
+                        }
+                        
+                        if (!empty($_FILES['hse_verbale_consegna_dpi_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_verbale_consegna_dpi_' . $i], $hse_current_user_id, 'verbale_consegna_dpi_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['verbale_consegna_dpi_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['verbale_consegna_dpi_file'])) {
+                            $hse_persona_data['verbale_consegna_dpi_file'] = $hse_existing_personale[$i]['verbale_consegna_dpi_file'];
+                        }
+                        
+                        if (!empty($_FILES['hse_verbale_consegna_dpi_terza_' . $i]['name'])) {
+                            $hse_formazione_file = hse_uploadFileToWordPress($_FILES['hse_verbale_consegna_dpi_terza_' . $i], $hse_current_user_id, 'verbale_consegna_dpi_terza_' . $i);
+                            if ($hse_formazione_file) {
+                                $hse_persona_data['verbale_consegna_dpi_terza_categoria_file'] = $hse_formazione_file;
+                            }
+                        } elseif ($i < $hse_existing_count && !empty($hse_existing_personale[$i]['verbale_consegna_dpi_terza_categoria_file'])) {
+                            $hse_persona_data['verbale_consegna_dpi_terza_categoria_file'] = $hse_existing_personale[$i]['verbale_consegna_dpi_terza_categoria_file'];
                         }
                         
                         // Upload file UNILAV
@@ -1578,9 +1661,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             'targa' => strtoupper($hse_automezzi_data[$i]['targa']),
                             'scadenza_revisione' => $hse_automezzi_data[$i]['scadenza_revisione'] ?: null,
                             'scadenza_assicurazione' => $hse_automezzi_data[$i]['scadenza_assicurazione'] ?: null,
-                            'scadenza_verifiche_periodiche' => $hse_automezzi_data[$i]['scadenza_verifiche_periodiche'] ?: null,
                             'user_id' => $hse_current_user_id
                         );
+                        
+                        // Process multiple verifiche periodiche
+                        $hse_verifiche_json = [];
+                        $hse_existing_verifiche = [];
+                        if ($i < $hse_existing_automezzi_count && !empty($hse_existing_automezzi[$i]['verifiche_periodiche_json'])) {
+                            $hse_existing_verifiche = json_decode($hse_existing_automezzi[$i]['verifiche_periodiche_json'], true) ?: [];
+                        }
+                        if (isset($_POST['hse_automezzi_scadenza_verifiche'][$i]) && is_array($_POST['hse_automezzi_scadenza_verifiche'][$i])) {
+                            $hse_scadenze = $_POST['hse_automezzi_scadenza_verifiche'][$i];
+                            $hse_files_verifiche = $_FILES['hse_automezzi_file_verifiche'] ?? [];
+                            foreach ($hse_scadenze as $vIdx => $hse_scadenza_v) {
+                                $hse_verifica_entry = ['scadenza' => sanitize_text_field($hse_scadenza_v)];
+                                if (isset($hse_existing_verifiche[$vIdx]['file']) && !empty($hse_existing_verifiche[$vIdx]['file'])) {
+                                    $hse_verifica_entry['file'] = $hse_existing_verifiche[$vIdx]['file'];
+                                }
+                                if (!empty($hse_files_verifiche['name'][$i][$vIdx])) {
+                                    $hse_verifica_file_data = [
+                                        'name' => $hse_files_verifiche['name'][$i][$vIdx],
+                                        'type' => $hse_files_verifiche['type'][$i][$vIdx],
+                                        'tmp_name' => $hse_files_verifiche['tmp_name'][$i][$vIdx],
+                                        'error' => $hse_files_verifiche['error'][$i][$vIdx],
+                                        'size' => $hse_files_verifiche['size'][$i][$vIdx],
+                                    ];
+                                    $hse_uploaded = hse_uploadFileToWordPress($hse_verifica_file_data, $hse_current_user_id, 'verifica_' . $i . '_' . $vIdx);
+                                    if ($hse_uploaded) {
+                                        $hse_verifica_entry['file'] = $hse_uploaded;
+                                    }
+                                }
+                                if (!empty($hse_verifica_entry['scadenza']) || !empty($hse_verifica_entry['file'])) {
+                                    $hse_verifiche_json[] = $hse_verifica_entry;
+                                }
+                            }
+                        }
+                        if (!empty($hse_verifiche_json[0])) {
+                            $hse_automezzo_data['scadenza_verifiche_periodiche'] = $hse_verifiche_json[0]['scadenza'] ?: null;
+                            if (!empty($hse_verifiche_json[0]['file'])) {
+                                $hse_automezzo_data['file_verifiche_periodiche'] = $hse_verifiche_json[0]['file'];
+                            }
+                        }
+                        if (!empty($hse_verifiche_json)) {
+                            $hse_automezzo_data['verifiche_periodiche_json'] = json_encode($hse_verifiche_json);
+                        }
                         
                         // 🚛 NUOVO: Aggiungi file solo se sono stati caricati (altrimenti preserva esistenti)
                         if ($i < $hse_existing_automezzi_count) {
@@ -1590,9 +1714,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             }
                             if (!empty($hse_automezzi_data[$i]['file_assicurazione'])) {
                                 $hse_automezzo_data['file_assicurazione'] = $hse_automezzi_data[$i]['file_assicurazione'];
-                            }
-                            if (!empty($hse_automezzi_data[$i]['file_verifiche_periodiche'])) {
-                                $hse_automezzo_data['file_verifiche_periodiche'] = $hse_automezzi_data[$i]['file_verifiche_periodiche'];
                             }
                             
                             $wpdb->update(
@@ -1604,7 +1725,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             // INSERT: aggiungi tutti i file
                             $hse_automezzo_data['file_targa'] = $hse_automezzi_data[$i]['file_targa'] ?: '';
                             $hse_automezzo_data['file_assicurazione'] = $hse_automezzi_data[$i]['file_assicurazione'] ?: '';
-                            $hse_automezzo_data['file_verifiche_periodiche'] = $hse_automezzi_data[$i]['file_verifiche_periodiche'] ?: '';
                             
                             $wpdb->insert($wpdb->prefix . 'cantiere_automezzi', $hse_automezzo_data);
                         }
@@ -1694,6 +1814,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                         }
                     }
                     
+                    // Track RSPP / RLS / ASPP changes (company-level documents)
+                    $rspp_rls_aspp_defs = [
+                        ['rspp', 'RSPP', 'hse_rspp_file',  'hse_rspp_nomina',  'rspp_data_nomina',  'hse_rspp_scadenza',  'rspp_data_scadenza'],
+                        ['rls',  'RLS',  'hse_rls_file',   'hse_rls_nomina',   'rls_data_nomina',   'hse_rls_scadenza',   'rls_data_scadenza'],
+                        ['aspp', 'ASPP', 'hse_aspp_file',  'hse_aspp_nomina',  'aspp_data_nomina',  'hse_aspp_scadenza',  'aspp_data_scadenza'],
+                    ];
+                    foreach ($rspp_rls_aspp_defs as [$key, $label, $file_input, $nomina_input, $nomina_db, $scadenza_input, $scadenza_db]) {
+                        // File upload
+                        if (!empty($_FILES[$file_input]['name'])) {
+                            $tracked_changes[] = [
+                                'type'     => 'file',
+                                'field'    => $label . ' - Nomina',
+                                'filename' => sanitize_file_name($_FILES[$file_input]['name']),
+                                'new_value' => 'File caricato/aggiornato',
+                            ];
+                        }
+                        // Data nomina
+                        if (isset($_POST[$nomina_input]) && $hse_existing_request_dvr) {
+                            $old_val = $hse_existing_request_dvr[$nomina_db] ?? '';
+                            $new_val = sanitize_text_field($_POST[$nomina_input]);
+                            if ($old_val != $new_val && !empty($new_val)) {
+                                $tracked_changes[] = [
+                                    'type'      => 'update',
+                                    'field'     => $label . ' - Data Nomina',
+                                    'old_value' => $old_val ?: 'Non impostata',
+                                    'new_value' => $new_val,
+                                ];
+                            }
+                        }
+                        // Data scadenza
+                        if (isset($_POST[$scadenza_input]) && $hse_existing_request_dvr) {
+                            $old_val = $hse_existing_request_dvr[$scadenza_db] ?? '';
+                            $new_val = sanitize_text_field($_POST[$scadenza_input]);
+                            if ($old_val != $new_val && !empty($new_val)) {
+                                $tracked_changes[] = [
+                                    'type'      => 'update',
+                                    'field'     => $label . ' - Data Scadenza',
+                                    'old_value' => $old_val ?: 'Non impostata',
+                                    'new_value' => $new_val,
+                                ];
+                            }
+                        }
+                    }
+
                     // Track new vehicles
                     $new_vehicles_count = max(0, $hse_new_automezzi_count - count($hse_existing_automezzi));
                     if ($new_vehicles_count > 0) {
@@ -1762,6 +1926,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                                     'new_value' => $new_verifiche
                                 ];
                             }
+                            // Check verifiche periodiche JSON (multiple entries)
+                            $old_vp_json = $old_mezzo['verifiche_periodiche_json'] ?? '';
+                            $new_vp_json = $new_mezzo['verifiche_periodiche_json'] ?? '';
+                            if ($old_vp_json != $new_vp_json && !empty($new_vp_json) && $new_vp_json !== '[]') {
+                                $vp_list = json_decode($new_vp_json, true) ?: [];
+                                $vp_count = count($vp_list);
+                                $tracked_changes[] = [
+                                    'type'      => 'update',
+                                    'field'     => 'Verifiche Periodiche (multiple) - ' . $mezzo_desc,
+                                    'old_value' => $old_vp_json ? (count(json_decode($old_vp_json, true) ?: []) . ' verifiche') : 'Non impostate',
+                                    'new_value' => $vp_count . ' verifiche registrate',
+                                ];
+                            }
                         }
                     }
                     
@@ -1803,11 +1980,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             ['formazione_primo_soccorso_data_scadenza',       'Formazione Primo Soccorso',        'hse_formazione_primo_soccorso_scadenza'],
                             ['formazione_preposti_data_scadenza',             'Formazione Preposti',              'hse_formazione_preposti_scadenza'],
                             ['formazione_generale_specifica_data_scadenza',   'Formazione Generale e Specifica',  'hse_formazione_generale_specifica_scadenza'],
-                            ['rspp_data_scadenza',                            'RSPP',                             'hse_rspp_scadenza'],
-                            ['rls_data_scadenza',                             'RLS',                              'hse_rls_scadenza'],
-                            ['aspp_data_scadenza',                            'ASPP',                             'hse_aspp_scadenza'],
                             ['formazione_ple_data_scadenza',                  'Formazione PLE',                   'hse_formazione_ple_scadenza'],
                             ['formazione_carrelli_data_scadenza',             'Formazione Carrelli',              'hse_formazione_carrelli_scadenza'],
+                            ['formazione_lavori_quota_data_emissione',        'Formazione Lavori in Quota - Emissione',    'hse_formazione_lavori_quota_emissione'],
+                            ['formazione_lavori_quota_data_scadenza',         'Formazione Lavori in Quota - Scadenza',     'hse_formazione_lavori_quota_scadenza'],
+                            ['formazione_ambienti_confinati_data_emissione',  'Formazione Ambienti Confinati - Emissione', 'hse_formazione_ambienti_confinati_emissione'],
+                            ['formazione_ambienti_confinati_data_scadenza',   'Formazione Ambienti Confinati - Scadenza',  'hse_formazione_ambienti_confinati_scadenza'],
                         ];
                         
                         foreach ($formazione_fields as [$db_field, $label, $post_key_prefix]) {
@@ -1834,14 +2012,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($hse_error_messages)) {
                             'hse_formazione_primo_soccorso_' . $i        => 'Formazione Primo Soccorso File',
                             'hse_formazione_preposti_' . $i              => 'Formazione Preposti File',
                             'hse_formazione_generale_specifica_' . $i    => 'Formazione Generale e Specifica File',
-                            'hse_rspp_' . $i                             => 'RSPP File',
-                            'hse_rls_' . $i                              => 'RLS File',
-                            'hse_aspp_' . $i                             => 'ASPP File',
                             'hse_formazione_ple_' . $i                   => 'Formazione PLE File',
                             'hse_formazione_carrelli_' . $i              => 'Formazione Carrelli File',
                             'hse_formazione_lavori_quota_' . $i          => 'Formazione Lavori in Quota File',
                             'hse_formazione_dpi_terza_categoria_' . $i   => 'Formazione DPI Terza Categoria File',
                             'hse_formazione_ambienti_confinati_' . $i    => 'Formazione Ambienti Confinati File',
+                            'hse_verbale_consegna_dpi_' . $i             => 'Verbale Consegna DPI File',
+                            'hse_verbale_consegna_dpi_terza_' . $i       => 'Verbale Consegna DPI 3a Categoria File',
                         ];
                         
                         foreach ($file_fields as $file_key => $label) {
@@ -2613,6 +2790,126 @@ if ($hse_existing_data && $hse_existing_data['dvr_file']) {
 echo '<small class="hse_dvr_help" style="color: #666;">Formato: PDF, Max: 10MB</small>';
 echo '</div>';
 
+// RSPP at company level
+echo '<div class="hse_form_group hse_rspp_group" style="margin-bottom: 20px;">';
+echo '<label class="hse_rspp_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">👷 RSPP - Responsabile Servizio Prevenzione e Protezione</label>';
+echo '<div style="background: rgba(102, 16, 242, 0.05); padding: 12px; border-radius: 6px; margin-top: 5px; border-left: 3px solid #6610f2;">';
+if (!empty($hse_existing_data['rspp_file'])) {
+    echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
+    echo '<div style="display: flex; align-items: center; gap: 6px;">';
+    echo '<span style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
+    echo '<div style="flex: 1;">';
+    echo '<div style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">👷 RSPP caricato</div>';
+    if (!empty($hse_existing_data['rspp_data_nomina'])) {
+        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_data['rspp_data_nomina'])) . '</div>';
+    }
+    if (!empty($hse_existing_data['rspp_data_scadenza'])) {
+        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_data['rspp_data_scadenza'])) . '</div>';
+    }
+    echo '<a href="' . esc_url($hse_existing_data['rspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+}
+echo '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📄 File RSPP:</label>';
+echo '<input type="file" name="hse_rspp_file" accept=".pdf" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+echo '</div>';
+$hse_rspp_nomina_val = !empty($hse_existing_data['rspp_data_nomina']) ? $hse_existing_data['rspp_data_nomina'] : '';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
+echo '<input type="date" name="hse_rspp_nomina" id="hse_rspp_nomina" value="' . esc_attr($hse_rspp_nomina_val) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_rspp_scadenza\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+echo '</div>';
+$hse_rspp_scadenza_val = !empty($hse_existing_data['rspp_data_scadenza']) ? $hse_existing_data['rspp_data_scadenza'] : '';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
+echo '<input type="date" name="hse_rspp_scadenza" id="hse_rspp_scadenza" value="' . esc_attr($hse_rspp_scadenza_val) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+
+// RLS at company level
+echo '<div class="hse_form_group hse_rls_group" style="margin-bottom: 20px;">';
+echo '<label class="hse_rls_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">👷 RLS - Rappresentante Lavoratori per la Sicurezza</label>';
+echo '<div style="background: rgba(102, 16, 242, 0.05); padding: 12px; border-radius: 6px; margin-top: 5px; border-left: 3px solid #6610f2;">';
+if (!empty($hse_existing_data['rls_file'])) {
+    echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
+    echo '<div style="display: flex; align-items: center; gap: 6px;">';
+    echo '<span style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
+    echo '<div style="flex: 1;">';
+    echo '<div style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">👷 RLS caricato</div>';
+    if (!empty($hse_existing_data['rls_data_nomina'])) {
+        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_data['rls_data_nomina'])) . '</div>';
+    }
+    if (!empty($hse_existing_data['rls_data_scadenza'])) {
+        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_data['rls_data_scadenza'])) . '</div>';
+    }
+    echo '<a href="' . esc_url($hse_existing_data['rls_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+}
+echo '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📄 File RLS:</label>';
+echo '<input type="file" name="hse_rls_file" accept=".pdf" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+echo '</div>';
+$hse_rls_nomina_val = !empty($hse_existing_data['rls_data_nomina']) ? $hse_existing_data['rls_data_nomina'] : '';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
+echo '<input type="date" name="hse_rls_nomina" id="hse_rls_nomina" value="' . esc_attr($hse_rls_nomina_val) . '" onchange="hse_calculateExpiryDate(this, 1, document.getElementById(\'hse_rls_scadenza\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+echo '</div>';
+$hse_rls_scadenza_val = !empty($hse_existing_data['rls_data_scadenza']) ? $hse_existing_data['rls_data_scadenza'] : '';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 1 anno):</label>';
+echo '<input type="date" name="hse_rls_scadenza" id="hse_rls_scadenza" value="' . esc_attr($hse_rls_scadenza_val) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+
+// ASPP at company level (optional)
+echo '<div class="hse_form_group hse_aspp_group" style="margin-bottom: 20px;">';
+echo '<label class="hse_aspp_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">👷 ASPP - Addetto Servizio Prevenzione e Protezione (opzionale)</label>';
+echo '<div style="background: rgba(102, 16, 242, 0.05); padding: 12px; border-radius: 6px; margin-top: 5px; border-left: 3px solid #6610f2;">';
+if (!empty($hse_existing_data['aspp_file'])) {
+    echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">';
+    echo '<div style="display: flex; align-items: center; gap: 6px;">';
+    echo '<span style="background: #28a745; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;">✓</span>';
+    echo '<div style="flex: 1;">';
+    echo '<div style="font-weight: bold; color: #155724; font-size: 10px; margin-bottom: 2px;">👷 ASPP caricato</div>';
+    if (!empty($hse_existing_data['aspp_data_nomina'])) {
+        echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_existing_data['aspp_data_nomina'])) . '</div>';
+    }
+    if (!empty($hse_existing_data['aspp_data_scadenza'])) {
+        echo '<div style="font-size: 10px; color: #155724;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_existing_data['aspp_data_scadenza'])) . '</div>';
+    }
+    echo '<a href="' . esc_url($hse_existing_data['aspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 12px;">👁️ Visualizza</a>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+}
+echo '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📄 File ASPP:</label>';
+echo '<input type="file" name="hse_aspp_file" accept=".pdf" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+echo '</div>';
+$hse_aspp_nomina_val = !empty($hse_existing_data['aspp_data_nomina']) ? $hse_existing_data['aspp_data_nomina'] : '';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
+echo '<input type="date" name="hse_aspp_nomina" id="hse_aspp_nomina" value="' . esc_attr($hse_aspp_nomina_val) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_aspp_scadenza\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">';
+echo '</div>';
+$hse_aspp_scadenza_val = !empty($hse_existing_data['aspp_data_scadenza']) ? $hse_existing_data['aspp_data_scadenza'] : '';
+echo '<div>';
+echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">⏰ Scadenza (nomina + 5 anni):</label>';
+echo '<input type="date" name="hse_aspp_scadenza" id="hse_aspp_scadenza" value="' . esc_attr($hse_aspp_scadenza_val) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+
 // RCT Data from User Registration
 echo '<div class="hse_form_group hse_rct_group" style="margin-bottom: 20px;">';
 echo '<label class="hse_rct_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">🛡️ Assicurazione RCT *</label>';
@@ -3118,102 +3415,6 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_generale_specifica_file_' . $index . '"),document.getElementById("hse_formazione_generale_specifica_emissione_' . $index . '"),5,document.getElementById("hse_formazione_generale_specifica_scadenza_' . $index . '"));</script>';
         echo '</div>';
         
-        // RSPP - OBBLIGATORIO (5 anni)
-        echo '<div class="hse_rspp_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RSPP (OBBLIGATORIO) *:</label>';
-        if (!empty($hse_persona['rspp_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
-            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
-            echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👷 RSPP Caricato</div>';
-            if (!empty($hse_persona['rspp_data_nomina'])) {
-                echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['rspp_data_nomina'])) . '</div>';
-            }
-            if (!empty($hse_persona['rspp_data_scadenza'])) {
-                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['rspp_data_scadenza'])) . '</div>';
-            }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
-            echo '<a href="' . esc_url($hse_persona['rspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-        }
-        echo '<input type="file" name="hse_rspp_' . $index . '" id="hse_rspp_file_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">';
-        $hse_rspp_nomina = !empty($hse_persona['rspp_data_nomina']) ? $hse_persona['rspp_data_nomina'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
-        echo '<input type="date" name="hse_rspp_nomina_' . $index . '" id="hse_rspp_nomina_' . $index . '" value="' . esc_attr($hse_rspp_nomina) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_rspp_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-        $hse_rspp_scadenza = !empty($hse_persona['rspp_data_scadenza']) ? $hse_persona['rspp_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
-        echo '<input type="date" name="hse_rspp_scadenza_' . $index . '" id="hse_rspp_scadenza_' . $index . '" value="' . esc_attr($hse_rspp_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
-        echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rspp_file_' . $index . '"),document.getElementById("hse_rspp_nomina_' . $index . '"),5,document.getElementById("hse_rspp_scadenza_' . $index . '"));</script>';
-        echo '</div>';
-        
-        // RLS - OBBLIGATORIO (1 anno)
-        echo '<div class="hse_rls_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RLS (OBBLIGATORIO) *:</label>';
-        if (!empty($hse_persona['rls_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
-            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
-            echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👷 RLS Caricato</div>';
-            if (!empty($hse_persona['rls_data_nomina'])) {
-                echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['rls_data_nomina'])) . '</div>';
-            }
-            if (!empty($hse_persona['rls_data_scadenza'])) {
-                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['rls_data_scadenza'])) . '</div>';
-            }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
-            echo '<a href="' . esc_url($hse_persona['rls_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-        }
-        echo '<input type="file" name="hse_rls_' . $index . '" id="hse_rls_file_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">';
-        $hse_rls_nomina = !empty($hse_persona['rls_data_nomina']) ? $hse_persona['rls_data_nomina'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
-        echo '<input type="date" name="hse_rls_nomina_' . $index . '" id="hse_rls_nomina_' . $index . '" value="' . esc_attr($hse_rls_nomina) . '" onchange="hse_calculateExpiryDate(this, 1, document.getElementById(\'hse_rls_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-        $hse_rls_scadenza = !empty($hse_persona['rls_data_scadenza']) ? $hse_persona['rls_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 1 anno):</label>';
-        echo '<input type="date" name="hse_rls_scadenza_' . $index . '" id="hse_rls_scadenza_' . $index . '" value="' . esc_attr($hse_rls_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
-        echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rls_file_' . $index . '"),document.getElementById("hse_rls_nomina_' . $index . '"),1,document.getElementById("hse_rls_scadenza_' . $index . '"));</script>';
-        echo '</div>';
-        
-        // ASPP - Opzionale (5 anni)
-        echo '<div class="hse_aspp_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 ASPP (opzionale):</label>';
-        if (!empty($hse_persona['aspp_file'])) {
-            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
-            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
-            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
-            echo '<div style="flex: 1;">';
-            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">👷 ASPP Caricato</div>';
-            if (!empty($hse_persona['aspp_data_nomina'])) {
-                echo '<div style="font-size: 10px; color: #155724;">📅 Nomina: ' . date('d/m/Y', strtotime($hse_persona['aspp_data_nomina'])) . '</div>';
-            }
-            if (!empty($hse_persona['aspp_data_scadenza'])) {
-                echo '<div style="font-size: 14px; color: #155724; font-weight: 600;">⏰ Scadenza: ' . date('d/m/Y', strtotime($hse_persona['aspp_data_scadenza'])) . '</div>';
-            }
-            echo '<div style="display: flex; gap: 6px; align-items: center; margin-top: 6px;">';
-            echo '<a href="' . esc_url($hse_persona['aspp_file']) . '" target="_blank" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-            echo '</div>';
-        }
-        echo '<input type="file" name="hse_aspp_' . $index . '" id="hse_aspp_file_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-        $hse_aspp_nomina = !empty($hse_persona['aspp_data_nomina']) ? $hse_persona['aspp_data_nomina'] : '';
-        echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
-        echo '<input type="date" name="hse_aspp_nomina_' . $index . '" id="hse_aspp_nomina_' . $index . '" value="' . esc_attr($hse_aspp_nomina) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_aspp_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-        $hse_aspp_scadenza = !empty($hse_persona['aspp_data_scadenza']) ? $hse_persona['aspp_data_scadenza'] : '';
-        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
-        echo '<input type="date" name="hse_aspp_scadenza_' . $index . '" id="hse_aspp_scadenza_' . $index . '" value="' . esc_attr($hse_aspp_scadenza) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
-        echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_aspp_file_' . $index . '"),document.getElementById("hse_aspp_nomina_' . $index . '"),5,document.getElementById("hse_aspp_scadenza_' . $index . '"));</script>';
-        echo '</div>';
-        
         // Formazione PLE (5 anni)
         echo '<div class="hse_formazione_ple_field">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>';
@@ -3279,7 +3480,6 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         echo '</div>';
         
         echo '</div>'; // Fine grid nuove formazioni
-        echo '<small style="color: #1565c0; font-weight: bold; margin-top: 10px; display: block;">⚠️ RSPP e RLS sono obbligatori per tutti gli operai</small>';
         echo '</div>'; // Fine hse_nuove_formazioni_section
         
         echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
@@ -3309,6 +3509,12 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
         } else {
             echo '<input type="file" name="hse_formazione_lavori_quota_' . $index . '" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
+        $hse_lavori_quota_emissione_value = !empty($hse_persona['formazione_lavori_quota_data_emissione']) ? $hse_persona['formazione_lavori_quota_data_emissione'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+        echo '<input type="date" name="hse_formazione_lavori_quota_emissione_' . $index . '" id="hse_formazione_lavori_quota_emissione_' . $index . '" value="' . esc_attr($hse_lavori_quota_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_lavori_quota_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+        $hse_lavori_quota_scadenza_value = !empty($hse_persona['formazione_lavori_quota_data_scadenza']) ? $hse_persona['formazione_lavori_quota_data_scadenza'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<input type="date" name="hse_formazione_lavori_quota_scadenza_' . $index . '" id="hse_formazione_lavori_quota_scadenza_' . $index . '" value="' . esc_attr($hse_lavori_quota_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
         echo '</div>';
         
         // Formazione DPI 3° categoria
@@ -3350,6 +3556,54 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
             echo '</div>';
         } else {
             echo '<input type="file" name="hse_formazione_ambienti_confinati_' . $index . '" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        $hse_ambienti_confinati_emissione_value = !empty($hse_persona['formazione_ambienti_confinati_data_emissione']) ? $hse_persona['formazione_ambienti_confinati_data_emissione'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+        echo '<input type="date" name="hse_formazione_ambienti_confinati_emissione_' . $index . '" id="hse_formazione_ambienti_confinati_emissione_' . $index . '" value="' . esc_attr($hse_ambienti_confinati_emissione_value) . '" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_ambienti_confinati_scadenza_' . $index . '\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+        $hse_ambienti_confinati_scadenza_value = !empty($hse_persona['formazione_ambienti_confinati_data_scadenza']) ? $hse_persona['formazione_ambienti_confinati_data_scadenza'] : '';
+        echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+        echo '<input type="date" name="hse_formazione_ambienti_confinati_scadenza_' . $index . '" id="hse_formazione_ambienti_confinati_scadenza_' . $index . '" value="' . esc_attr($hse_ambienti_confinati_scadenza_value) . '" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+        echo '</div>';
+        
+        // Verbale Consegna DPI
+        echo '<div class="hse_verbale_consegna_dpi_field">';
+        echo '<label class="hse_verbale_consegna_dpi_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI:</label>';
+        if (!empty($hse_persona['verbale_consegna_dpi_file'])) {
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
+            echo '<div style="flex: 1;">';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">📋 Verbale DPI Caricato</div>';
+            echo '<div style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['verbale_consegna_dpi_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['verbale_consegna_dpi_file']) . '\', \'verbale_consegna_dpi_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_verbale_consegna_dpi_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+        }
+        echo '</div>';
+        
+        // Verbale Consegna DPI 3a Categoria
+        echo '<div class="hse_verbale_consegna_dpi_terza_field">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI 3a Categoria:</label>';
+        if (!empty($hse_persona['verbale_consegna_dpi_terza_categoria_file'])) {
+            echo '<div style="margin-bottom: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: 12px; border-radius: 6px; border-left: 4px solid #28a745;">';
+            echo '<div style="display: flex; align-items: flex-start; gap: 10px;">';
+            echo '<span style="background: #28a745; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; flex-shrink: 0;">✓</span>';
+            echo '<div style="flex: 1;">';
+            echo '<div style="font-weight: bold; color: #155724; font-size: 14px; margin-bottom: 4px;">📋 Verbale DPI 3a Cat. Caricato</div>';
+            echo '<div style="display: flex; gap: 6px; align-items: center;">';
+            echo '<a href="' . esc_url($hse_persona['verbale_consegna_dpi_terza_categoria_file']) . '" target="_blank" class="hse_view_file_link" style="color: #0066a2; text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 8px; background: rgba(0, 102, 162, 0.1); border-radius: 4px;">👁️ Visualizza</a>';
+            echo '<button type="button" onclick="hse_eliminaFile(\'' . esc_js($hse_persona['verbale_consegna_dpi_terza_categoria_file']) . '\', \'verbale_consegna_dpi_terza_categoria_file\', ' . $hse_persona['id'] . ', this)" class="hse_elimina_file_btn" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold;">🗑️ Elimina</button>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<input type="file" name="hse_verbale_consegna_dpi_terza_' . $index . '" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
         }
         echo '</div>';
         
@@ -3493,39 +3747,6 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_formazione_generale_specifica_file_0"),document.getElementById("hse_formazione_generale_specifica_emissione_0"),5,document.getElementById("hse_formazione_generale_specifica_scadenza_0"));</script>';
     echo '</div>';
     
-    // RSPP
-    echo '<div style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">';
-    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RSPP (OBBLIGATORIO) *:</label>';
-    echo '<input type="file" name="hse_rspp_0" id="hse_rspp_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
-    echo '<input type="date" name="hse_rspp_nomina_0" id="hse_rspp_nomina_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_rspp_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
-    echo '<input type="date" name="hse_rspp_scadenza_0" id="hse_rspp_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
-    echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rspp_file_0"),document.getElementById("hse_rspp_nomina_0"),5,document.getElementById("hse_rspp_scadenza_0"));</script>';
-    echo '</div>';
-    
-    // RLS
-    echo '<div style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">';
-    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RLS (OBBLIGATORIO) *:</label>';
-    echo '<input type="file" name="hse_rls_0" id="hse_rls_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>';
-    echo '<input type="date" name="hse_rls_nomina_0" id="hse_rls_nomina_0" onchange="hse_calculateExpiryDate(this, 1, document.getElementById(\'hse_rls_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 1 anno):</label>';
-    echo '<input type="date" name="hse_rls_scadenza_0" id="hse_rls_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
-    echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_rls_file_0"),document.getElementById("hse_rls_nomina_0"),1,document.getElementById("hse_rls_scadenza_0"));</script>';
-    echo '</div>';
-    
-    // ASPP
-    echo '<div>';
-    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 ASPP (opzionale):</label>';
-    echo '<input type="file" name="hse_aspp_0" id="hse_aspp_file_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>';
-    echo '<input type="date" name="hse_aspp_nomina_0" id="hse_aspp_nomina_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_aspp_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
-    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>';
-    echo '<input type="date" name="hse_aspp_scadenza_0" id="hse_aspp_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
-    echo '<script>hse_autoFillEmissionDate(document.getElementById("hse_aspp_file_0"),document.getElementById("hse_aspp_nomina_0"),5,document.getElementById("hse_aspp_scadenza_0"));</script>';
-    echo '</div>';
-    
     // PLE
     echo '<div>';
     echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>';
@@ -3549,7 +3770,6 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '</div>';
     
     echo '</div>'; // Fine grid nuove formazioni
-    echo '<small style="color: #1565c0; font-weight: bold; margin-top: 10px; display: block;">⚠️ RSPP e RLS sono obbligatori per tutti gli operai</small>';
     echo '</div>'; // Fine hse_nuove_formazioni_section
     
     echo '<small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l\'assegnazione ai cantieri</small>';
@@ -3563,6 +3783,10 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div class="hse_lavori_quota_field">';
     echo '<label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>';
     echo '<input type="file" name="hse_formazione_lavori_quota_0" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+    echo '<input type="date" name="hse_formazione_lavori_quota_emissione_0" id="hse_formazione_lavori_quota_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_lavori_quota_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<input type="date" name="hse_formazione_lavori_quota_scadenza_0" id="hse_formazione_lavori_quota_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
     echo '</div>';
     
     echo '<div class="hse_dpi_terza_categoria_field">';
@@ -3573,6 +3797,20 @@ if ($hse_existing_data && !empty($hse_existing_data['personale'])) {
     echo '<div class="hse_ambienti_confinati_field">';
     echo '<label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>';
     echo '<input type="file" name="hse_formazione_ambienti_confinati_0" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>';
+    echo '<input type="date" name="hse_formazione_ambienti_confinati_emissione_0" id="hse_formazione_ambienti_confinati_emissione_0" onchange="hse_calculateExpiryDate(this, 5, document.getElementById(\'hse_formazione_ambienti_confinati_scadenza_0\'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">';
+    echo '<label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>';
+    echo '<input type="date" name="hse_formazione_ambienti_confinati_scadenza_0" id="hse_formazione_ambienti_confinati_scadenza_0" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">';
+    echo '</div>';
+    
+    echo '<div class="hse_verbale_consegna_dpi_field">';
+    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI:</label>';
+    echo '<input type="file" name="hse_verbale_consegna_dpi_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+    echo '</div>';
+    
+    echo '<div class="hse_verbale_consegna_dpi_terza_field">';
+    echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI 3a Categoria:</label>';
+    echo '<input type="file" name="hse_verbale_consegna_dpi_terza_0" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
     echo '</div>';
     
     echo '</div>'; // Fine hse_ulteriori_formazione_grid
@@ -3670,7 +3908,8 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
             'AUTOCARRO' => '🚚 Autocarro',
             'AUTOCARRO_GRU' => '🏗️ Autocarro con Gru',
             'PLE' => '⬆️ PLE',
-            'MEZZI_TERRA' => '🚜 Mezzi Movimenti Terra'
+            'MEZZI_TERRA' => '🚜 Mezzi Movimenti Terra',
+            'CARRELLO_ELEVATORE' => '🏎️ Carrello Elevatore'
         ];
         foreach ($tipologie as $value => $label) {
             $selected = ($hse_tipologia === $value) ? 'selected' : '';
@@ -3722,7 +3961,7 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
         echo '</div>'; // Fine terza riga
         
         // Quarta riga: File Assicurazione
-        echo '<div style="margin-bottom: 15px;">';
+        echo '<div class="hse_automezzo_file_assicurazione_field" style="margin-bottom: 15px;">';
         echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📋 File Assicurazione *:</label>';
         if (!empty($hse_automezzo['file_assicurazione'])) {
             echo '<div style="margin-bottom: 5px; padding: 8px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
@@ -3737,24 +3976,44 @@ if ($hse_existing_data && !empty($hse_existing_data['automezzi'])) {
         echo '<div class="hse_verifiche_periodiche_section" style="' . $verifiche_style . ' background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">';
         echo '<h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">⚠️ Verifiche Periodiche (obbligatorie per questo tipo di mezzo)</h6>';
         
-        echo '<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">';
-        
-        echo '<div class="hse_automezzo_scadenza_verifiche_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📅 Scadenza Verifiche:</label>';
-        echo '<input type="date" name="hse_automezzi_scadenza_verifiche[]" value="' . esc_attr($hse_automezzo['scadenza_verifiche_periodiche'] ?? '') . '" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">';
-        echo '</div>';
-        
-        echo '<div class="hse_automezzo_file_verifiche_field">';
-        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📄 File Verifiche:</label>';
+        echo '<div class="hse_verifiche_container" id="hse_verifiche_container_' . $index . '">';
+        echo '<div class="hse_verifica_entry" data-index="0">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica 1:</label>';
+        echo '<input type="date" name="hse_automezzi_scadenza_verifiche[' . $index . '][]" value="' . esc_attr($hse_automezzo['scadenza_verifiche_periodiche'] ?? '') . '" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">';
+        echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica 1:</label>';
         if (!empty($hse_automezzo['file_verifiche_periodiche'])) {
             echo '<div style="margin-bottom: 5px; padding: 6px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
             echo '<a href="' . esc_url($hse_automezzo['file_verifiche_periodiche']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
             echo '</div>';
         }
-        echo '<input type="file" name="hse_automezzi_file_verifiche_' . $index . '" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; font-size: 11px;">';
+        echo '<input type="file" name="hse_automezzi_file_verifiche[' . $index . '][]" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">';
         echo '</div>';
         
-        echo '</div>'; // Fine grid verifiche
+        // Mostra verifiche extra dal JSON
+        $hse_verifiche_extra = [];
+        if (!empty($hse_automezzo['verifiche_periodiche_json'])) {
+            $hse_verifiche_extra = json_decode($hse_automezzo['verifiche_periodiche_json'], true) ?: [];
+            array_shift($hse_verifiche_extra); // Skip prima voce (già mostrata sopra)
+        }
+        foreach ($hse_verifiche_extra as $vIdx => $hse_verifica_extra_item) {
+            $vNum = $vIdx + 2;
+            echo '<div class="hse_verifica_entry" data-index="' . ($vIdx + 1) . '">';
+            echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica ' . $vNum . ':</label>';
+            echo '<input type="date" name="hse_automezzi_scadenza_verifiche[' . $index . '][]" value="' . esc_attr($hse_verifica_extra_item['scadenza'] ?? '') . '" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">';
+            echo '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica ' . $vNum . ':</label>';
+            if (!empty($hse_verifica_extra_item['file'])) {
+                echo '<div style="margin-bottom: 5px; padding: 6px; background: #d4edda; border-radius: 4px; border-left: 3px solid #28a745;">';
+                echo '<a href="' . esc_url($hse_verifica_extra_item['file']) . '" target="_blank" style="color: #155724; text-decoration: none; font-size: 11px;">📎 Visualizza file caricato</a>';
+                echo '</div>';
+            }
+            echo '<input type="file" name="hse_automezzi_file_verifiche[' . $index . '][]" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">';
+            echo '<button type="button" onclick="this.closest(\'.hse_verifica_entry\').remove()" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️ Rimuovi</button>';
+            echo '</div>';
+        }
+        
+        echo '</div>'; // end container
+        echo '<button type="button" onclick="hse_addVerificaPeriodica(' . $index . ')" style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px;">➕ Aggiungi Verifica</button>';
+        
         echo '</div>'; // Fine sezione verifiche
         
         echo '</div>'; // Fine hse_automezzo_data
@@ -4883,6 +5142,7 @@ function hse_addAutomezzo() {
                         <option value="AUTOCARRO_GRU">🏗️ Autocarro con Gru</option>
                         <option value="PLE">⬆️ PLE</option>
                         <option value="MEZZI_TERRA">🚜 Mezzi Movimenti Terra</option>
+                        <option value="CARRELLO_ELEVATORE">🏎️ Carrello Elevatore</option>
                     </select>
                 </div>
                 <div class="hse_automezzo_descrizione_field">
@@ -4916,7 +5176,7 @@ function hse_addAutomezzo() {
             </div>
             
             <!-- Quarta riga: File Assicurazione -->
-            <div style="margin-bottom: 15px;">
+            <div class="hse_automezzo_file_assicurazione_field" style="margin-bottom: 15px;">
                 <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404;">📋 File Assicurazione *:</label>
                 <input type="file" name="hse_automezzi_file_assicurazione_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;" required>
             </div>
@@ -4924,16 +5184,15 @@ function hse_addAutomezzo() {
             <!-- Quinta riga: Verifiche Periodiche (nascosta di default) -->
             <div class="hse_verifiche_periodiche_section" style="display: none; background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffc107;">
                 <h6 style="margin: 0 0 10px 0; color: #856404; font-size: 13px;">⚠️ Verifiche Periodiche (obbligatorie per questo tipo di mezzo)</h6>
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
-                    <div class="hse_automezzo_scadenza_verifiche_field">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📅 Scadenza Verifiche:</label>
-                        <input type="date" name="hse_automezzi_scadenza_verifiche[]" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;">
-                    </div>
-                    <div class="hse_automezzo_file_verifiche_field">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #856404; font-size: 12px;">📄 File Verifiche:</label>
-                        <input type="file" name="hse_automezzi_file_verifiche_${newIndex}" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; font-size: 11px;">
+                <div class="hse_verifiche_container" id="hse_verifiche_container_${newIndex}">
+                    <div class="hse_verifica_entry" data-index="0">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica 1:</label>
+                        <input type="date" name="hse_automezzi_scadenza_verifiche[${newIndex}][]" class="hse_verifiche_date_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica 1:</label>
+                        <input type="file" name="hse_automezzi_file_verifiche[${newIndex}][]" accept=".pdf,.jpg,.jpeg,.png" class="hse_verifiche_file_input" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">
                     </div>
                 </div>
+                <button type="button" onclick="hse_addVerificaPeriodica(${newIndex})" style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px;">➕ Aggiungi Verifica</button>
             </div>
         </div>
         
@@ -4976,6 +5235,7 @@ function hse_toggleVerificheFields(selectElement) {
     
     const tipologia = selectElement.value;
     const needsVerifiche = ['AUTOCARRO_GRU', 'PLE', 'MEZZI_TERRA'].includes(tipologia);
+    const isCarrello = (tipologia === 'CARRELLO_ELEVATORE');
     
     if (verificheSection) {
         verificheSection.style.display = needsVerifiche ? 'block' : 'none';
@@ -4991,12 +5251,43 @@ function hse_toggleVerificheFields(selectElement) {
         
         if (verificheFileInput) {
             if (needsVerifiche) {
-                verificheFileInput.setAttribute('required', 'required');
+                // Only mark required if no file is already uploaded for this entry
+                const vEntry = verificheFileInput.closest('.hse_verifica_entry');
+                const hasExistingFile = vEntry && vEntry.querySelector('a[href]') !== null;
+                if (!hasExistingFile) {
+                    verificheFileInput.setAttribute('required', 'required');
+                }
             } else {
                 verificheFileInput.removeAttribute('required');
             }
         }
     }
+
+    // Campi facoltativi per Carrello Elevatore: targa, file targa, assicurazione, file assicurazione
+    const optionalForCarrello = [
+        'hse_automezzo_targa_field',
+        'hse_automezzo_file_targa_field',
+        'hse_automezzo_scadenza_assicurazione_field',
+        'hse_automezzo_file_assicurazione_field'
+    ];
+    optionalForCarrello.forEach(function(cls) {
+        const div = row.querySelector('.' + cls);
+        if (!div) return;
+        const label = div.querySelector('label');
+        const inputs = div.querySelectorAll('input');
+        if (isCarrello) {
+            if (label) label.innerHTML = label.innerHTML.replace(' *:', ' (opz.):');
+            inputs.forEach(function(inp) { inp.removeAttribute('required'); });
+        } else {
+            if (label) label.innerHTML = label.innerHTML.replace(' (opz.):', ' *:');
+            inputs.forEach(function(inp) {
+                // File inputs on existing rows (with an already-uploaded file indicator) stay optional
+                if (inp.type !== 'file') {
+                    inp.setAttribute('required', 'required');
+                }
+            });
+        }
+    });
 }
 
 function hse_removeAutomezzoRow(button) {
@@ -5028,6 +5319,23 @@ function hse_removeAutomezzoRow(button) {
     }, 300);
     
     hse_showToast('🗑️ Automezzo rimosso', 'info');
+}
+
+function hse_addVerificaPeriodica(mezzoIndex) {
+    var container = document.getElementById('hse_verifiche_container_' + mezzoIndex);
+    if (!container) return;
+    var entries = container.querySelectorAll('.hse_verifica_entry');
+    var newIndex = entries.length;
+    var vNum = newIndex + 1;
+    var div = document.createElement('div');
+    div.className = 'hse_verifica_entry';
+    div.setAttribute('data-index', newIndex);
+    div.innerHTML = '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📋 Scadenza Verifica ' + vNum + ':</label>' +
+        '<input type="date" name="hse_automezzi_scadenza_verifiche[' + mezzoIndex + '][]" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">' +
+        '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">📄 File Verifica ' + vNum + ':</label>' +
+        '<input type="file" name="hse_automezzi_file_verifiche[' + mezzoIndex + '][]" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">' +
+        '<button type="button" onclick="this.closest(\'.hse_verifica_entry\').remove()" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️ Rimuovi</button>';
+    container.appendChild(div);
 }
 
 function hse_removeLastAutomezzo() {
@@ -6034,30 +6342,6 @@ function hse_addPersona() {
                         <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
                         <input type="date" name="hse_formazione_generale_specifica_scadenza_${hse_newIndex}" id="hse_formazione_generale_specifica_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
-                    <div class="hse_rspp_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RSPP (OBBLIGATORIO) *:</label>
-                        <input type="file" name="hse_rspp_${hse_newIndex}" id="hse_rspp_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>
-                        <input type="date" name="hse_rspp_nomina_${hse_newIndex}" id="hse_rspp_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_rspp_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>
-                        <input type="date" name="hse_rspp_scadenza_${hse_newIndex}" id="hse_rspp_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
-                    </div>
-                    <div class="hse_rls_field" style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 2px solid #ffc107;">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 RLS (OBBLIGATORIO) *:</label>
-                        <input type="file" name="hse_rls_${hse_newIndex}" id="hse_rls_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 2px solid #ffc107; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina *:</label>
-                        <input type="date" name="hse_rls_nomina_${hse_newIndex}" id="hse_rls_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 1, document.getElementById('hse_rls_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 1 anno):</label>
-                        <input type="date" name="hse_rls_scadenza_${hse_newIndex}" id="hse_rls_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
-                    </div>
-                    <div class="hse_aspp_field">
-                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">👷 ASPP (opzionale):</label>
-                        <input type="file" name="hse_aspp_${hse_newIndex}" id="hse_aspp_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">📅 Data Nomina:</label>
-                        <input type="date" name="hse_aspp_nomina_${hse_newIndex}" id="hse_aspp_nomina_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_aspp_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (nomina + 5 anni):</label>
-                        <input type="date" name="hse_aspp_scadenza_${hse_newIndex}" id="hse_aspp_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
-                    </div>
                     <div class="hse_formazione_ple_field">
                         <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Utilizzo PLE:</label>
                         <input type="file" name="hse_formazione_ple_${hse_newIndex}" id="hse_formazione_ple_file_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
@@ -6075,7 +6359,6 @@ function hse_addPersona() {
                         <input type="date" name="hse_formazione_carrelli_scadenza_${hse_newIndex}" id="hse_formazione_carrelli_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                 </div>
-                <small style="color: #1565c0; font-weight: bold; margin-top: 10px; display: block;">⚠️ RSPP e RLS sono obbligatori per tutti gli operai</small>
             </div>
             
             <small class="hse_formazione_help" style="color: #17a2b8; font-weight: bold; margin-top: 10px; display: block;">💡 I documenti formazione sono opzionali ma necessari per l'assegnazione ai cantieri</small>
@@ -6085,7 +6368,11 @@ function hse_addPersona() {
                 <div class="hse_ulteriori_formazione_grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                     <div class="hse_lavori_quota_field">
                         <label class="hse_lavori_quota_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🏗️ Formazione Lavori in Quota:</label>
-                        <input type="file" name="hse_formazione_lavori_quota_${hse_newIndex}" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="file" name="hse_formazione_lavori_quota_${hse_newIndex}" accept=".pdf" class="hse_lavori_quota_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_lavori_quota_emissione_${hse_newIndex}" id="hse_formazione_lavori_quota_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_lavori_quota_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_lavori_quota_scadenza_${hse_newIndex}" id="hse_formazione_lavori_quota_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
                     </div>
                     <div class="hse_dpi_terza_categoria_field">
                         <label class="hse_dpi_terza_categoria_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🦺 Formazione uso DPI 3° categoria:</label>
@@ -6093,7 +6380,19 @@ function hse_addPersona() {
                     </div>
                     <div class="hse_ambienti_confinati_field">
                         <label class="hse_ambienti_confinati_label" style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">🕳️ Formazione lavori in ambienti confinati:</label>
-                        <input type="file" name="hse_formazione_ambienti_confinati_${hse_newIndex}" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="file" name="hse_formazione_ambienti_confinati_${hse_newIndex}" accept=".pdf" class="hse_ambienti_confinati_input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">📅 Data Emissione:</label>
+                        <input type="date" name="hse_formazione_ambienti_confinati_emissione_${hse_newIndex}" id="hse_formazione_ambienti_confinati_emissione_${hse_newIndex}" onchange="hse_calculateExpiryDate(this, 5, document.getElementById('hse_formazione_ambienti_confinati_scadenza_${hse_newIndex}'))" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                        <label style="display: block; font-size: 14px; color: #333; margin-bottom: 3px; font-weight: 600;">⏰ Scadenza (emissione + 5 anni):</label>
+                        <input type="date" name="hse_formazione_ambienti_confinati_scadenza_${hse_newIndex}" id="hse_formazione_ambienti_confinati_scadenza_${hse_newIndex}" readonly style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; background: #f8f9fa; cursor: not-allowed;">
+                    </div>
+                    <div class="hse_verbale_consegna_dpi_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI:</label>
+                        <input type="file" name="hse_verbale_consegna_dpi_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div class="hse_verbale_consegna_dpi_terza_field">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333; font-size: 12px;">📋 Verbale Consegna DPI 3a Categoria:</label>
+                        <input type="file" name="hse_verbale_consegna_dpi_terza_${hse_newIndex}" accept=".pdf" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </div>
                 </div>
                 <small class="hse_ulteriori_formazione_help" style="color: #856404; font-weight: bold; margin-top: 10px; display: block;">💡 Questi documenti di formazione aggiuntivi sono opzionali ma possono essere richiesti per specifiche tipologie di lavoro</small>
@@ -6135,30 +6434,6 @@ function hse_addPersona() {
             document.getElementById(`hse_formazione_generale_specifica_emissione_${hse_newIndex}`),
             5,
             document.getElementById(`hse_formazione_generale_specifica_scadenza_${hse_newIndex}`)
-        );
-        
-        // RSPP
-        hse_autoFillEmissionDate(
-            document.getElementById(`hse_rspp_file_${hse_newIndex}`),
-            document.getElementById(`hse_rspp_nomina_${hse_newIndex}`),
-            5,
-            document.getElementById(`hse_rspp_scadenza_${hse_newIndex}`)
-        );
-        
-        // RLS
-        hse_autoFillEmissionDate(
-            document.getElementById(`hse_rls_file_${hse_newIndex}`),
-            document.getElementById(`hse_rls_nomina_${hse_newIndex}`),
-            1,
-            document.getElementById(`hse_rls_scadenza_${hse_newIndex}`)
-        );
-        
-        // ASPP
-        hse_autoFillEmissionDate(
-            document.getElementById(`hse_aspp_file_${hse_newIndex}`),
-            document.getElementById(`hse_aspp_nomina_${hse_newIndex}`),
-            5,
-            document.getElementById(`hse_aspp_scadenza_${hse_newIndex}`)
         );
         
         // PLE
@@ -6681,6 +6956,11 @@ document.addEventListener("DOMContentLoaded", function() {
     hse_updatePersonaleCount();
     
     hse_setupPersonaTitleUpdate();
+
+    // Inizializza toggle campi targa/assicurazione per i mezzi già renderizzati
+    document.querySelectorAll('.hse_mezzo_tipologia_select').forEach(function(sel) {
+        hse_toggleVerificheFields(sel);
+    });
     
     setTimeout(() => {
         hse_restoreAccordionStates();

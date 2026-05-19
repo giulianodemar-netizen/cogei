@@ -292,7 +292,8 @@ function hse_getAutomezziAssegnatiCantiere($cantiere_id, $user_id) {
                a.scadenza_assicurazione,
                a.file_assicurazione,
                a.scadenza_verifiche_periodiche,
-               a.file_verifiche_periodiche
+               a.file_verifiche_periodiche,
+               a.verifiche_periodiche_json
         FROM {$wpdb->prefix}cantiere_automezzi_assegnazioni aa
         JOIN {$wpdb->prefix}cantiere_automezzi a ON aa.automezzo_id = a.id
         WHERE aa.cantiere_id = %d AND aa.user_id = %d
@@ -2051,6 +2052,7 @@ echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !imp
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Email</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">P.IVA</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">DVR</th>';
+echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">👷 RSPP/RLS/ASPP</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">RCT</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">Personale</th>';
 echo '<th style="padding: 10px; border: 1px solid #ddd; background: #0066a2 !important; color: white !important;">🚛 Mezzi Meccanici</th>';
@@ -2158,6 +2160,67 @@ foreach ($richieste as $richiesta) {
     echo '</div>'; // Close debug wrapper
     echo '</td>';
     
+    // RSPP/RLS/ASPP at company level — card-style blocks, all three always shown
+    echo '<td style="padding: 6px; border: 1px solid #ddd; vertical-align: top; min-width: 160px;">';
+    echo '<div style="display: flex; flex-direction: column; gap: 5px;">';
+
+    // Helper: render one block
+    $hse_render_doc_block = function($label, $icon, $file, $data_nomina, $data_scadenza) {
+        $has_file = !empty($file);
+        $bg    = $has_file ? 'linear-gradient(135deg,#d4edda 0%,#c3e6cb 100%)' : '#f8f9fa';
+        $border= $has_file ? '#28a745' : '#adb5bd';
+        $color = $has_file ? '#155724' : '#6c757d';
+        $tag_open  = $has_file ? '<a href="' . esc_url($file) . '" target="_blank" style="text-decoration:none;">' : '<span>';
+        $tag_close = $has_file ? '</a>' : '</span>';
+
+        // strtotime('0000-00-00') returns a large negative number (not false) on many PHP builds,
+        // which renders as year -0001. Guard against it with: non-empty, not a zero-date, and ts > 86400.
+        $hse_parse_ts = function($d) {
+            if (empty($d) || $d === '0000-00-00' || $d === '0000-00-00 00:00:00') return null;
+            $ts = strtotime($d);
+            return ($ts !== false && $ts > 86400) ? $ts : null;
+        };
+        $ts_nomina   = $hse_parse_ts($data_nomina);
+        $ts_scadenza = $hse_parse_ts($data_scadenza);
+
+        echo $tag_open;
+        echo '<div style="background:' . $bg . '; border-left: 3px solid ' . $border . '; border-radius: 4px; padding: 5px 7px;">';
+        echo '<div style="font-weight: bold; font-size: 11px; color: ' . $color . '; margin-bottom: 2px;">' . $icon . ' ' . $label . ($has_file ? ' ✓' : ' —') . '</div>';
+        if ($ts_nomina !== null) {
+            echo '<div style="font-size: 10px; color: ' . $color . ';">📅 ' . date('d/m/Y', $ts_nomina) . '</div>';
+        }
+        if ($ts_scadenza !== null) {
+            $now = time();
+            $diff_days = ($ts_scadenza - $now) / 86400;
+            $sc_color = ($diff_days < 0) ? '#dc3545' : (($diff_days < 30) ? '#fd7e14' : $color);
+            echo '<div style="font-size: 10px; color: ' . $sc_color . ';">⏰ Sc: ' . date('d/m/Y', $ts_scadenza) . '</div>';
+        }
+        echo '</div>';
+        echo $tag_close;
+    };
+
+    $hse_render_doc_block(
+        'RSPP', '👷',
+        $richiesta['rspp_file'] ?? '',
+        $richiesta['rspp_data_nomina'] ?? '',
+        $richiesta['rspp_data_scadenza'] ?? ''
+    );
+    $hse_render_doc_block(
+        'RLS', '🛡️',
+        $richiesta['rls_file'] ?? '',
+        $richiesta['rls_data_nomina'] ?? '',
+        $richiesta['rls_data_scadenza'] ?? ''
+    );
+    $hse_render_doc_block(
+        'ASPP', '👷',
+        $richiesta['aspp_file'] ?? '',
+        $richiesta['aspp_data_nomina'] ?? '',
+        $richiesta['aspp_data_scadenza'] ?? ''
+    );
+
+    echo '</div>';
+    echo '</td>';
+    
     // File RCT (da user meta)
     echo '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">';
     $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
@@ -2230,7 +2293,7 @@ foreach ($richieste as $richiesta) {
         foreach ($automezzi_grouped as $automezzo) {
             $tipologia_icon = '🚗';
             if (!empty($automezzo['tipologia'])) {
-                $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜'];
+                $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜', 'CARRELLO_ELEVATORE' => '🏎️'];
                 $tipologia_icon = $tipologia_icons[$automezzo['tipologia']] ?? '🚗';
             }
             
@@ -2239,7 +2302,7 @@ foreach ($richieste as $richiesta) {
             echo '<strong>' . $tipologia_icon . ' ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
             echo '<span style="font-size: 9px; color: #6c757d;">🏷️ ' . htmlspecialchars($automezzo['targa']) . '</span>';
             if (!empty($automezzo['tipologia']) && $automezzo['tipologia'] !== 'AUTO') {
-                $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra'];
+                $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra', 'CARRELLO_ELEVATORE' => 'Carrello Elevatore'];
                 echo ' <span style="font-size: 8px; background: #17a2b8; color: white; padding: 1px 4px; border-radius: 3px;">' . ($tipologia_labels[$automezzo['tipologia']] ?? $automezzo['tipologia']) . '</span>';
             }
             echo '<br>';
@@ -2261,7 +2324,7 @@ foreach ($richieste as $richiesta) {
             if (!in_array($automezzo['id'], $automezzi_assegnati_ids)) {
                 $tipologia_icon = '🚗';
                 if (!empty($automezzo['tipologia'])) {
-                    $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜'];
+                    $tipologia_icons = ['AUTO' => '🚗', 'AUTOCARRO' => '🚚', 'AUTOCARRO_GRU' => '🏗️', 'PLE' => '⬆️', 'MEZZI_TERRA' => '🚜', 'CARRELLO_ELEVATORE' => '🏎️'];
                     $tipologia_icon = $tipologia_icons[$automezzo['tipologia']] ?? '🚗';
                 }
                 
@@ -2270,7 +2333,7 @@ foreach ($richieste as $richiesta) {
                 echo '<strong>' . $tipologia_icon . ' ' . htmlspecialchars($automezzo['descrizione_automezzo']) . '</strong><br>';
                 echo '<span style="font-size: 9px; color: #6c757d;">🏷️ ' . htmlspecialchars($automezzo['targa']) . '</span>';
                 if (!empty($automezzo['tipologia']) && $automezzo['tipologia'] !== 'AUTO') {
-                    $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra'];
+                    $tipologia_labels = ['AUTOCARRO' => 'Autocarro', 'AUTOCARRO_GRU' => 'Autocarro con Gru', 'PLE' => 'PLE', 'MEZZI_TERRA' => 'Mezzi Movimenti Terra', 'CARRELLO_ELEVATORE' => 'Carrello Elevatore'];
                     echo ' <span style="font-size: 8px; background: #17a2b8; color: white; padding: 1px 4px; border-radius: 3px;">' . ($tipologia_labels[$automezzo['tipologia']] ?? $automezzo['tipologia']) . '</span>';
                 }
                 echo '</div>';
@@ -2511,51 +2574,6 @@ foreach ($richieste as $richiesta) {
                 $formazioni_nuove[] = '<a href="' . esc_url($persona['formazione_generale_specifica_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $gen_spec_text . '</a>';
             }
             
-            if (!empty($persona['rspp_file'])) {
-                $rspp_text = '👷 RSPP';
-                if (!empty($persona['rspp_data_nomina']) || !empty($persona['rspp_data_scadenza'])) {
-                    $rspp_text .= ' (';
-                    if (!empty($persona['rspp_data_nomina'])) {
-                        $rspp_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['rspp_data_nomina']));
-                    }
-                    if (!empty($persona['rspp_data_scadenza'])) {
-                        $rspp_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['rspp_data_scadenza']));
-                    }
-                    $rspp_text .= ')';
-                }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rspp_text . '</a>';
-            }
-            
-            if (!empty($persona['rls_file'])) {
-                $rls_text = '👷 RLS';
-                if (!empty($persona['rls_data_nomina']) || !empty($persona['rls_data_scadenza'])) {
-                    $rls_text .= ' (';
-                    if (!empty($persona['rls_data_nomina'])) {
-                        $rls_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['rls_data_nomina']));
-                    }
-                    if (!empty($persona['rls_data_scadenza'])) {
-                        $rls_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['rls_data_scadenza']));
-                    }
-                    $rls_text .= ')';
-                }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['rls_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 700;">' . $rls_text . '</a>';
-            }
-            
-            if (!empty($persona['aspp_file'])) {
-                $aspp_text = '👷 ASPP';
-                if (!empty($persona['aspp_data_nomina']) || !empty($persona['aspp_data_scadenza'])) {
-                    $aspp_text .= ' (';
-                    if (!empty($persona['aspp_data_nomina'])) {
-                        $aspp_text .= 'Nom: ' . date('d/m/Y', strtotime($persona['aspp_data_nomina']));
-                    }
-                    if (!empty($persona['aspp_data_scadenza'])) {
-                        $aspp_text .= ' - Sc: ' . date('d/m/Y', strtotime($persona['aspp_data_scadenza']));
-                    }
-                    $aspp_text .= ')';
-                }
-                $formazioni_nuove[] = '<a href="' . esc_url($persona['aspp_file']) . '" target="_blank" style="color: #0066a2; font-size: 14px; font-weight: 600;">' . $aspp_text . '</a>';
-            }
-            
             if (!empty($persona['formazione_ple_file'])) {
                 $ple_text = '🏗️ PLE';
                 if (!empty($persona['formazione_ple_data_emissione']) || !empty($persona['formazione_ple_data_scadenza'])) {
@@ -2786,7 +2804,23 @@ foreach ($richieste as $richiesta) {
     echo 'azienda_nome: "' . addslashes($rag_soc ?: $user->display_name) . '",';
     echo 'dvr_file: "' . addslashes($richiesta['dvr_file']) . '",';
     echo 'dvr_data_emissione: "' . addslashes($richiesta['dvr_data_emissione']) . '",';
-    
+
+    // RSPP / RLS / ASPP (company-level)
+    $hse_js_parse_date = function($d) {
+        if (empty($d) || $d === '0000-00-00' || $d === '0000-00-00 00:00:00') return '';
+        $ts = strtotime($d);
+        return ($ts !== false && $ts > 86400) ? date('d/m/Y', $ts) : '';
+    };
+    echo 'rspp_file: "' . addslashes($richiesta['rspp_file'] ?? '') . '",';
+    echo 'rspp_data_nomina: "' . addslashes($hse_js_parse_date($richiesta['rspp_data_nomina'] ?? '')) . '",';
+    echo 'rspp_data_scadenza: "' . addslashes($hse_js_parse_date($richiesta['rspp_data_scadenza'] ?? '')) . '",';
+    echo 'rls_file: "' . addslashes($richiesta['rls_file'] ?? '') . '",';
+    echo 'rls_data_nomina: "' . addslashes($hse_js_parse_date($richiesta['rls_data_nomina'] ?? '')) . '",';
+    echo 'rls_data_scadenza: "' . addslashes($hse_js_parse_date($richiesta['rls_data_scadenza'] ?? '')) . '",';
+    echo 'aspp_file: "' . addslashes($richiesta['aspp_file'] ?? '') . '",';
+    echo 'aspp_data_nomina: "' . addslashes($hse_js_parse_date($richiesta['aspp_data_nomina'] ?? '')) . '",';
+    echo 'aspp_data_scadenza: "' . addslashes($hse_js_parse_date($richiesta['aspp_data_scadenza'] ?? '')) . '",';
+
     // RCT da user meta
     $rct_file_id = get_user_meta($user_id, 'user_registration_file_1677080663513', true);
     $rct_scadenza = get_user_meta($user_id, 'user_registration_scad_rct_rco', true);
@@ -2817,9 +2851,6 @@ foreach ($richieste as $richiesta) {
         echo 'formazione_primo_soccorso: ' . (!empty($persona['formazione_primo_soccorso_file']) ? 'true' : 'false') . ',';
         echo 'formazione_preposti: ' . (!empty($persona['formazione_preposti_file']) ? 'true' : 'false') . ',';
         echo 'formazione_generale_specifica: ' . (!empty($persona['formazione_generale_specifica_file']) ? 'true' : 'false') . ',';
-        echo 'rspp: ' . (!empty($persona['rspp_file']) ? 'true' : 'false') . ',';
-        echo 'rls: ' . (!empty($persona['rls_file']) ? 'true' : 'false') . ',';
-        echo 'aspp: ' . (!empty($persona['aspp_file']) ? 'true' : 'false') . ',';
         echo 'formazione_ple: ' . (!empty($persona['formazione_ple_file']) ? 'true' : 'false') . ',';
         echo 'formazione_carrelli: ' . (!empty($persona['formazione_carrelli_file']) ? 'true' : 'false') . ',';
         echo 'formazione_lavori_quota: ' . (!empty($persona['formazione_lavori_quota_file']) ? 'true' : 'false') . ',';
@@ -2894,9 +2925,6 @@ foreach ($richieste as $richiesta) {
                 
                 // 📚 Aggiungi nuovi campi formazione implementati
                 echo 'formazione_generale_specifica: ' . (!empty($operaio['formazione_generale_specifica_file']) ? 'true' : 'false') . ',';
-                echo 'rspp: ' . (!empty($operaio['rspp_file']) ? 'true' : 'false') . ',';
-                echo 'rls: ' . (!empty($operaio['rls_file']) ? 'true' : 'false') . ',';
-                echo 'aspp: ' . (!empty($operaio['aspp_file']) ? 'true' : 'false') . ',';
                 echo 'formazione_ple: ' . (!empty($operaio['formazione_ple_file']) ? 'true' : 'false') . ',';
                 echo 'formazione_carrelli: ' . (!empty($operaio['formazione_carrelli_file']) ? 'true' : 'false') . ',';
                 
@@ -2946,7 +2974,8 @@ foreach ($all_richieste_for_mezzi as $richiesta) {
         echo 'scadenza_assicurazione: "' . addslashes($mezzo['scadenza_assicurazione'] ?? '') . '",';
         echo 'file_assicurazione: "' . addslashes($mezzo['file_assicurazione'] ?? '') . '",';
         echo 'scadenza_verifiche_periodiche: "' . addslashes($mezzo['scadenza_verifiche_periodiche'] ?? '') . '",';
-        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '"';
+        echo 'file_verifiche_periodiche: "' . addslashes($mezzo['file_verifiche_periodiche'] ?? '') . '",';
+        echo 'verifiche_periodiche_json: ' . (!empty($mezzo['verifiche_periodiche_json']) ? json_encode(json_decode($mezzo['verifiche_periodiche_json'], true) ?: []) : '[]');
         echo '},';
     }
 }
@@ -3163,8 +3192,8 @@ echo '</div>'; // Fine tab assegnazioni
 echo '</div>'; // Fine container principale
 
 // ================== MODAL ASSEGNAZIONE (MODIFICATO) ==================
-echo '<div id="assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">';
-echo '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">';
+echo '<div id="assignment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow-y: auto;">';
+echo '<div style="position: relative; top: 20px; left: 50%; transform: translateX(-50%); background: white; border-radius: 8px; width: 90%; max-width: 700px; max-height: none; margin-bottom: 40px; overflow-y: visible;">';
 
 // Header modal
 echo '<div style="background: #2196f3; color: white; padding: 20px; border-radius: 8px 8px 0 0;">';
@@ -3777,6 +3806,8 @@ echo '</div>'; // End content-log-disattivazioni
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
+const cantiereDetailsNonce = <?php echo json_encode(wp_create_nonce('cogei_cantiere_details_nonce')); ?>;
+const cantiereDetailsAjaxUrl = <?php echo json_encode(site_url('/ajax_fornitori/get_cantiere_details.php')); ?>;
 // TAB MANAGEMENT
 function showTab(tabName) {
     // Nascondi tutti i contenuti
@@ -3879,6 +3910,8 @@ function showAssignmentModal(cantiereId, cantiereNome) {
     toggleFiltroAttive();
     
     document.getElementById('assignment-modal').style.display = 'block';
+    // Scroll to top of page so the modal is immediately visible at the top of the screen
+    window.scrollTo(0, 0);
     
     console.log('🔗 Apertura modal assegnazioni per cantiere:', cantiereNome);
 }
@@ -4135,6 +4168,10 @@ function applyAllFilters() {
             selectedTypes.push(tipo.charAt(0).toUpperCase() + tipo.slice(1)); // Capitalize first letter
         }
     });
+    // "Nolo" checkbox covers both "Nolo" and "Noli" stored values
+    if (selectedTypes.includes('Nolo') && !selectedTypes.includes('Noli')) {
+        selectedTypes.push('Noli');
+    }
     
     console.log('🏢 Filtro tipologie attive:', selectedTypes);
     console.log('🔍 Filtro abilitate:', soloAttive ? 'ATTIVO' : 'DISATTIVO');
@@ -4278,6 +4315,10 @@ function searchAssignments() {
             selectedTypes.push(tipo.charAt(0).toUpperCase() + tipo.slice(1));
         }
     });
+    // "Nolo" checkbox covers both "Nolo" and "Noli" stored values
+    if (selectedTypes.includes('Nolo') && !selectedTypes.includes('Noli')) {
+        selectedTypes.push('Noli');
+    }
     
     const cantiereId = document.getElementById('modal-cantiere-id').value;
     const allCantieri = <?php 
@@ -4586,6 +4627,30 @@ function loadStatusDetails(richiestaId) {
                     </div>
                 </div>
             </div>
+
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #17a2b8;">👷 RSPP / RLS / ASPP</h5>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; font-size: 12px;">
+                    ${['rspp','rls','aspp'].map(role => {
+                        const labels = {rspp: '👷 RSPP', rls: '🛡️ RLS', aspp: '👷 ASPP'};
+                        const file     = richiestaData[role + '_file']     || '';
+                        const nomina   = richiestaData[role + '_data_nomina']   || '';
+                        const scadenza = richiestaData[role + '_data_scadenza'] || '';
+                        const hasFile  = file.length > 0;
+                        const bg       = hasFile ? 'linear-gradient(135deg,#d4edda 0%,#c3e6cb 100%)' : '#f0f0f0';
+                        const border   = hasFile ? '#28a745' : '#adb5bd';
+                        const color    = hasFile ? '#155724' : '#6c757d';
+                        const inner = `
+                            <div style="font-weight:bold;font-size:11px;color:${color};margin-bottom:3px;">${labels[role]}${hasFile ? ' ✓' : ' —'}</div>
+                            ${nomina   ? `<div style="font-size:10px;color:${color};">📅 ${nomina}</div>`   : ''}
+                            ${scadenza ? `<div style="font-size:10px;color:${color};">⏰ Sc: ${scadenza}</div>` : ''}
+                        `;
+                        return hasFile
+                            ? `<a href="${file}" target="_blank" style="text-decoration:none;"><div style="background:${bg};border-left:3px solid ${border};border-radius:4px;padding:6px 8px;">${inner}</div></a>`
+                            : `<div style="background:${bg};border-left:3px solid ${border};border-radius:4px;padding:6px 8px;">${inner}</div>`;
+                    }).join('')}
+                </div>
+            </div>
             
             ${elementi_completati < elementi_totali ? `
             <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 5px solid #ffc107; margin-bottom: 15px;">
@@ -4618,9 +4683,6 @@ function loadStatusDetails(richiestaId) {
                         
                         // Formazioni Specifiche e Nomine
                         if (operaio.formazione_generale_specifica) { competenze.push('Form. Gen. e Spec.'); icons += '🎓'; }
-                        if (operaio.rspp) { competenze.push('RSPP'); icons += '👷'; }
-                        if (operaio.rls) { competenze.push('RLS'); icons += '👷'; }
-                        if (operaio.aspp) { competenze.push('ASPP'); icons += '👷'; }
                         if (operaio.formazione_ple) { competenze.push('PLE'); icons += '🏗️'; }
                         if (operaio.formazione_carrelli) { competenze.push('Carrelli'); icons += '🚜'; }
                         
@@ -4629,18 +4691,12 @@ function loadStatusDetails(richiestaId) {
                         if (operaio.formazione_dpi_terza) { competenze.push('DPI 3° Cat.'); icons += '🦺'; }
                         if (operaio.formazione_ambienti_confinati) { competenze.push('Amb. Confinati'); icons += '🕳️'; }
                         
-                        // Check if RSPP or RLS are present (obbligatori)
-                        const hasRSPP = operaio.rspp;
-                        const hasRLS = operaio.rls;
-                        const borderColor = (hasRSPP && hasRLS) ? '#28a745' : '#ffc107';
-                        
                         return `
-                        <div style="background: white; border: 2px solid ${borderColor}; border-radius: 4px; padding: 8px;">
+                        <div style="background: white; border: 2px solid #28a745; border-radius: 4px; padding: 8px;">
                             <div style="font-weight: bold; color: #333; margin-bottom: 4px;">${operaio.nome} ${operaio.cognome}</div>
                             <div style="font-size: 10px; color: #666; margin-bottom: 4px;">
                                 📅 Nato: ${operaio.data_nascita || 'N/A'}
                             </div>
-                            ${(!hasRSPP || !hasRLS) ? `<div style="background: #fff3cd; color: #856404; font-size: 9px; padding: 3px 5px; border-radius: 3px; margin-bottom: 4px;">⚠️ Mancano: ${!hasRSPP ? 'RSPP' : ''} ${!hasRLS ? 'RLS' : ''}</div>` : ''}
                             <div style="font-size: 14px; margin: 4px 0;">${icons || '⚠️'}</div>
                             <div style="font-size: 9px; color: #666; line-height: 1.3;">
                                 ${competenze.length > 0 ? competenze.join(', ') : 'Nessuna formazione'}
@@ -4856,7 +4912,10 @@ function loadCantiereWorkers(cantiereId, userId) {
                             'AUTOCARRO': '🚚',
                             'AUTOCARRO CON GRU': '🏗️',
                             'PLE': '⬆️',
-                            'MEZZI MOVIMENTI TERRA': '🚜'
+                            'MEZZI MOVIMENTI TERRA': '🚜',
+                            'AUTOCARRO_GRU': '🏗️',
+                            'MEZZI_TERRA': '🚜',
+                            'CARRELLO_ELEVATORE': '🏎️'
                         };
                         const icona = iconeTipologia[automezzo.tipologia] || '🚗';
                         const tipologia = automezzo.tipologia || 'AUTO';
@@ -4946,11 +5005,12 @@ function loadCantiereDetailsData(cantiereId) {
 
 function fetchCantiereDetailsFromServer(cantiereId) {
     // Chiama il vero endpoint AJAX
-    const ajaxUrl = '/cogei/ajax_fornitori/get_cantiere_details.php';
+    const ajaxUrl = cantiereDetailsAjaxUrl;
     
     // Prepara i dati da inviare
     const formData = new FormData();
     formData.append('cantiere_id', cantiereId);
+    formData.append('nonce', cantiereDetailsNonce);
     
     console.log('🔄 Chiamata AJAX per cantiere ID:', cantiereId);
     
@@ -4981,7 +5041,7 @@ function fetchCantiereDetailsFromServer(cantiereId) {
     })
     .catch(error => {
         console.error('❌ Errore AJAX:', error);
-        displayCantiereDetailsError(error.message);
+        displayCantiereDetailsError(error.message, cantiereId);
     });
 }
 
@@ -5011,18 +5071,18 @@ function displayCantiereDetailsContent(data) {
     document.getElementById('cantiere-details-content').style.display = 'block';
 }
 
-function displayCantiereDetailsError(errorMessage) {
+function displayCantiereDetailsError(errorMessage, cantiereId) {
     const contentDiv = document.getElementById('cantiere-details-content');
     
     contentDiv.innerHTML = `
         <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 6px; text-align: center; border-left: 5px solid #dc3545;">
             <div style="font-size: 18px; margin-bottom: 10px;">❌ Errore nel caricamento</div>
             <div style="font-size: 14px; margin-bottom: 15px;">${errorMessage}</div>
-            <button onclick="loadCantiereDetailsData(${document.getElementById('modal-cantiere-id')?.value || 'null'})" 
+            <button onclick="loadCantiereDetailsData(${cantiereId || 0})" 
                     style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
                 🔄 Riprova
             </button>
-            <button onclick="generateFallbackCantiereDetails(${document.getElementById('modal-cantiere-id')?.value || 'null'})" 
+            <button onclick="generateFallbackCantiereDetails(${cantiereId || 0})" 
                     style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
                 📋 Mostra Demo
             </button>
@@ -5237,7 +5297,8 @@ function generateRealCantiereDetailsContent(data) {
                         'AUTOCARRO': '🚚 Autocarro',
                         'AUTOCARRO_GRU': '🏗️ Autocarro con Gru',
                         'PLE': '⬆️ PLE',
-                        'MEZZI_TERRA': '🚜 Mezzi Movimenti Terra'
+                        'MEZZI_TERRA': '🚜 Mezzi Movimenti Terra',
+                        'CARRELLO_ELEVATORE': '🏎️ Carrello Elevatore'
                     };
                     
                     const tipologiaLabel = tipologiaLabels[mezzo.tipologia] || '🚗 ' + mezzo.tipologia;
@@ -5945,7 +6006,8 @@ async function generateCantierePDF(data) {
                         'AUTOCARRO': 'Autocarro',
                         'AUTOCARRO_GRU': 'Autocarro con Gru',
                         'PLE': 'PLE',
-                        'MEZZI_TERRA': 'Mezzi Movimenti Terra'
+                        'MEZZI_TERRA': 'Mezzi Movimenti Terra',
+                        'CARRELLO_ELEVATORE': 'Carrello Elevatore'
                     };
                     const tipologia = tipologiaLabels[mezzo.tipologia] || mezzo.tipologia;
                     
@@ -6190,7 +6252,7 @@ function loadImageAsBase64(url) {
 function testAjaxConnection() {
     console.log('🔧 Test connessione AJAX endpoint...');
     
-    const ajaxUrl = '/cogei/ajax_fornitori/get_cantiere_details.php';
+    const ajaxUrl = cantiereDetailsAjaxUrl;
     
     fetch(ajaxUrl, {
         method: 'POST',
@@ -7162,8 +7224,8 @@ function cancelDocumentRequest(userId, aziendaName) {
 }
 
 @keyframes modalSlideIn {
-    from { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    from { opacity: 0; transform: translateX(-50%) scale(0.9); }
+    to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 
 /* 🚀 NUOVI STILI: Aziende nel modal con filtro */
@@ -7728,11 +7790,10 @@ label:has(input[name="user_ids[]"]:checked) {
     #edit-cantiere-modal > div,
     #delete-cantiere-modal > div {
         width: 95% !important;
-        margin: 20px;
+        margin: 10px auto 40px !important;
+        top: 10px !important;
+        left: 0 !important;
         transform: none !important;
-        position: relative !important;
-        top: auto !important;
-        left: auto !important;
     }
     
     #cantiere-details-modal > div {
@@ -7805,9 +7866,42 @@ label:has(input[name="user_ids[]"]:checked) {
     }
     
     .azienda-option {
-        background: #2d3748 !important;
-        color: #e2e8f0;
+        background: #3a4a5c !important;
+        color: #e2e8f0 !important;
         border-color: #4a5568 !important;
+    }
+
+    .azienda-option strong {
+        color: #a8d5b5 !important;
+    }
+
+    .azienda-option[data-attiva="0"] strong {
+        color: #a0aec0 !important;
+    }
+
+    .azienda-option div[style*="font-size: 11px"] {
+        color: #cbd5e0 !important;
+    }
+
+    .azienda-option:hover,
+    .azienda-option[data-attiva="1"]:hover,
+    .azienda-option[data-attiva="0"]:hover {
+        background: #4a5e72 !important;
+    }
+
+    .azienda-option:hover strong,
+    .azienda-option[data-attiva="1"]:hover strong {
+        color: #c6f6d5 !important;
+    }
+
+    .azienda-option[data-attiva="0"]:hover strong {
+        color: #e2e8f0 !important;
+    }
+
+    .azienda-option:hover div[style*="font-size: 11px"],
+    .azienda-option[data-attiva="1"]:hover div[style*="font-size: 11px"],
+    .azienda-option[data-attiva="0"]:hover div[style*="font-size: 11px"] {
+        color: #e2e8f0 !important;
     }
 }
 
@@ -8106,7 +8200,8 @@ echo '        "AUTO": "🚗 Auto",';
 echo '        "AUTOCARRO": "🚚 Autocarro",';
 echo '        "AUTOCARRO_GRU": "🏗️ Autocarro con Gru",';
 echo '        "PLE": "⬆️ PLE",';
-echo '        "MEZZI_TERRA": "🚜 Mezzi Movimenti Terra"';
+echo '        "MEZZI_TERRA": "🚜 Mezzi Movimenti Terra",';
+echo '        "CARRELLO_ELEVATORE": "🏎️ Carrello Elevatore"';
 echo '    };';
 echo '    ';
 echo '    const needsVerifiche = ["AUTOCARRO_GRU", "PLE", "MEZZI_TERRA"].includes(mezzoData.tipologia);';
@@ -8154,18 +8249,22 @@ echo '        </div>';
 echo '    `;';
 echo '    ';
 echo '    if (needsVerifiche) {';
+echo '        const verificheList = (mezzoData.verifiche_periodiche_json && mezzoData.verifiche_periodiche_json.length > 0) ? mezzoData.verifiche_periodiche_json : (mezzoData.scadenza_verifiche_periodiche ? [{scadenza: mezzoData.scadenza_verifiche_periodiche, file: mezzoData.file_verifiche_periodiche}] : []);';
 echo '        content += `';
 echo '            <div class="summary-card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; margin-bottom: 20px;">';
-echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie</h5>';
+echo '                <h5 class="summary-card-title" style="color: #856404; font-size: 18px;">⚠️ Verifiche Periodiche Obbligatorie (${verificheList.length || 0})</h5>';
 echo '                <div style="display: grid; gap: 14px;">';
-echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.scadenza_verifiche_periodiche ? "#fff" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.scadenza_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong style="font-size: 15px;">📅 Scadenza Verifiche Periodiche:</strong><br>';
-echo '                        <span style="font-size: 15px; font-weight: 600;">${mezzoData.scadenza_verifiche_periodiche ? new Date(mezzoData.scadenza_verifiche_periodiche).toLocaleDateString("it-IT") : "<span style=\"color: #721c24;\">Non impostata</span>"}</span>';
-echo '                    </div>';
-echo '                    <div class="summary-card-info" style="padding: 12px; background: ${mezzoData.file_verifiche_periodiche ? "#d4edda" : "#f8d7da"}; border-radius: 6px; border-left: 4px solid ${mezzoData.file_verifiche_periodiche ? "#28a745" : "#dc3545"};">';
-echo '                        <strong style="font-size: 15px;">📄 File Verifiche Periodiche:</strong><br>';
-echo '                        ${mezzoData.file_verifiche_periodiche ? `<a href="${mezzoData.file_verifiche_periodiche}" target="_blank" style="color: #155724; font-size: 15px; font-weight: 600;">Visualizza documento</a>` : "<span style=\"color: #721c24; font-size: 15px;\">Non caricato</span>"}';
-echo '                    </div>';
+echo '                    ${verificheList.length > 0 ? verificheList.map((v, idx) => `';
+echo '                    <div style="border: 1px solid #ffc107; border-radius: 6px; padding: 10px;">';
+echo '                        <strong style="font-size: 14px; color: #856404;">Verifica ${idx + 1}</strong><br>';
+echo '                        <div style="margin-top: 6px; padding: 8px; background: ${v.scadenza ? "#fff" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${v.scadenza ? "#28a745" : "#dc3545"};">';
+echo '                            <strong>📅 Scadenza:</strong> ${v.scadenza ? new Date(v.scadenza).toLocaleDateString("it-IT") : "<span style=\"color:#721c24\">Non impostata</span>"}';
+echo '                        </div>';
+echo '                        <div style="margin-top: 6px; padding: 8px; background: ${v.file ? "#d4edda" : "#f8d7da"}; border-radius: 4px; border-left: 3px solid ${v.file ? "#28a745" : "#dc3545"};">';
+echo '                            <strong>📄 File:</strong> ${v.file ? `<a href="${v.file}" target="_blank" style="color:#155724;font-weight:600;">Visualizza</a>` : "<span style=\"color:#721c24\">Non caricato</span>"}';
+echo '                        </div>';
+echo '                    </div>`';
+echo '                    ).join("") : `<div style="color: #856404; font-style: italic;">Nessuna verifica registrata</div>`}';
 echo '                </div>';
 echo '            </div>';
 echo '        `;';

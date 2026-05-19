@@ -5,20 +5,30 @@
  * Posizione: https://cogei.provasiti.it/cogei/ajax_fornitori/get_cantiere_details.php
  */
 
+// Cattura e scarta qualsiasi output anticipato (plugin, WordPress, ecc.)
+// Stesso pattern usato da tutti gli altri file AJAX funzionanti (es. elimina_operaio.php)
+while (ob_get_level()) {
+    ob_end_clean();
+}
+ob_start();
+
+// Non caricare i temi: non servono per una risposta AJAX
+define('WP_USE_THEMES', false);
+
 // IMPORTANT: Aumenta memoria e timeout
 ini_set('memory_limit', '512M');
 ini_set('max_execution_time', 60);
 
-// Sicurezza e setup WordPress MIGLIORATO
+// Sicurezza e setup WordPress
 if (!defined('ABSPATH')) {
     // Prova diversi percorsi per wp-load.php
     $possible_paths = [
-        dirname(dirname(dirname(__FILE__))) . '/wp-load.php',  // 3 livelli sopra
-        dirname(dirname(__FILE__)) . '/wp-load.php',           // 2 livelli sopra  
-        dirname(__FILE__) . '/../wp-load.php',                 // 1 livello sopra
+        dirname(dirname(__FILE__)) . '/wp-load.php',           // 1 livello sopra (cogei/wp-load.php)
+        dirname(__FILE__) . '/../wp-load.php',                 // 1 livello sopra (alternativo)
+        dirname(dirname(dirname(__FILE__))) . '/wp-load.php',  // 2 livelli sopra
         dirname(__FILE__) . '/../../wp-load.php',              // 2 livelli sopra (alternativo)
-        $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php',            // Root del server
-        $_SERVER['DOCUMENT_ROOT'] . '/cogei/wp-load.php'       // Root + cartella cogei
+        $_SERVER['DOCUMENT_ROOT'] . '/cogei/wp-load.php',      // Root + cartella cogei
+        $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'             // Root del server
     ];
     
     $wp_loaded = false;
@@ -29,6 +39,14 @@ if (!defined('ABSPATH')) {
             break;
         }
     }
+    
+    // Scarta output generato da WordPress e plugin durante il caricamento
+    $wp_output = ob_get_clean();
+    if (!empty(trim($wp_output))) {
+        error_log("get_cantiere_details.php - Output WordPress catturato: " . substr($wp_output, 0, 200));
+    }
+    // Riavvia buffering per catturare eventuale output residuo
+    ob_start();
     
     if (!$wp_loaded) {
         // Se non trova WordPress, restituisce errore specifico
@@ -72,12 +90,13 @@ if ($cantiere_id <= 0) {
 
 // ================== CONTROLLI PERMESSI ==================
 
-// Verifica che l'utente sia autenticato
-if (!is_user_logged_in()) {
+// Verifica nonce WordPress (garantisce autenticazione + protezione CSRF)
+$nonce = isset($_POST['nonce']) ? sanitize_text_field($_POST['nonce']) : '';
+if (!wp_verify_nonce($nonce, 'cogei_cantiere_details_nonce')) {
     http_response_code(401);
     die(json_encode([
         'error' => 'Accesso non autorizzato',
-        'message' => 'È necessario essere autenticati per accedere a questo endpoint'
+        'message' => 'Nonce non valido o sessione scaduta. Ricaricare la pagina e riprovare.'
     ]));
 }
 
@@ -85,15 +104,12 @@ $current_user_id = get_current_user_id();
 $current_user = wp_get_current_user();
 
 // Verifica ruoli utente - Solo amministratori possono vedere tutti i dettagli
-// TODO: Implementare logica di permessi più granulare se necessario
 $allowed_roles = ['administrator', 'bo_admin', 'hse_manager'];
 $user_roles = (array) $current_user->roles;
 $has_permission = !empty(array_intersect($allowed_roles, $user_roles));
 
 if (!$has_permission) {
-    // Log tentativo di accesso non autorizzato
     error_log("AJAX Cantiere Details - Accesso negato per user ID {$current_user_id} (ruoli: " . implode(', ', $user_roles) . ")");
-    
     http_response_code(403);
     die(json_encode([
         'error' => 'Accesso non autorizzato',
@@ -222,6 +238,7 @@ function getAutomezziAssegnatiCantiereAjax($cantiere_id, $user_id = null) {
                a.file_assicurazione,
                a.scadenza_verifiche_periodiche,
                a.file_verifiche_periodiche,
+               a.verifiche_periodiche_json,
                a.data_creazione as automezzo_data_creazione,
                a.data_aggiornamento as automezzo_data_aggiornamento,
                u.user_email, um.meta_value as rag_soc
@@ -432,42 +449,6 @@ try {
                 ];
             }
             
-            // RSPP
-            if (!empty($operaio['rspp_file'])) {
-                $documenti[] = [
-                    'name' => 'RSPP',
-                    'type' => 'ruolo_sicurezza',
-                    'url' => $operaio['rspp_file'],
-                    'uploaded_at' => null,
-                    'expires_at' => $operaio['rspp_data_scadenza'] ?? null,
-                    'emission_date' => $operaio['rspp_data_nomina'] ?? null
-                ];
-            }
-            
-            // RLS
-            if (!empty($operaio['rls_file'])) {
-                $documenti[] = [
-                    'name' => 'RLS',
-                    'type' => 'ruolo_sicurezza',
-                    'url' => $operaio['rls_file'],
-                    'uploaded_at' => null,
-                    'expires_at' => $operaio['rls_data_scadenza'] ?? null,
-                    'emission_date' => $operaio['rls_data_nomina'] ?? null
-                ];
-            }
-            
-            // ASPP
-            if (!empty($operaio['aspp_file'])) {
-                $documenti[] = [
-                    'name' => 'ASPP',
-                    'type' => 'ruolo_sicurezza',
-                    'url' => $operaio['aspp_file'],
-                    'uploaded_at' => null,
-                    'expires_at' => $operaio['aspp_data_scadenza'] ?? null,
-                    'emission_date' => $operaio['aspp_data_nomina'] ?? null
-                ];
-            }
-            
             // Formazione PLE
             if (!empty($operaio['formazione_ple_file'])) {
                 $documenti[] = [
@@ -583,8 +564,21 @@ try {
                 ];
             }
             
-            // File Verifiche Periodiche
-            if (!empty($automezzo['file_verifiche_periodiche'])) {
+            // File Verifiche Periodiche - use JSON if available, otherwise legacy field
+            if (!empty($automezzo['verifiche_periodiche_json'])) {
+                $verifiche_entries = json_decode($automezzo['verifiche_periodiche_json'], true) ?: [];
+                foreach ($verifiche_entries as $v_idx => $verifica_entry) {
+                    if (!empty($verifica_entry['file'])) {
+                        $documenti_automezzo[] = [
+                            'name' => 'Verifiche Periodiche ' . ($v_idx + 1),
+                            'type' => 'verifica_periodica',
+                            'url' => $verifica_entry['file'],
+                            'uploaded_at' => null,
+                            'expires_at' => $verifica_entry['scadenza'] ?? null
+                        ];
+                    }
+                }
+            } elseif (!empty($automezzo['file_verifiche_periodiche'])) {
                 $documenti_automezzo[] = [
                     'name' => 'Verifiche Periodiche',
                     'type' => 'verifica_periodica',
@@ -602,6 +596,9 @@ try {
                 'scadenza_revisione' => $automezzo['scadenza_revisione'] ?? null,
                 'scadenza_assicurazione' => $automezzo['scadenza_assicurazione'] ?? null,
                 'scadenza_verifiche_periodiche' => $automezzo['scadenza_verifiche_periodiche'] ?? null,
+                'verifiche_periodiche_json' => !empty($automezzo['verifiche_periodiche_json'])
+                    ? (json_decode($automezzo['verifiche_periodiche_json'], true) ?: [])
+                    : [],
                 'data_creazione' => $automezzo['automezzo_data_creazione'] ?? null,
                 'data_aggiornamento' => $automezzo['automezzo_data_aggiornamento'] ?? null,
                 'data_assegnazione' => $automezzo['data_assegnazione'] ?: '',
